@@ -4,3 +4,4 @@
 .idea
 .venv
 .langgraph_api
+deepagents/
