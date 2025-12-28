@@ -14,7 +14,7 @@ from langchain_core.messages import HumanMessage
 load_dotenv(dotenv_path='.env', verbose=True)
 
 from analysis import agent
-from sandbox_backend import sandbox_manager
+from sandbox_backend import sandbox_manager, _current_thread_id
 
 
 async def run_agent_with_cleanup(user_message: str = None):
@@ -45,6 +45,9 @@ async def run_agent_with_cleanup(user_message: str = None):
 
     try:
         print("\n--- 开始执行 (使用 astream_events 监控节点) ---")
+
+        # 设置 thread_id 到 ContextVar，这样 backend_factory 可以正确获取
+        token = _current_thread_id.set(thread_id)
 
         # 执行 agent
         async for event in agent.astream_events(inputs, version="v1", config=config):
@@ -78,6 +81,9 @@ async def run_agent_with_cleanup(user_message: str = None):
         print(f"\n🧹 正在清理沙箱 (thread_id: {thread_id})")
         sandbox_manager.cleanup_session(thread_id)
         print("✨ 清理完成！")
+        
+        # 清除 ContextVar 中的 thread_id
+        _current_thread_id.reset(token)
 
 
 async def run_multiple_conversations():
@@ -109,6 +115,9 @@ async def run_multiple_conversations():
             # 显示会话目录
             print(f"\n📁 沙箱目录: ./sandbox_sessions/{thread_id}/")
             
+            # 设置 thread_id 到 ContextVar
+            token = _current_thread_id.set(thread_id)
+            
             # 执行 agent
             async for event in agent.astream_events(inputs, version="v1", config=config):
                 kind = event["event"]
@@ -126,6 +135,10 @@ async def run_multiple_conversations():
             # 清理当前对话的沙箱
             print(f"\n🧹 清理对话 {i} 的沙箱...")
             sandbox_manager.cleanup_session(thread_id)
+            
+            # 清除 ContextVar 中的 thread_id
+            _current_thread_id.reset(token)
+            
             print(f"✅ 对话 {i} 完成\n")
     
     print("=" * 80)
@@ -148,6 +161,9 @@ async def run_with_user_input():
     print(f"📁 沙箱目录: ./sandbox_sessions/{thread_id}/\n")
     
     try:
+        # 设置 thread_id 到 ContextVar（整个会话期间保持）
+        token = _current_thread_id.set(thread_id)
+        
         while True:
             # 获取用户输入
             user_input = input("用户: ").strip()
@@ -188,6 +204,10 @@ async def run_with_user_input():
         # 清理会话
         print(f"\n🧹 清理会话沙箱...")
         sandbox_manager.cleanup_session(thread_id)
+        
+        # 清除 ContextVar 中的 thread_id
+        _current_thread_id.reset(token)
+        
         print("✨ 清理完成！")
 
 

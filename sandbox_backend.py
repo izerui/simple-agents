@@ -4,6 +4,7 @@
 每个对话（由 thread_id 标识）都会获得自己的临时文件系统，对话结束后可以自动清理。
 """
 
+import contextvars
 import os
 import shutil
 import uuid
@@ -12,6 +13,11 @@ from typing import Callable
 
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import BackendProtocol, BackendFactory
+
+# 全局 ContextVar，用于在整个调用链中传递 thread_id
+_current_thread_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_current_thread_id", default=None
+)
 
 
 class SandboxBackendManager:
@@ -90,27 +96,19 @@ class SandboxBackendManager:
                 - 工具调用时：runtime 是 langchain.prebuilt.tool_node.ToolRuntime（有 config 属性）
                 实际文件操作发生在工具调用时，此时可正确获取 thread_id
             """
-            # 从运行时配置中获取 thread_id
-            thread_id = None
+            # 优先从 ContextVar 获取 thread_id（这是最可靠的方式）
+            thread_id = _current_thread_id.get()
 
-            # 情况 1: ToolRuntime 类型 - 在工具调用时传入，有 config 属性
-            if hasattr(runtime, 'config'):
-                config = runtime.config
-                if config is not None and isinstance(config, dict):
-                    configurable = config.get('configurable', {})
-                    thread_id = configurable.get('thread_id')
-
-            # 情况 2: Runtime 类型 - 在模型调用时传入，尝试从 state 获取
-            if thread_id is None and hasattr(runtime, 'state'):
-                state = runtime.state
-                if isinstance(state, dict) and 'config' in state:
-                    config = state['config']
-                    if isinstance(config, dict):
+            # 如果 ContextVar 中没有，尝试从 runtime 获取（兼容性后备）
+            if thread_id is None:
+                # 情况 1: ToolRuntime 类型 - 在工具调用时传入，有 config 属性
+                if hasattr(runtime, 'config'):
+                    config = runtime.config
+                    if config is not None and isinstance(config, dict):
                         configurable = config.get('configurable', {})
                         thread_id = configurable.get('thread_id')
 
-            # 如果还是没有 thread_id，生成一个新的 UUID 作为后备
-            # 这通常发生在模型调用阶段（不进行实际文件操作）
+            # 如果还是没有 thread_id，生成 UUID 作为后备
             if thread_id is None:
                 thread_id = str(uuid.uuid4())
 
