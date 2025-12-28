@@ -53,6 +53,34 @@ class SandboxBackendManager:
             print(f"📁 创建沙箱目录: {session_dir}")
         return self._session_dirs[thread_id]
 
+    def upload_files_to_sandbox(self, thread_id: str, source_dir: str = "./files/"):
+        """
+        将源目录的文件复制到沙箱目录中
+
+        Args:
+            thread_id: 对话的唯一标识符
+            source_dir: 源目录路径，默认为 ./files/
+        """
+        source_path = Path(source_dir)
+        
+        if not source_path.exists():
+            print(f"⚠️  源目录不存在: {source_path}")
+            return
+        
+        # 确保沙箱目录已创建
+        session_dir = self.create_session_dir(thread_id)
+        
+        # 复制源目录中的所有文件到沙箱目录
+        file_count = 0
+        for source_file in source_path.iterdir():
+            if source_file.is_file():
+                dest_file = session_dir / source_file.name
+                shutil.copy2(source_file, dest_file)
+                file_count += 1
+                print(f"📄 上传文件: {source_file.name} -> {dest_file.name}")
+        
+        print(f"✅ 共上传 {file_count} 个文件到沙箱目录: {session_dir}")
+
     def cleanup_session(self, thread_id: str):
         """
         清理指定 thread_id 的沙箱目录

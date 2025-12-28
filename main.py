@@ -46,6 +46,10 @@ async def run_agent_with_cleanup(user_message: str = None):
     try:
         print("\n--- 开始执行 (使用 astream_events 监控节点) ---")
 
+        # 上传 files 目录的内容到沙箱
+        print("\n📤 正在上传文件到沙箱...")
+        sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
+
         # 设置 thread_id 到 ContextVar，这样 backend_factory 可以正确获取
         token = _current_thread_id.set(thread_id)
 
@@ -115,6 +119,10 @@ async def run_multiple_conversations():
             # 显示会话目录
             print(f"\n📁 沙箱目录: ./sandbox_sessions/{thread_id}/")
             
+            # 上传 files 目录的内容到沙箱
+            print("\n📤 正在上传文件到沙箱...")
+            sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
+            
             # 设置 thread_id 到 ContextVar
             token = _current_thread_id.set(thread_id)
             
@@ -161,6 +169,10 @@ async def run_with_user_input():
     print(f"📁 沙箱目录: ./sandbox_sessions/{thread_id}/\n")
     
     try:
+        # 上传 files 目录的内容到沙箱
+        print("\n📤 正在上传文件到沙箱...")
+        sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
+        
         # 设置 thread_id 到 ContextVar（整个会话期间保持）
         token = _current_thread_id.set(thread_id)
         
