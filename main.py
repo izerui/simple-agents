@@ -31,7 +31,7 @@ async def run_agent_with_cleanup(user_message: str = None):
         user_message = "读取文件内容帮我汇总后，生成一个新的汇总文件。"
     
     print(f"{'=' * 80}")
-    print(f"🚀 开始对话 (thread_id: {thread_id[:8]}...)")
+    print(f"🚀 开始对话 (thread_id: {thread_id})")
     print(f"📝 用户消息: {user_message}")
     print(f"{'=' * 80}")
     
@@ -75,7 +75,7 @@ async def run_agent_with_cleanup(user_message: str = None):
     finally:
         # ✅ 关键：对话结束后自动清理沙箱
         # 使用 finally 块确保即使发生异常也会清理
-        print(f"\n🧹 正在清理沙箱 (thread_id: {thread_id[:8]}...)")
+        print(f"\n🧹 正在清理沙箱 (thread_id: {thread_id})")
         sandbox_manager.cleanup_session(thread_id)
         print("✨ 清理完成！")
 
@@ -107,7 +107,7 @@ async def run_multiple_conversations():
         
         try:
             # 显示会话目录
-            print(f"\n📁 沙箱目录: ./sandbox_sessions/session_{thread_id[:8]}/")
+            print(f"\n📁 沙箱目录: ./sandbox_sessions/{thread_id}/")
             
             # 执行 agent
             async for event in agent.astream_events(inputs, version="v1", config=config):
@@ -144,8 +144,8 @@ async def run_with_user_input():
     print("提示: 输入 'quit' 或 'exit' 退出\n")
     
     thread_id = str(uuid.uuid4())
-    print(f"📁 会话 ID: {thread_id[:8]}...")
-    print(f"📁 沙箱目录: ./sandbox_sessions/session_{thread_id[:8]}/\n")
+    print(f"📁 会话 ID: {thread_id}")
+    print(f"📁 沙箱目录: ./sandbox_sessions/{thread_id}/\n")
     
     try:
         while True:

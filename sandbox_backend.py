@@ -41,7 +41,7 @@ class SandboxBackendManager:
             临时目录的 Path 对象
         """
         if thread_id not in self._session_dirs:
-            session_dir = self.base_dir / f"session_{thread_id[:8]}"
+            session_dir = self.base_dir / thread_id
             session_dir.mkdir(parents=True, exist_ok=True)
             self._session_dirs[thread_id] = session_dir
             print(f"📁 创建沙箱目录: {session_dir}")
