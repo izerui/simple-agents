@@ -10,6 +10,8 @@ import asyncio
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 
+from utils import format_messages
+
 # 在所有其他导入之前加载环境变量
 load_dotenv(dotenv_path='.env', verbose=True)
 
@@ -20,37 +22,39 @@ from sandbox_backend import sandbox_manager, _current_thread_id
 async def run_agent_with_cleanup(user_message: str = None):
     """
     运行 agent 并在结束后自动清理沙箱目录
-    
+
     Args:
         user_message: 用户输入的消息，如果不提供则使用默认消息
     """
     # 为每次对话生成唯一的 thread_id
     thread_id = str(uuid.uuid4())
-    
+
     if user_message is None:
-        user_message = "我编写了一个初稿，但是后来省厅发了57号文，导致内容重叠，帮我找下重叠的部分，并结合参考文档给我一些指导建议。"
-    
+        user_message = "从学校的论文指导书中从各个方面提取相关的指导意见"
+
     print(f"{'=' * 80}")
     print(f"🚀 开始对话 (thread_id: {thread_id})")
     print(f"📝 用户消息: {user_message}")
     print(f"{'=' * 80}")
-    
+
     inputs = {
         "messages": [HumanMessage(content=user_message)]
     }
 
+    format_messages([HumanMessage(content=user_message)])
+
     config = {
         "configurable": {
             "thread_id": thread_id,  # ← 这个 ID 决定了沙箱路径
-            "recursion_limit": 50
         },
+        "recursion_limit": 500
     }
 
     try:
         print("\n--- 开始执行 (使用 astream_events 监控节点) ---")
 
         # 上传 files 目录的内容到沙箱
-        print("\n📤 正在上传文件到沙箱...")
+        # print("\n📤 正在上传文件到沙箱...")
         sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
 
         # 设置 thread_id 到 ContextVar，这样 backend_factory 可以正确获取
@@ -86,7 +90,7 @@ async def run_agent_with_cleanup(user_message: str = None):
         # ✅ 关键：对话结束后自动清理沙箱
         # 使用 finally 块确保即使发生异常也会清理
         print(f"\n🧹 正在清理沙箱 (thread_id: {thread_id})")
-        sandbox_manager.cleanup_session(thread_id)
+        # sandbox_manager.cleanup_session(thread_id)
         print("✨ 清理完成！")
         
         # 清除 ContextVar 中的 thread_id
@@ -116,14 +120,19 @@ async def run_multiple_conversations():
         
         thread_id = str(uuid.uuid4())
         inputs = {"messages": [HumanMessage(content=user_message)]}
-        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 500}
+        config = {
+            "configurable": {
+                "thread_id": thread_id
+            },
+            "recursion_limit": 500
+        }
         
         try:
             # 显示会话目录
             print(f"\n📁 沙箱目录: ./sandbox_sessions/{thread_id}/")
             
             # 上传 files 目录的内容到沙箱
-            print("\n📤 正在上传文件到沙箱...")
+            # print("\n📤 正在上传文件到沙箱...")
             sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
             
             # 设置 thread_id 到 ContextVar
@@ -173,7 +182,7 @@ async def run_with_user_input():
     
     try:
         # 上传 files 目录的内容到沙箱
-        print("\n📤 正在上传文件到沙箱...")
+        # print("\n📤 正在上传文件到沙箱...")
         sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
         
         # 设置 thread_id 到 ContextVar（整个会话期间保持）
@@ -196,7 +205,12 @@ async def run_with_user_input():
             print("\nAgent: ", end="", flush=True)
             
             inputs = {"messages": [HumanMessage(content=user_input)]}
-            config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 500}
+            config = {
+                "configurable": {
+                    "thread_id": thread_id
+                },
+                "recursion_limit": 500
+            }
             
             async for event in agent.astream_events(inputs, version="v1", config=config):
                 kind = event["event"]

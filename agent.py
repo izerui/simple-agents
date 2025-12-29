@@ -31,7 +31,7 @@ max_researcher_iterations = 3
 # Get current date
 current_date = datetime.now().strftime("%Y-%m-%d")
 
-# Combine orchestrator instructions (RESEARCHER_INSTRUCTIONS only for sub-agents)
+# 组合编排指令（仅限子代理的 RESEARCHER_INSTRUCTIONS）
 INSTRUCTIONS = (
         AGENT_WORKFLOW_INSTRUCTIONS
         + "\n\n"
@@ -49,25 +49,18 @@ limiter = ToolCallLimitMiddleware(
     exit_behavior="continue"  # 达到 50 次后，强制终止并返回当前结果
 )
 
-config = {
-        "configurable": {
-            "recursion_limit": 50
-        },
-    }
-
-# Create research sub-agent
+# 创建研究子代理
 research_sub_agent = SubAgent(
-    name= "research-agent",
-    description = "Delegate research to the sub-agent researcher. Only give this researcher one topic at a time.",
+    name= "子代理研究员",
+    description = "将研究委托给子代理研究员，每次仅限一个主题。",
     system_prompt = AGENT_INSTRUCTIONS.format(date=current_date),
     tools = [think_tool],
     middleware= [limiter],
-    config=config
 )
 
 # Model Claude 4.5
 model = init_chat_model(
-    model_provider='anthropic',
+    model_provider=os.getenv('MODEL_PROVIDER'),
     model=os.getenv('MODEL_MODEL_ID'),
     base_url=os.getenv('MODEL_BASE_URL'),
     api_key=os.getenv('MODEL_API_KEY'),

@@ -50,7 +50,7 @@ class SandboxBackendManager:
             session_dir = self.base_dir / thread_id
             session_dir.mkdir(parents=True, exist_ok=True)
             self._session_dirs[thread_id] = session_dir
-            print(f"📁 创建沙箱目录: {session_dir}")
+            # print(f"📁 创建沙箱目录: {session_dir}")
         return self._session_dirs[thread_id]
 
     def _copy_directory_recursively(self, thread_id: str, source_dir: Path, session_dir: Path, relative_to: Path) -> int:
@@ -82,9 +82,36 @@ class SandboxBackendManager:
                 dest_file = dest_dir / item.name
                 shutil.copy2(item, dest_file)
                 file_count += 1
-                print(f"📄 上传文件: {item} -> {dest_file}")
         
         return file_count
+
+    def _print_tree_structure(self, directory: Path, prefix: str = "", is_last: bool = True):
+        """
+        打印目录的树状结构
+
+        Args:
+            directory: 要打印的目录路径
+            prefix: 每行的前缀（用于缩进）
+            is_last: 是否是当前目录的最后一项
+        """
+        if not directory.exists():
+            return
+
+        # 获取目录下的所有项并排序
+        items = sorted(directory.iterdir(), key=lambda x: (not x.is_file(), x.name))
+        
+        for i, item in enumerate(items):
+            is_item_last = i == len(items) - 1
+            current_prefix = "└── " if is_item_last else "├── "
+            item_name = item.name
+            
+            # 打印当前项
+            print(f"{prefix}{current_prefix}{item_name}")
+            
+            # 如果是目录，递归打印其内容
+            if item.is_dir():
+                next_prefix = prefix + ("    " if is_item_last else "│   ")
+                self._print_tree_structure(item, next_prefix, is_item_last)
 
     def upload_files_to_sandbox(self, thread_id: str, source_dir: str = "./files/"):
         """
@@ -112,9 +139,10 @@ class SandboxBackendManager:
                 dest_file = session_dir / source_file.name
                 shutil.copy2(source_file, dest_file)
                 file_count += 1
-                print(f"📄 上传文件: {source_file} -> {dest_file}")
-        
-        print(f"✅ 共上传 {file_count} 个文件到沙箱目录: {session_dir}")
+        print('\n')
+        print(f"📂 沙箱目录结构: {session_dir}")
+        self._print_tree_structure(session_dir)
+        print('\n')
 
     def cleanup_session(self, thread_id: str):
         """
