@@ -28,7 +28,7 @@ async def run_agent_with_cleanup(user_message: str = None):
     thread_id = str(uuid.uuid4())
     
     if user_message is None:
-        user_message = "读取文件内容帮我汇总后，生成一个新的汇总文件。"
+        user_message = "我编写了一个初稿，但是后来省厅发了57号文，导致内容重叠，帮我找下重叠的部分，并结合参考文档给我一些指导建议。"
     
     print(f"{'=' * 80}")
     print(f"🚀 开始对话 (thread_id: {thread_id})")
@@ -42,7 +42,7 @@ async def run_agent_with_cleanup(user_message: str = None):
     config = {
         "configurable": {
             "thread_id": thread_id,  # ← 这个 ID 决定了沙箱路径
-            "recursion_limit": 100
+            "recursion_limit": 50
         },
     }
 
@@ -116,7 +116,7 @@ async def run_multiple_conversations():
         
         thread_id = str(uuid.uuid4())
         inputs = {"messages": [HumanMessage(content=user_message)]}
-        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 50}
+        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 500}
         
         try:
             # 显示会话目录
@@ -196,7 +196,7 @@ async def run_with_user_input():
             print("\nAgent: ", end="", flush=True)
             
             inputs = {"messages": [HumanMessage(content=user_input)]}
-            config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
+            config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 500}
             
             async for event in agent.astream_events(inputs, version="v1", config=config):
                 kind = event["event"]

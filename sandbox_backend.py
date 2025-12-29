@@ -53,9 +53,42 @@ class SandboxBackendManager:
             print(f"📁 创建沙箱目录: {session_dir}")
         return self._session_dirs[thread_id]
 
+    def _copy_directory_recursively(self, thread_id: str, source_dir: Path, session_dir: Path, relative_to: Path) -> int:
+        """
+        递归复制目录结构到沙箱，保留原始目录结构
+
+        Args:
+            thread_id: 对话的唯一标识符
+            source_dir: 当前要复制的源目录
+            session_dir: 沙箱会话目录
+            relative_to: 原始根目录，用于计算相对路径
+
+        Returns:
+            复制的文件数量
+        """
+        # 计算相对路径
+        relative_path = source_dir.relative_to(relative_to)
+        dest_dir = session_dir / relative_path
+        
+        # 创建目标目录
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_count = 0
+        for item in source_dir.iterdir():
+            if item.is_dir():
+                # 递归处理子目录
+                file_count += self._copy_directory_recursively(thread_id, item, session_dir, relative_to)
+            elif item.is_file():
+                dest_file = dest_dir / item.name
+                shutil.copy2(item, dest_file)
+                file_count += 1
+                print(f"📄 上传文件: {item} -> {dest_file}")
+        
+        return file_count
+
     def upload_files_to_sandbox(self, thread_id: str, source_dir: str = "./files/"):
         """
-        将源目录的文件复制到沙箱目录中
+        将源目录的文件复制到沙箱目录中，保留原始目录结构
 
         Args:
             thread_id: 对话的唯一标识符
@@ -70,14 +103,16 @@ class SandboxBackendManager:
         # 确保沙箱目录已创建
         session_dir = self.create_session_dir(thread_id)
         
-        # 复制源目录中的所有文件到沙箱目录
+        # 使用内部方法递归复制，保留目录结构
         file_count = 0
         for source_file in source_path.iterdir():
-            if source_file.is_file():
+            if source_file.is_dir():
+                file_count += self._copy_directory_recursively(thread_id, source_file, session_dir, source_path)
+            elif source_file.is_file():
                 dest_file = session_dir / source_file.name
                 shutil.copy2(source_file, dest_file)
                 file_count += 1
-                print(f"📄 上传文件: {source_file.name} -> {dest_file.name}")
+                print(f"📄 上传文件: {source_file} -> {dest_file}")
         
         print(f"✅ 共上传 {file_count} 个文件到沙箱目录: {session_dir}")
 

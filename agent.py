@@ -45,9 +45,15 @@ INSTRUCTIONS = (
 
 # 1. 创建限制器：例如单次运行最多允许 5 次工具调用
 limiter = ToolCallLimitMiddleware(
-    run_limit=3,
-    exit_behavior="continue"  # 达到 3 次后，强制终止并返回当前结果
+    run_limit=50,
+    exit_behavior="continue"  # 达到 50 次后，强制终止并返回当前结果
 )
+
+config = {
+        "configurable": {
+            "recursion_limit": 50
+        },
+    }
 
 # Create research sub-agent
 research_sub_agent = SubAgent(
@@ -55,11 +61,17 @@ research_sub_agent = SubAgent(
     description = "Delegate research to the sub-agent researcher. Only give this researcher one topic at a time.",
     system_prompt = AGENT_INSTRUCTIONS.format(date=current_date),
     tools = [think_tool],
-    middleware= [limiter]
+    middleware= [limiter],
+    config=config
 )
 
 # Model Claude 4.5
-model = init_chat_model(model=os.getenv('MODEL_MODEL_ID'), base_url=os.getenv('MODEL_BASE_URL'), api_key=os.getenv('MODEL_API_KEY'), temperature=0.0)
+model = init_chat_model(
+    model_provider='anthropic',
+    model=os.getenv('MODEL_MODEL_ID'),
+    base_url=os.getenv('MODEL_BASE_URL'),
+    api_key=os.getenv('MODEL_API_KEY'),
+    temperature=0.0)
 
 # Create the agent
 # 使用 BackendFactory 实现每个对话独立的沙箱路径
