@@ -68,15 +68,37 @@ async def run_agent_with_cleanup(user_message: str = None):
             if kind == "on_chain_end":
                 node_name = event["name"]
                 node_output = event["data"].get("output")
-                print(f"✅ 节点 [{node_name}] 执行完毕")
+                # print(f"✅ 节点 [{node_name}] 执行完毕")
                 if node_output and len(str(node_output)) > 100:
-                    print(f"   输出摘要: {str(node_output)[:100]}...\n")
+                    # print(f"   输出摘要: {str(node_output)[:100]}...\n")
+                    pass
 
             # 监控 Token 级别 (打字机效果)
             elif kind == "on_chat_model_stream":
-                content = event["data"]["chunk"].content
-                if content:
-                    print(content, end="", flush=True)
+                chunk = event["data"]["chunk"]
+                # 使用 content_blocks 属性（更可靠）
+                if hasattr(chunk, "content_blocks"):
+                    for block in chunk.content_blocks:
+                        if block["type"] == "text":
+                            print(block["text"], end="", flush=True)
+                        elif block["type"] == "reasoning":
+                            print(f"\n💭 {block['reasoning']}")
+                        # elif block["type"] == "tool_call_chunk":
+                        #     print(f"\n🔧 工具调用: {block.get('name')}")
+                else:
+                    # 降级处理
+                    print(chunk.content, end="", flush=True)
+                # 2. 显示工具调用（增强透明度）
+            # elif kind == "on_tool_start":
+            #     print(f"\n🔧 正在调用: {event['name']}")
+
+                # 3. 显示执行步骤
+            elif kind == "on_chain_end":
+                print(f"\n✅ [{event['name']}] 完成")
+
+                # 4. 错误处理
+            elif kind.endswith("_error"):
+                print(f"\n❌ 出错: {event['data'].get('error')}")
 
         print("\n\n--- 执行结束 ---")
         
