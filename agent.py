@@ -19,8 +19,8 @@ from sandbox_backend import sandbox_manager  # 导入全局沙箱管理器
 
 from tools import think_tool
 from prompts import (
-    RESEARCHER_INSTRUCTIONS,
-    RESEARCH_WORKFLOW_INSTRUCTIONS,
+    AGENT_INSTRUCTIONS,
+    AGENT_WORKFLOW_INSTRUCTIONS,
     SUBAGENT_DELEGATION_INSTRUCTIONS,
 )
 
@@ -33,11 +33,11 @@ current_date = datetime.now().strftime("%Y-%m-%d")
 
 # Combine orchestrator instructions (RESEARCHER_INSTRUCTIONS only for sub-agents)
 INSTRUCTIONS = (
-    RESEARCH_WORKFLOW_INSTRUCTIONS
-    + "\n\n"
-    + "=" * 80
-    + "\n\n"
-    + SUBAGENT_DELEGATION_INSTRUCTIONS.format(
+        AGENT_WORKFLOW_INSTRUCTIONS
+        + "\n\n"
+        + "=" * 80
+        + "\n\n"
+        + SUBAGENT_DELEGATION_INSTRUCTIONS.format(
         max_concurrent_research_units=max_concurrent_research_units,
         max_researcher_iterations=max_researcher_iterations,
     )
@@ -53,7 +53,7 @@ limiter = ToolCallLimitMiddleware(
 research_sub_agent = SubAgent(
     name= "research-agent",
     description = "Delegate research to the sub-agent researcher. Only give this researcher one topic at a time.",
-    system_prompt = RESEARCHER_INSTRUCTIONS.format(date=current_date),
+    system_prompt = AGENT_INSTRUCTIONS.format(date=current_date),
     tools = [think_tool],
     middleware= [limiter]
 )

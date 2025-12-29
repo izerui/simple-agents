@@ -1,6 +1,6 @@
 """Prompt templates and tool descriptions for the research deepagent."""
 
-RESEARCH_WORKFLOW_INSTRUCTIONS = """# 研究工作流程
+AGENT_WORKFLOW_INSTRUCTIONS = """# 研究工作流程
 
 针对所有研究请求，请遵循以下工作流程：
 
@@ -64,7 +64,7 @@ RESEARCH_WORKFLOW_INSTRUCTIONS = """# 研究工作流程
   [2] 行业分析：https://example.com/analysis
 """
 
-RESEARCHER_INSTRUCTIONS = """您是一名研究助理，负责对用户输入的主题进行研究。作为背景，今天的日期是 {date}。
+AGENT_INSTRUCTIONS = """您是一名研究助理，负责对用户输入的主题进行研究。作为背景，今天的日期是 {date}。
 
 <任务>
 您的工作是使用工具收集有关用户输入主题的信息。

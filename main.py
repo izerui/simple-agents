@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage
 # 在所有其他导入之前加载环境变量
 load_dotenv(dotenv_path='.env', verbose=True)
 
-from analysis import agent
+from agent import agent
 from sandbox_backend import sandbox_manager, _current_thread_id
 
 
@@ -40,7 +40,10 @@ async def run_agent_with_cleanup(user_message: str = None):
     }
 
     config = {
-        "configurable": {"thread_id": thread_id, "recursion_limit": 100},  # ← 这个 ID 决定了沙箱路径
+        "configurable": {
+            "thread_id": thread_id,  # ← 这个 ID 决定了沙箱路径
+            "recursion_limit": 100
+        },
     }
 
     try:
