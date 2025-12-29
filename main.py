@@ -30,7 +30,12 @@ async def run_agent_with_cleanup(user_message: str = None):
     thread_id = str(uuid.uuid4())
 
     if user_message is None:
-        user_message = "从学校的论文指导书中从各个方面提取相关的指导意见"
+        user_message = """基于论文指导手册，从专业角度评价该学生论文的以下方面：
+1. 文献综述质量：是否全面、是否准确、是否有批判性思维
+2. 研究方法与实施：方法是否科学、是否可行、数据分析是否合理
+3. 论文结构与逻辑：逻辑是否清晰、结构是否合理
+4. 学术规范与表达：专业术语使用是否准确、表达是否清晰
+5. 总结：整体评价和核心改进建议, 结论针对五个方面各自给出评价和改进建议，每个模块建议字数不超过300字。并依托指导手册针对该论文进行打分。"""
 
     print(f"{'=' * 80}")
     print(f"🚀 开始对话 (thread_id: {thread_id})")
@@ -64,17 +69,8 @@ async def run_agent_with_cleanup(user_message: str = None):
         async for event in agent.astream_events(inputs, version="v1", config=config):
             kind = event["event"]
 
-            # 监控节点执行
-            if kind == "on_chain_end":
-                node_name = event["name"]
-                node_output = event["data"].get("output")
-                # print(f"✅ 节点 [{node_name}] 执行完毕")
-                if node_output and len(str(node_output)) > 100:
-                    # print(f"   输出摘要: {str(node_output)[:100]}...\n")
-                    pass
-
             # 监控 Token 级别 (打字机效果)
-            elif kind == "on_chat_model_stream":
+            if kind == "on_chat_model_stream":
                 chunk = event["data"]["chunk"]
                 # 使用 content_blocks 属性（更可靠）
                 if hasattr(chunk, "content_blocks"):
@@ -88,13 +84,24 @@ async def run_agent_with_cleanup(user_message: str = None):
                 else:
                     # 降级处理
                     print(chunk.content, end="", flush=True)
-                # 2. 显示工具调用（增强透明度）
+
+            # 监控 Token 流结束
+            elif kind == "on_chat_model_end":
+                # 流式输出结束后换行
+                print("", flush=True)
+
+            # 2. 显示工具调用（增强透明度）
             # elif kind == "on_tool_start":
             #     print(f"\n🔧 正在调用: {event['name']}")
 
-                # 3. 显示执行步骤
+            # 3. 显示执行步骤
             elif kind == "on_chain_end":
-                print(f"\n✅ [{event['name']}] 完成")
+                node_name = event["name"]
+                node_output = event["data"].get("output")
+                # print(f"✅ 节点 [{node_name}] 执行完毕")
+                if node_output and len(str(node_output)) > 100:
+                    # print(f"   输出摘要: {str(node_output)[:100]}...\n")
+                    pass
 
                 # 4. 错误处理
             elif kind.endswith("_error"):
