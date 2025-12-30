@@ -14,6 +14,7 @@ from deepagents import create_deep_agent, SubAgent
 from langgraph.prebuilt import ToolRuntime
 
 from deepagents.backends import FilesystemBackend
+from deepagents.backends.filesystem_async import AsyncFilesystemBackend
 from tools import think_tool, fetch_url
 from prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
@@ -99,7 +100,7 @@ def get_backend_per_thread(runtime: ToolRuntime):
 
     # 3. 创建新的 Backend 实例并缓存
     # 注意：不预先转换为绝对路径，让 FilesystemBackend.__init__ 处理
-    backend = FilesystemBackend(
+    backend = AsyncFilesystemBackend(
         root_dir=user_root_dir,
         virtual_mode=True,
         max_file_size_mb=50,
