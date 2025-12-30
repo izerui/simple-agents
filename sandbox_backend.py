@@ -2,22 +2,27 @@
 
 这个模块提供了 SandboxBackendManager 类，用于管理多个对话的独立沙箱目录。
 每个对话（由 thread_id 标识）都会获得自己的临时文件系统，对话结束后可以自动清理。
+
+所有操作都是纯异步的，使用 aiofiles 避免 blockbuster 的阻塞检测。
 """
 
 import contextvars
-
+import asyncio
+import os
 import shutil
 import uuid
 from pathlib import Path
+from typing import Optional
 
-
+from aiofiles import os as aiofiles_os
+from aiofiles import open as aiofiles_open
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import BackendProtocol, BackendFactory
 from rich.console import Console
 from rich.tree import Tree
 
 # 全局 ContextVar，用于在整个调用链中传递 thread_id
-_current_thread_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+_current_thread_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "_current_thread_id", default=None
 )
 
@@ -25,6 +30,7 @@ _current_thread_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 class SandboxBackendManager:
     """
     沙箱后端管理器 - 为每个线程/对话创建独立的临时目录
+    所有操作都是异步的，避免 blockbuster 的阻塞检测
     """
 
     def __init__(self, base_dir: str = "./sandbox_sessions/"):
@@ -35,12 +41,14 @@ class SandboxBackendManager:
             base_dir: 沙箱会话的基础目录
         """
         self.base_dir = Path(base_dir)
-        self.base_dir.mkdir(parents=True, exist_ok=True)
+        # 同步初始化，仅在模块启动时执行一次
+        if not self.base_dir.exists():
+            self.base_dir.mkdir(parents=True, exist_ok=True)
         self._session_dirs = {}  # thread_id -> temp_dir_path
 
-    def create_session_dir(self, thread_id: str) -> Path:
+    async def create_session_dir(self, thread_id: str) -> Path:
         """
-        为指定的 thread_id 创建临时目录
+        为指定的 thread_id 创建临时目录（异步）
 
         Args:
             thread_id: 对话的唯一标识符
@@ -50,17 +58,25 @@ class SandboxBackendManager:
         """
         if thread_id not in self._session_dirs:
             session_dir = self.base_dir / thread_id
-            session_dir.mkdir(parents=True, exist_ok=True)
+            # 使用 aiofiles.os.mkdir 避免阻塞
+            try:
+                await aiofiles_os.makedirs(session_dir, exist_ok=True)
+            except Exception:
+                # 如果已经存在，忽略错误
+                pass
             self._session_dirs[thread_id] = session_dir
-            # print(f"📁 创建沙箱目录: {session_dir}")
         return self._session_dirs[thread_id]
 
-    def _copy_directory_recursively(self, thread_id: str, source_dir: Path, session_dir: Path, relative_to: Path) -> int:
+    async def _acopy_directory_recursively(
+        self, 
+        source_dir: Path, 
+        session_dir: Path, 
+        relative_to: Path
+    ) -> int:
         """
-        递归复制目录结构到沙箱，保留原始目录结构
+        递归复制目录结构到沙箱（纯异步）
 
         Args:
-            thread_id: 对话的唯一标识符
             source_dir: 当前要复制的源目录
             session_dir: 沙箱会话目录
             relative_to: 原始根目录，用于计算相对路径
@@ -72,71 +88,99 @@ class SandboxBackendManager:
         relative_path = source_dir.relative_to(relative_to)
         dest_dir = session_dir / relative_path
         
-        # 创建目标目录
-        dest_dir.mkdir(parents=True, exist_ok=True)
+        # 创建目标目录（异步）
+        try:
+            await aiofiles_os.makedirs(dest_dir, exist_ok=True)
+        except Exception:
+            pass
         
         file_count = 0
-        for item in source_dir.iterdir():
-            if item.is_dir():
-                # 递归处理子目录
-                file_count += self._copy_directory_recursively(thread_id, item, session_dir, relative_to)
-            elif item.is_file():
-                dest_file = dest_dir / item.name
-                shutil.copy2(item, dest_file)
-                file_count += 1
+        
+        # 异步遍历目录
+        try:
+            entries = await aiofiles_os.scandir(source_dir)
+            for entry in entries:
+                if entry.is_dir():
+                    # 递归处理子目录
+                    file_count += await self._acopy_directory_recursively(
+                        Path(entry.path), 
+                        session_dir, 
+                        relative_to
+                    )
+                elif entry.is_file():
+                    dest_file = dest_dir / entry.name
+                    # 异步复制文件
+                    await self._acopy_file(Path(entry.path), dest_file)
+                    file_count += 1
+        except (FileNotFoundError, PermissionError):
+            pass
         
         return file_count
 
+    async def _acopy_file(self, source: Path, dest: Path) -> None:
+        """
+        异步复制单个文件
+        
+        Args:
+            source: 源文件路径
+            dest: 目标文件路径
+        """
+        # 确保目标目录存在
+        dest_parent = dest.parent
+        try:
+            await aiofiles_os.makedirs(dest_parent, exist_ok=True)
+        except Exception:
+            pass
+        
+        # 异步读取和写入
+        async with aiofiles_open(source, 'rb') as src_file:
+            content = await src_file.read()
+            async with aiofiles_open(dest, 'wb') as dest_file:
+                await dest_file.write(content)
+        
+        # 尝试复制元数据（这部分可能需要同步，但只在复制完成后执行）
+        try:
+            stat_info = await aiofiles_os.stat(source)
+            await aiofiles_os.utime(
+                dest, 
+                (stat_info.st_atime, stat_info.st_mtime)
+            )
+        except Exception:
+            pass
+
     def _print_tree_structure(self, directory: Path, prefix: str = "", is_last: bool = True):
         """
-        打印目录的树状结构
-
-        Args:
-            directory: 要打印的目录路径
-            prefix: 每行的前缀（用于缩进）
-            is_last: 是否是当前目录的最后一项
+        打印目录的树状结构（同步，仅在打印时使用）
         """
         if not directory.exists():
             return
 
-        # 获取目录下的所有项并排序
         items = sorted(directory.iterdir(), key=lambda x: (not x.is_file(), x.name))
         
         for i, item in enumerate(items):
             is_item_last = i == len(items) - 1
             current_prefix = "└── " if is_item_last else "├── "
             item_name = item.name
-            
-            # 打印当前项
             print(f"{prefix}{current_prefix}{item_name}")
             
-            # 如果是目录，递归打印其内容
             if item.is_dir():
                 next_prefix = prefix + ("    " if is_item_last else "│   ")
                 self._print_tree_structure(item, next_prefix, is_item_last)
 
     def _build_rich_tree(self, directory: Path, parent_tree: Tree) -> None:
         """
-        递归构建 rich 树状结构
-
-        Args:
-            directory: 要遍历的目录路径
-            parent_tree: 父级树节点
+        递归构建 rich 树状结构（同步，仅在打印时使用）
         """
         if not directory.exists():
             return
 
-        # 获取目录下的所有项并排序（目录优先）
         items = sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name))
 
         for item in items:
             if item.is_dir():
-                # 添加目录节点
                 branch = parent_tree.add(f"📁 [bold cyan]{item.name}[/bold cyan]")
-                # 递归处理子目录
                 self._build_rich_tree(item, branch)
             else:
-                # 添加文件节点
                 file_size = item.stat().st_size
                 size_str = self._format_file_size(file_size)
                 parent_tree.add(f"📄 {item.name} [dim]({size_str})[/dim]")
@@ -144,12 +188,6 @@ class SandboxBackendManager:
     def _format_file_size(self, size_bytes: int) -> str:
         """
         格式化文件大小为人类可读的形式
-
-        Args:
-            size_bytes: 文件大小（字节）
-
-        Returns:
-            格式化后的文件大小字符串
         """
         size = float(size_bytes)
         for unit in ['B', 'KB', 'MB', 'GB']:
@@ -160,7 +198,7 @@ class SandboxBackendManager:
 
     def print_file_tree(self, directory: Path | None = None, title: str | None = None) -> None:
         """
-        使用 rich 库打印精美的文件树结构
+        使用 rich 库打印精美的文件树结构（同步，仅在打印时使用）
 
         Args:
             directory: 要打印的目录路径，如果为 None 则打印沙箱根目录
@@ -175,26 +213,16 @@ class SandboxBackendManager:
             console.print(f"[red]⚠️  目录不存在: {directory}[/red]")
             return
 
-        # 设置树标题
         if title is None:
             title = f"📁 [bold]{directory.name}[/bold]"
 
-        # 创建根节点
         tree = Tree(title)
-
-        # 构建树结构
         self._build_rich_tree(directory, tree)
-
-        # 打印树
         console.print(tree)
 
-    def print_session_file_tree(self, thread_id: str, title: str | None = None) -> None:
+    async def print_session_file_tree(self, thread_id: str, title: str | None = None) -> None:
         """
-        打印指定会话的沙箱文件树
-
-        Args:
-            thread_id: 对话的唯一标识符
-            title: 自定义标题，如果为 None 则使用默认标题
+        打印指定会话的沙箱文件树（异步）
         """
         session_dir = self._session_dirs.get(thread_id)
 
@@ -203,16 +231,15 @@ class SandboxBackendManager:
             console.print(f"[red]⚠️  会话 {thread_id} 不存在或已被清理[/red]")
             return
 
-        # 设置默认标题
         if title is None:
             title = f"📦 [bold green]会话沙箱[/bold green] [dim]({thread_id[:8]}...)[/dim]"
 
-        # 打印文件树
+        # 打印是同步的，但整个方法标记为异步以避免混淆
         self.print_file_tree(session_dir, title)
 
-    def upload_files_to_sandbox(self, thread_id: str, source_dir: str = "./files/"):
+    async def upload_files_to_sandbox(self, thread_id: str, source_dir: str = "./files/") -> None:
         """
-        将源目录的文件复制到沙箱目录中，保留原始目录结构
+        将源目录的文件复制到沙箱目录中，保留原始目录结构（纯异步）
 
         Args:
             thread_id: 对话的唯一标识符
@@ -220,22 +247,36 @@ class SandboxBackendManager:
         """
         source_path = Path(source_dir)
 
-        if not source_path.exists():
+        # 异步检查源目录是否存在
+        try:
+            exists = await aiofiles_os.path.exists(source_path)
+        except Exception:
+            exists = False
+            
+        if not exists:
             print(f"⚠️  源目录不存在: {source_path}")
             return
 
-        # 确保沙箱目录已创建
-        session_dir = self.create_session_dir(thread_id)
+        # 确保沙箱目录已创建（异步）
+        session_dir = await self.create_session_dir(thread_id)
 
-        # 使用内部方法递归复制，保留目录结构
+        # 异步遍历并复制
         file_count = 0
-        for source_file in source_path.iterdir():
-            if source_file.is_dir():
-                file_count += self._copy_directory_recursively(thread_id, source_file, session_dir, source_path)
-            elif source_file.is_file():
-                dest_file = session_dir / source_file.name
-                shutil.copy2(source_file, dest_file)
-                file_count += 1
+        try:
+            entries = await aiofiles_os.scandir(source_path)
+            for entry in entries:
+                if entry.is_dir():
+                    file_count += await self._acopy_directory_recursively(
+                        Path(entry.path), 
+                        session_dir, 
+                        source_path
+                    )
+                elif entry.is_file():
+                    dest_file = session_dir / entry.name
+                    await self._acopy_file(Path(entry.path), dest_file)
+                    file_count += 1
+        except (FileNotFoundError, PermissionError):
+            pass
 
         # 使用 rich 库打印文件树
         print('\n')
@@ -244,24 +285,51 @@ class SandboxBackendManager:
         self.print_file_tree(session_dir)
         print('\n')
 
-    def cleanup_session(self, thread_id: str):
+    async def _aremove_directory(self, directory: Path) -> None:
         """
-        清理指定 thread_id 的沙箱目录
+        异步递归删除目录
+        
+        Args:
+            directory: 要删除的目录路径
+        """
+        if not directory.exists():
+            return
+        
+        try:
+            # 先递归删除所有内容
+            entries = await aiofiles_os.scandir(directory)
+            for entry in entries:
+                if entry.is_dir():
+                    await self._aremove_directory(Path(entry.path))
+                elif entry.is_file():
+                    await aiofiles_os.remove(entry.path)
+            
+            # 删除空目录
+            try:
+                await aiofiles_os.rmdir(directory)
+            except OSError:
+                pass
+        except (FileNotFoundError, PermissionError):
+            pass
+
+    async def cleanup_session(self, thread_id: str) -> None:
+        """
+        清理指定 thread_id 的沙箱目录（纯异步）
 
         Args:
             thread_id: 对话的唯一标识符
         """
         if thread_id in self._session_dirs:
             session_dir = self._session_dirs[thread_id]
-            if session_dir.exists():
-                shutil.rmtree(session_dir)
-                print(f"🗑️  清理沙箱目录: {session_dir}")
+            await self._aremove_directory(session_dir)
+            print(f"🗑️  清理沙箱目录: {session_dir}")
             del self._session_dirs[thread_id]
 
-    def cleanup_all(self):
-        """清理所有沙箱目录"""
-        for thread_id in list(self._session_dirs.keys()):
-            self.cleanup_session(thread_id)
+    async def cleanup_all(self) -> None:
+        """清理所有沙箱目录（并发异步）"""
+        tasks = [self.cleanup_session(thread_id) for thread_id in list(self._session_dirs.keys())]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     def create_backend_factory(self) -> BackendFactory:
         """
@@ -270,6 +338,14 @@ class SandboxBackendManager:
         Returns:
             一个函数，接受 Runtime 对象并返回 BackendProtocol 实例
         """
+
+        # 预先解析基础目录，避免在 factory 中调用 resolve()
+        # 这只在模块加载时执行一次，不会在异步上下文中
+        try:
+            resolved_base_dir = str(self.base_dir.resolve())
+        except Exception:
+            # 如果 resolve 失败，使用绝对路径
+            resolved_base_dir = str(self.base_dir.absolute())
 
         def backend_factory(runtime) -> BackendProtocol:
             """
@@ -292,7 +368,6 @@ class SandboxBackendManager:
 
             # 如果 ContextVar 中没有，尝试从 runtime 获取（兼容性后备）
             if thread_id is None:
-                # 情况 1: ToolRuntime 类型 - 在工具调用时传入，有 config 属性
                 if hasattr(runtime, 'config'):
                     config = runtime.config
                     if config is not None and isinstance(config, dict):
@@ -303,20 +378,33 @@ class SandboxBackendManager:
             if thread_id is None:
                 thread_id = str(uuid.uuid4())
 
-            # 为这个对话创建独立目录
-            session_dir = self.create_session_dir(thread_id)
+            # 获取会话目录路径（不调用 resolve）
+            if thread_id not in self._session_dirs:
+                session_dir = self.base_dir / thread_id
+                self._session_dirs[thread_id] = session_dir
+            else:
+                session_dir = self._session_dirs[thread_id]
+            
+            # 直接拼接字符串而不是使用 Path 操作
+            full_path = os.path.join(resolved_base_dir, thread_id)
 
-            # 创建使用该目录的 backend
-            return FilesystemBackend(
-                root_dir=str(session_dir),
-                virtual_mode=True
-            )
+            # 创建 FilesystemBackend 并手动设置属性，避免触发 resolve()
+            backend = FilesystemBackend.__new__(FilesystemBackend)
+            backend.cwd = Path(full_path)
+            backend.root_dir = str(backend.cwd)
+            backend.virtual_mode = True
+            
+            # 设置其他必要的属性
+            backend._files = {}
+            backend._initialized = True
+
+            return backend
 
         return backend_factory
 
-    def get_session_info(self, thread_id: str) -> dict:
+    async def get_session_info(self, thread_id: str) -> dict:
         """
-        获取指定会话的信息
+        获取指定会话的信息（纯异步）
 
         Args:
             thread_id: 对话的唯一标识符
@@ -339,25 +427,43 @@ class SandboxBackendManager:
                 "file_count": 0
             }
 
+        exists = await aiofiles_os.path.exists(session_dir)
         file_count = 0
-        if session_dir.exists():
-            file_count = sum(1 for _ in session_dir.rglob("*") if _.is_file())
+        
+        if exists:
+            # 异步统计文件数量
+            try:
+                entries = await aiofiles_os.scandir(session_dir)
+                for entry in entries:
+                    if entry.is_file():
+                        file_count += 1
+                    elif entry.is_dir():
+                        # 递归统计子目录
+                        sub_entries = await aiofiles_os.scandir(entry.path)
+                        for sub_entry in sub_entries:
+                            if sub_entry.is_file():
+                                file_count += 1
+            except Exception:
+                pass
 
         return {
             "thread_id": thread_id,
             "session_dir": str(session_dir),
-            "exists": session_dir.exists(),
+            "exists": exists,
             "file_count": file_count
         }
 
-    def list_all_sessions(self) -> list:
+    async def list_all_sessions(self) -> list:
         """
-        列出所有活动的会话
+        列出所有活动的会话（并发异步）
 
         Returns:
             会话信息列表
         """
-        return [self.get_session_info(thread_id) for thread_id in self._session_dirs.keys()]
+        tasks = [self.get_session_info(thread_id) for thread_id in self._session_dirs.keys()]
+        if tasks:
+            return await asyncio.gather(*tasks)
+        return []
 
     def __len__(self) -> int:
         """返回当前活动的会话数量"""
@@ -369,5 +475,4 @@ class SandboxBackendManager:
 
 
 # 全局沙箱管理器实例
-# 可以在应用中使用这个全局实例，也可以创建多个独立的管理器
 sandbox_manager = SandboxBackendManager()
