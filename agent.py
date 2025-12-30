@@ -17,7 +17,7 @@ from deepagents import create_deep_agent, FilesystemMiddleware, SubAgent
 from langchain_core.messages import HumanMessage
 from sandbox_backend import sandbox_manager  # 导入全局沙箱管理器
 
-from tools import think_tool
+from tools import think_tool, fetch_url
 from prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
     SUBAGENT_INSTRUCTIONS,
@@ -54,7 +54,7 @@ research_sub_agent = SubAgent(
     name= "子代理研究员",
     description = "将研究委托给子代理研究员，每次仅限一个主题。",
     system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
-    tools = [think_tool],
+    tools = [think_tool, fetch_url],
     middleware= [limiter],
 )
 
@@ -71,7 +71,7 @@ model = init_chat_model(
 # 每个 thread_id 会在调用时自动获得独立的临时目录
 agent = create_deep_agent(
     model=model,
-    tools=[think_tool],
+    tools=[think_tool, fetch_url],
     system_prompt=INSTRUCTIONS,
     backend=sandbox_manager.create_backend_factory(),  # 使用沙箱工厂函数
     subagents=[research_sub_agent],
