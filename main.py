@@ -50,7 +50,6 @@ async def run_agent_with_cleanup(user_message: str):
     )
 
     try:
-        print("\n--- 开始执行 (使用 astream_events 监控节点) ---")
 
         # 上传 files 目录的内容到沙箱
         # print("\n📤 正在上传文件到沙箱...")
@@ -107,9 +106,6 @@ async def run_multiple_conversations(conversations: list[str]):
         )
 
         try:
-            # 显示会话目录
-            print(f"\n📁 沙箱目录: ./sandbox_sessions/{thread_id}/")
-
             # 上传 files 目录的内容到沙箱
             # print("\n📤 正在上传文件到沙箱...")
             sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
@@ -152,7 +148,6 @@ async def run_with_user_input():
 
     thread_id = str(uuid.uuid4())
     print(f"📁 会话 ID: {thread_id}")
-    print(f"📁 沙箱目录: ./sandbox_sessions/{thread_id}/\n")
 
     try:
         # 上传 files 目录的内容到沙箱
@@ -195,7 +190,7 @@ async def run_with_user_input():
             # 显示当前会话的文件数量
             session_info = sandbox_manager.get_session_info(thread_id)
             if session_info['file_count'] > 0:
-                print(f"📊 当前沙箱中有 {session_info['file_count']} 个文件\n")
+                sandbox_manager.print_session_file_tree(thread_id)
             else:
                 print()
 

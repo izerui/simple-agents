@@ -5,14 +5,16 @@
 """
 
 import contextvars
-import os
+
 import shutil
 import uuid
 from pathlib import Path
-from typing import Callable
+
 
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import BackendProtocol, BackendFactory
+from rich.console import Console
+from rich.tree import Tree
 
 # 全局 ContextVar，用于在整个调用链中传递 thread_id
 _current_thread_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
@@ -113,6 +115,101 @@ class SandboxBackendManager:
                 next_prefix = prefix + ("    " if is_item_last else "│   ")
                 self._print_tree_structure(item, next_prefix, is_item_last)
 
+    def _build_rich_tree(self, directory: Path, parent_tree: Tree) -> None:
+        """
+        递归构建 rich 树状结构
+
+        Args:
+            directory: 要遍历的目录路径
+            parent_tree: 父级树节点
+        """
+        if not directory.exists():
+            return
+
+        # 获取目录下的所有项并排序（目录优先）
+        items = sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name))
+
+        for item in items:
+            if item.is_dir():
+                # 添加目录节点
+                branch = parent_tree.add(f"📁 [bold cyan]{item.name}[/bold cyan]")
+                # 递归处理子目录
+                self._build_rich_tree(item, branch)
+            else:
+                # 添加文件节点
+                file_size = item.stat().st_size
+                size_str = self._format_file_size(file_size)
+                parent_tree.add(f"📄 {item.name} [dim]({size_str})[/dim]")
+
+    def _format_file_size(self, size_bytes: int) -> str:
+        """
+        格式化文件大小为人类可读的形式
+
+        Args:
+            size_bytes: 文件大小（字节）
+
+        Returns:
+            格式化后的文件大小字符串
+        """
+        size = float(size_bytes)
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size < 1024.0:
+                return f"{size:.1f}{unit}"
+            size /= 1024.0
+        return f"{size:.1f}TB"
+
+    def print_file_tree(self, directory: Path | None = None, title: str | None = None) -> None:
+        """
+        使用 rich 库打印精美的文件树结构
+
+        Args:
+            directory: 要打印的目录路径，如果为 None 则打印沙箱根目录
+            title: 树的标题，如果为 None 则使用目录名称
+        """
+        console = Console()
+
+        if directory is None:
+            directory = self.base_dir
+
+        if not directory.exists():
+            console.print(f"[red]⚠️  目录不存在: {directory}[/red]")
+            return
+
+        # 设置树标题
+        if title is None:
+            title = f"📁 [bold]{directory.name}[/bold]"
+
+        # 创建根节点
+        tree = Tree(title)
+
+        # 构建树结构
+        self._build_rich_tree(directory, tree)
+
+        # 打印树
+        console.print(tree)
+
+    def print_session_file_tree(self, thread_id: str, title: str | None = None) -> None:
+        """
+        打印指定会话的沙箱文件树
+
+        Args:
+            thread_id: 对话的唯一标识符
+            title: 自定义标题，如果为 None 则使用默认标题
+        """
+        session_dir = self._session_dirs.get(thread_id)
+
+        if not session_dir or not session_dir.exists():
+            console = Console()
+            console.print(f"[red]⚠️  会话 {thread_id} 不存在或已被清理[/red]")
+            return
+
+        # 设置默认标题
+        if title is None:
+            title = f"📦 [bold green]会话沙箱[/bold green] [dim]({thread_id[:8]}...)[/dim]"
+
+        # 打印文件树
+        self.print_file_tree(session_dir, title)
+
     def upload_files_to_sandbox(self, thread_id: str, source_dir: str = "./files/"):
         """
         将源目录的文件复制到沙箱目录中，保留原始目录结构
@@ -122,14 +219,14 @@ class SandboxBackendManager:
             source_dir: 源目录路径，默认为 ./files/
         """
         source_path = Path(source_dir)
-        
+
         if not source_path.exists():
             print(f"⚠️  源目录不存在: {source_path}")
             return
-        
+
         # 确保沙箱目录已创建
         session_dir = self.create_session_dir(thread_id)
-        
+
         # 使用内部方法递归复制，保留目录结构
         file_count = 0
         for source_file in source_path.iterdir():
@@ -139,9 +236,12 @@ class SandboxBackendManager:
                 dest_file = session_dir / source_file.name
                 shutil.copy2(source_file, dest_file)
                 file_count += 1
+
+        # 使用 rich 库打印文件树
         print('\n')
-        print(f"📂 沙箱目录结构: {session_dir}")
-        self._print_tree_structure(session_dir)
+        console = Console()
+        console.print(f"[bold green]📂 沙箱目录: {session_dir}[/bold green]")
+        self.print_file_tree(session_dir)
         print('\n')
 
     def cleanup_session(self, thread_id: str):
