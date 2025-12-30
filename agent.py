@@ -6,16 +6,11 @@ for conducting web research with strategic thinking and context management.
 Supports per-conversation sandbox isolation using BackendFactory.
 """
 import os
-import uuid
 from datetime import datetime
 
-from deepagents.backends import FilesystemBackend
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
-# from langchain_google_genai import ChatGoogleGenerativeAI
-from deepagents import create_deep_agent, FilesystemMiddleware, SubAgent
-from langchain_core.messages import HumanMessage
-from sandbox_backend import sandbox_manager  # 导入全局沙箱管理器
+from deepagents import create_deep_agent, SubAgent
 
 from tools import think_tool, fetch_url
 from prompts import (
@@ -67,13 +62,11 @@ model = init_chat_model(
     temperature=0.0)
 
 # Create the agent
-# 使用 BackendFactory 实现每个对话独立的沙箱路径
-# 每个 thread_id 会在调用时自动获得独立的临时目录
+# 每个对话会获得独立的沙箱路径（sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
-    model=model,
+    model=model,  # 使用模型实例
     tools=[think_tool, fetch_url],
     system_prompt=INSTRUCTIONS,
-    backend=sandbox_manager.create_backend_factory(),  # 使用沙箱工厂函数
     subagents=[research_sub_agent],
 )
 

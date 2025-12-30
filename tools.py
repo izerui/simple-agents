@@ -6,7 +6,6 @@ using Tavily for URL discovery and fetching full webpage content.
 from typing import Any
 
 import httpx
-from deepagents.backends import FilesystemBackend
 from langchain_core.tools import tool
 from markdownify import markdownify
 
@@ -37,28 +36,6 @@ def fetch_webpage_content(url: str, timeout: float = 10.0) -> str:
         return markdownify(response.text)
     except Exception as e:
         return f"Error fetching content from {url}: {str(e)}"
-
-
-@tool()
-def list_files(directory_path: str = "./"):
-    """
-    列出指定目录下的文件列表。
-    directory_path: 相对路径或绝对路径。
-    """
-    # 这里的 agent.backend 就是你传入的 FilesystemBackend 实例
-    # 它会自动处理你定义的 root_dir: '/Users/liuyuhua/PycharmProjects/paper-rag'
-    results = FilesystemBackend(root_dir=directory_path).ls_info(directory_path)
-
-    if not results:
-        return "该目录下没有文件或目录不存在。"
-
-    # 格式化输出，让 DeepSeek 能够读懂
-    output = []
-    for item in results:
-        prefix = "[目录]" if item["is_dir"] else "[文件]"
-        output.append(f"{prefix} {item['path']} (大小: {item.get('size', 0)} bytes)")
-
-    return "\n".join(output)
 
 
 # @tool(parse_docstring=True)

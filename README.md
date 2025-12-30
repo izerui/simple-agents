@@ -10,8 +10,8 @@ A sophisticated AI research agent framework built with LangGraph and DeepAgents,
 ## Features
 
 - **Multi-Agent Research System**: Orchestrates research tasks with specialized sub-agents
-- **Sandbox File System**: Per-conversation sandbox isolation with automatic cleanup using BackendFactory
-- **File Upload**: Support for uploading directories to sandbox while preserving directory structure
+- **Sandbox File System**: Per-conversation sandbox isolation with automatic cleanup via FileUploadMiddleware
+- **File Upload**: Automatic file upload handling with files copied to sandbox_sessions/{thread_id}/
 - **Strategic Thinking**: Built-in reflection tool (think_tool) for systematic research decision-making
 - **Streaming Output**: Real-time token-level streaming with node execution monitoring
 - **Tool Call Limits**: Configurable middleware to prevent excessive tool usage
@@ -26,7 +26,7 @@ The system consists of several key components:
 - **`main.py`**: Entry point for running the agent with streaming events
 - **`tools.py`**: Research tools including file operations and reflection
 - **`prompts.py`**: Research workflow instructions and agent prompts
-- **`sandbox_backend.py`**: Sandbox backend manager for per-conversation isolation
+- **`file_upload_middleware.py`**: File upload middleware with sandbox management
 - **`utils.py`**: Utilities for displaying messages and prompts with rich formatting
 
 ## Installation
@@ -75,10 +75,11 @@ Configure in `agent.py`:
 
 ### Sandbox Configuration
 
-The `SandboxBackendManager` provides per-conversation file system isolation:
-- Each conversation gets a unique sandbox directory under `sandbox_sessions/`
-- Files can be uploaded from the `files/` directory to preserve directory structure
+The `FileUploadMiddleware` provides per-conversation file system isolation:
+- Each conversation gets a unique sandbox directory under `sandbox_sessions/{thread_id}/`
+- Files uploaded via agent-chat-ui are automatically copied to the sandbox directory
 - Automatic cleanup of sandbox directories after conversations
+- Uses ContextVar to track thread_id across the conversation lifecycle
 
 ### Model Settings
 
@@ -92,12 +93,12 @@ simple-agents/
 ├── main.py               # Entry point with streaming execution
 ├── tools.py              # Research tools (file ops, reflection)
 ├── prompts.py            # Research workflow instructions
-├── sandbox_backend.py    # Sandbox backend manager for isolation
+├── file_upload_middleware.py  # File upload middleware with sandbox management
 ├── utils.py              # Utilities for rich message display
 ├── pyproject.toml        # Project dependencies
 ├── langgraph.json        # LangGraph configuration
 ├── .env                  # Environment variables (create this)
-├── files/                # Source files for sandbox upload
+├── uploads/              # Temporary upload directory
 └── sandbox_sessions/     # Per-conversation sandbox directories (created automatically)
 ```
 
@@ -107,7 +108,7 @@ The agent follows a systematic research process:
 
 1. **Plan**: Break down research into focused tasks using todos
 2. **Save Request**: Store research questions to `/deepagent_request.md`
-3. **Upload Files**: Upload relevant files from `files/` to sandbox
+3. **Upload Files**: Files uploaded via UI are automatically copied to sandbox directory
 4. **Research**: Delegate to specialized sub-agents with file reading
 5. **Reflect**: Use think_tool after each operation for strategic thinking
 6. **Synthesize**: Consolidate findings and citations
@@ -116,13 +117,15 @@ The agent follows a systematic research process:
 
 ## Key Components
 
-### SandboxBackendManager
+### FileUploadMiddleware
 
-Provides per-conversation file system isolation:
-- `create_session_dir(thread_id)`: Creates unique sandbox directory
-- `upload_files_to_sandbox(thread_id, source_dir)`: Uploads files preserving structure
-- `cleanup_session(thread_id)`: Removes sandbox directory after conversation
-- `create_backend_factory()`: Returns factory function for dynamic backend creation
+Provides automatic file upload handling and sandbox management:
+- `set_thread_id(thread_id)`: Sets the current conversation thread_id
+- `get_sandbox_dir(thread_id)`: Creates and returns the sandbox directory path
+- `handle_message(message, thread_id)`: Processes file attachments in messages
+- `pre_tool_call(tool_name, tool_args, thread_id)`: Handles file uploads in tool calls
+- Uses ContextVar (`_current_thread_id`) to track thread_id across operations
+- Automatically handles file naming conflicts by appending timestamps
 
 ### Research Tools
 

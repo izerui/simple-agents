@@ -17,8 +17,6 @@ from utils import format_messages
 load_dotenv(dotenv_path='.env', verbose=True)
 
 from agent import agent
-from sandbox_backend import sandbox_manager, _current_thread_id
-
 
 async def run_agent_with_cleanup(user_message: str):
     """
@@ -50,35 +48,16 @@ async def run_agent_with_cleanup(user_message: str):
     )
 
     try:
-
-        # 上传 files 目录的内容到沙箱
-        # print("\n📤 正在上传文件到沙箱...")
-        sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
-
-        # 设置 thread_id 到 ContextVar，这样 backend_factory 可以正确获取
-        token = _current_thread_id.set(thread_id)
-
         # 执行 agent
         async for event in agent.astream_events(inputs, version="v1", config=config):
             output_handler( event)
 
         print("\n\n--- 执行结束 ---")
 
-        # 显示会话信息
-        session_info = sandbox_manager.get_session_info(thread_id)
-        print(f"\n📊 会话统计:")
-        print(f"   会话目录: {session_info['session_dir']}")
-        print(f"   文件数量: {session_info['file_count']}")
-
     finally:
         # ✅ 关键：对话结束后自动清理沙箱
         # 使用 finally 块确保即使发生异常也会清理
-        print(f"\n🧹 正在清理沙箱 (thread_id: {thread_id})")
-        # sandbox_manager.cleanup_session(thread_id)
-        print("✨ 清理完成！")
-
-        # 清除 ContextVar 中的 thread_id
-        _current_thread_id.reset(token)
+        pass
 
 
 async def run_multiple_conversations(conversations: list[str]):
@@ -104,31 +83,11 @@ async def run_multiple_conversations(conversations: list[str]):
             },
             recursion_limit=500,
         )
-
         try:
-            # 上传 files 目录的内容到沙箱
-            # print("\n📤 正在上传文件到沙箱...")
-            sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
-
-            # 设置 thread_id 到 ContextVar
-            token = _current_thread_id.set(thread_id)
-
             # 执行 agent
             async for event in agent.astream_events(inputs, version="v1", config=config):
                 output_handler( event)
-
-            # 显示会话统计
-            session_info = sandbox_manager.get_session_info(thread_id)
-            print(f"\n\n📊 会话统计: {session_info['file_count']} 个文件")
-
         finally:
-            # 清理当前对话的沙箱
-            print(f"\n🧹 清理对话 {i} 的沙箱...")
-            sandbox_manager.cleanup_session(thread_id)
-
-            # 清除 ContextVar 中的 thread_id
-            _current_thread_id.reset(token)
-
             print(f"✅ 对话 {i} 完成\n")
 
     print("=" * 80)
@@ -150,13 +109,6 @@ async def run_with_user_input():
     print(f"📁 会话 ID: {thread_id}")
 
     try:
-        # 上传 files 目录的内容到沙箱
-        # print("\n📤 正在上传文件到沙箱...")
-        sandbox_manager.upload_files_to_sandbox(thread_id, "./files/")
-
-        # 设置 thread_id 到 ContextVar（整个会话期间保持）
-        token = _current_thread_id.set(thread_id)
-
         while True:
             # 获取用户输入
             user_input = input("用户: ").strip()
@@ -187,23 +139,8 @@ async def run_with_user_input():
 
             print("\n")
 
-            # 显示当前会话的文件数量
-            session_info = sandbox_manager.get_session_info(thread_id)
-            if session_info['file_count'] > 0:
-                sandbox_manager.print_session_file_tree(thread_id)
-            else:
-                print()
-
     finally:
-        # 清理会话
-        print(f"\n🧹 清理会话沙箱...")
-        sandbox_manager.cleanup_session(thread_id)
-
-        # 清除 ContextVar 中的 thread_id
-        _current_thread_id.reset(token)
-
-        print("✨ 清理完成！")
-
+        pass
 
 
 def output_handler(event):
