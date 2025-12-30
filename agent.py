@@ -19,8 +19,8 @@ from sandbox_backend import sandbox_manager  # 导入全局沙箱管理器
 
 from tools import think_tool
 from prompts import (
-    AGENT_INSTRUCTIONS,
     AGENT_WORKFLOW_INSTRUCTIONS,
+    SUBAGENT_INSTRUCTIONS,
     SUBAGENT_DELEGATION_INSTRUCTIONS,
 )
 
@@ -53,7 +53,7 @@ limiter = ToolCallLimitMiddleware(
 research_sub_agent = SubAgent(
     name= "子代理研究员",
     description = "将研究委托给子代理研究员，每次仅限一个主题。",
-    system_prompt = AGENT_INSTRUCTIONS.format(date=current_date),
+    system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
     tools = [think_tool],
     middleware= [limiter],
 )
