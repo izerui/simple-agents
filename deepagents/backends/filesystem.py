@@ -53,7 +53,8 @@ class FilesystemBackend(BackendProtocol):
                      all file paths will be resolved relative to this directory.
                      If not provided, uses the current working directory.
         """
-        self.cwd = Path(root_dir).resolve() if root_dir else Path.cwd()
+        # Avoid blocking operations: use Path() directly without resolve() or cwd()
+        self.cwd = Path(root_dir) if root_dir else Path(".")
         self.virtual_mode = virtual_mode
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
 
@@ -75,7 +76,7 @@ class FilesystemBackend(BackendProtocol):
             vpath = key if key.startswith("/") else "/" + key
             if ".." in vpath or vpath.startswith("~"):
                 raise ValueError("Path traversal not allowed")
-            full = (self.cwd / vpath.lstrip("/")).resolve()
+            full = self.cwd / vpath.lstrip("/")
             try:
                 full.relative_to(self.cwd)
             except ValueError:
@@ -85,7 +86,7 @@ class FilesystemBackend(BackendProtocol):
         path = Path(key)
         if path.is_absolute():
             return path
-        return (self.cwd / path).resolve()
+        return self.cwd / path
 
     def ls_info(self, path: str) -> list[FileInfo]:
         """List files and directories in the specified directory (non-recursive).
