@@ -102,7 +102,7 @@ def get_backend_per_thread(runtime: ToolRuntime):
     backend = FilesystemBackend(
         root_dir=user_root_dir,
         virtual_mode=True,
-        max_file_size_mb=10,
+        max_file_size_mb=50,
     )
     return backend
 
