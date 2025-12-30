@@ -6,12 +6,13 @@ using Tavily for URL discovery and fetching full webpage content.
 from typing import Any
 
 import httpx
-from deepagents import FilesystemMiddleware
 from deepagents.backends import FilesystemBackend
-from langchain_core.tools import InjectedToolArg, tool
+from langchain_core.tools import tool
 from markdownify import markdownify
+
+
 # from tavily import TavilyClient
-from typing_extensions import Annotated, Literal
+
 
 # tavily_client = TavilyClient(api_key='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')
 
@@ -58,6 +59,7 @@ def list_files(directory_path: str = "./"):
         output.append(f"{prefix} {item['path']} (大小: {item.get('size', 0)} bytes)")
 
     return "\n".join(output)
+
 
 # @tool(parse_docstring=True)
 # def tavily_search(
@@ -140,7 +142,7 @@ def think_tool(reflection: str) -> str:
     return f"Reflection recorded: {reflection}"
 
 
-@tool(parse_docstring=True)
+@tool(parse_docstring=True, return_direct=True)
 def fetch_url(url: str, timeout: int = 30) -> dict[str, Any]:
     """Fetch content from a URL and convert HTML to markdown format.
 
@@ -167,10 +169,11 @@ def fetch_url(url: str, timeout: int = 30) -> dict[str, Any]:
     4. NEVER show the raw markdown to the user unless specifically requested
     """
     try:
-        response = requests.get(
+        response = httpx.get(
             url,
             timeout=timeout,
             headers={"User-Agent": "Mozilla/5.0 (compatible; DeepAgents/1.0)"},
+            follow_redirects=True,
         )
         response.raise_for_status()
 

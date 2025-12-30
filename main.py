@@ -9,6 +9,7 @@ import uuid
 import asyncio
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 
 from utils import format_messages
 
@@ -40,12 +41,13 @@ async def run_agent_with_cleanup(user_message: str):
 
     format_messages([HumanMessage(content=user_message)])
 
-    config = {
-        "configurable": {
-            "thread_id": thread_id,  # ← 这个 ID 决定了沙箱路径
+    config = RunnableConfig(
+        configurable={
+            "thread_id": thread_id, # ← 这个 ID 决定了沙箱路径
+            "tool_timeout": 30.0
         },
-        "recursion_limit": 500
-    }
+        recursion_limit=500,
+    )
 
     try:
         print("\n--- 开始执行 (使用 astream_events 监控节点) ---")
@@ -96,12 +98,13 @@ async def run_multiple_conversations(conversations: list[str]):
 
         thread_id = str(uuid.uuid4())
         inputs = {"messages": [HumanMessage(content=user_message)]}
-        config = {
-            "configurable": {
-                "thread_id": thread_id
+        config = RunnableConfig(
+            configurable={
+                "thread_id": thread_id,  # ← 这个 ID 决定了沙箱路径
+                "tool_timeout": 30.0
             },
-            "recursion_limit": 500
-        }
+            recursion_limit=500,
+        )
 
         try:
             # 显示会话目录
@@ -176,12 +179,13 @@ async def run_with_user_input():
             print("\nAgent: ", end="", flush=True)
 
             inputs = {"messages": [HumanMessage(content=user_input)]}
-            config = {
-                "configurable": {
-                    "thread_id": thread_id
+            config = RunnableConfig(
+                configurable={
+                    "thread_id": thread_id,  # ← 这个 ID 决定了沙箱路径
+                    "tool_timeout": 30.0
                 },
-                "recursion_limit": 500
-            }
+                recursion_limit=500,
+            )
 
             async for event in agent.astream_events(inputs, version="v1", config=config):
                 output_handler( event)
