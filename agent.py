@@ -101,7 +101,8 @@ def get_backend_per_thread(runtime: ToolRuntime):
     # 注意：不预先转换为绝对路径，让 FilesystemBackend.__init__ 处理
     backend = FilesystemBackend(
         root_dir=user_root_dir,
-        virtual_mode=True
+        virtual_mode=True,
+        max_file_size_mb=10,
     )
     return backend
 
