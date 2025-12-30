@@ -26,7 +26,7 @@ async def run_agent_with_cleanup(user_message: str):
         user_message: 用户输入的消息，如果不提供则使用默认消息
     """
     # 为每次对话生成唯一的 thread_id
-    thread_id = str(uuid.uuid4())
+    thread_id = '0913bfbc-30f0-4770-b9fd-5c6af14953e3'
 
     print(f"{'=' * 80}")
     print(f"🚀 开始对话 (thread_id: {thread_id})")
@@ -49,7 +49,7 @@ async def run_agent_with_cleanup(user_message: str):
 
     try:
         # 执行 agent
-        async for event in agent.astream_events(inputs, version="v1", config=config):
+        async for event in agent.astream_events(inputs, version="v2", config=config):
             output_handler( event)
 
         print("\n\n--- 执行结束 ---")
@@ -85,7 +85,7 @@ async def run_multiple_conversations(conversations: list[str]):
         )
         try:
             # 执行 agent
-            async for event in agent.astream_events(inputs, version="v1", config=config):
+            async for event in agent.astream_events(inputs, version="v2", config=config):
                 output_handler( event)
         finally:
             print(f"✅ 对话 {i} 完成\n")
@@ -134,7 +134,7 @@ async def run_with_user_input():
                 recursion_limit=500,
             )
 
-            async for event in agent.astream_events(inputs, version="v1", config=config):
+            async for event in agent.astream_events(inputs, version="v2", config=config):
                 output_handler( event)
 
             print("\n")
@@ -207,4 +207,5 @@ if __name__ == "__main__":
 3. 论文结构与逻辑：逻辑是否清晰、结构是否合理
 4. 学术规范与表达：专业术语使用是否准确、表达是否清晰
 5. 总结：整体评价和核心改进建议, 结论针对五个方面各自给出评价和改进建议，每个模块建议字数不超过300字。并依托指导手册针对该论文进行打分。"""
+    message = '列出根目录文件'
     asyncio.run(run_agent_with_cleanup(message))

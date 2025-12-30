@@ -11,6 +11,7 @@ from datetime import datetime
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from deepagents import create_deep_agent, SubAgent
+from langgraph.prebuilt import ToolRuntime
 
 from tools import think_tool, fetch_url
 from prompts import (
@@ -61,11 +62,39 @@ model = init_chat_model(
     api_key=os.getenv('MODEL_API_KEY'),
     temperature=0.0)
 
+
+# 定义一个工厂函数
+def get_backend_per_thread(runtime: ToolRuntime):
+    """
+    根据当前对话的 thread_id 创建一个 FilesystemBackend 实例。
+
+    Args:
+        runtime: LangGraph 的 Runtime 对象
+
+    Returns:
+        FilesystemBackend 实例，配置了独立的沙箱路径
+    """
+    if runtime is None or not hasattr(runtime, 'configurable'):
+        return None
+    # 1. 从配置中获取当前对话的 thread_id
+    thread_id = config['configurable'].get("thread_id")
+
+    # 2. 动态构造该用户专属的目录
+    # 结果示例：./user_data/thread_abc/
+    user_root_dir = f"./sandbox_sessions/{thread_id}"
+
+    # 3. 返回一个新的 Backend 实例
+    return FilesystemBackend(
+        root_dir=user_root_dir,
+        virtual_mode=True
+    )
+
 # Create the agent
 # 每个对话会获得独立的沙箱路径（sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
     model=model,  # 使用模型实例
     tools=[think_tool, fetch_url],
+    backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
     subagents=[research_sub_agent],
 )
