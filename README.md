@@ -1,5 +1,10 @@
 # Simple Agents
 
+debug:
+```
+uv pip install -U "langgraph-cli[inmem]"
+```
+
 A sophisticated AI research agent framework built with LangGraph and DeepAgents, designed to conduct comprehensive web research with strategic thinking and context management.
 
 ## Features
