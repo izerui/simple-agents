@@ -26,7 +26,7 @@ async def run_agent_with_cleanup(user_message: str):
         user_message: 用户输入的消息，如果不提供则使用默认消息
     """
     # 为每次对话生成唯一的 thread_id
-    thread_id = '0913bfbc-30f0-4770-b9fd-5c6af14953e3'
+    thread_id = str(uuid.uuid4())
 
     print(f"{'=' * 80}")
     print(f"🚀 开始对话 (thread_id: {thread_id})")
