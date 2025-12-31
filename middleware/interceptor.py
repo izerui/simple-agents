@@ -12,7 +12,7 @@ from langgraph.typing import ContextT
 
 from deepagents.backends import StateBackend
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
-from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol
+from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol, FileUploadResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,16 +63,17 @@ class AttachmentExtractMiddleware(AgentMiddleware):
 
         # 将 self.attachments 和 self.images 按原有文件名写入到 backend 的 /home目录下
         try:
-            files_to_upload = [
+            files = [
                 (item['metadata']['filename'], base64.b64decode(item['data']))
                 for item in self.attachments
             ]
-            files_to_upload.extend([
+            files.extend([
                 (item['metadata']['name'], base64.b64decode(item['data']))
                 for item in self.images
             ])
 
-            await backend.aupload_files(files_to_upload)
+            uploads: list[FileUploadResponse] = await backend.aupload_files(files)
+
         except Exception as e:
             logger.error(f"Error uploading files: {e}")
 
