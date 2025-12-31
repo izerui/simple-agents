@@ -66,7 +66,7 @@ async def run_agent_with_cleanup(user_message: str):
     config = RunnableConfig(
         configurable={
             "thread_id": thread_id, # ← 这个 ID 决定了沙箱路径
-            "tool_timeout": 30.0
+            "tool_timeout": 300.0
         },
         recursion_limit=500,
     )

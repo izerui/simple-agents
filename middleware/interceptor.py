@@ -31,6 +31,7 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         # Use provided backend or default to StateBackend factory
         self.backend = backend
         self.adapterConverter = AdapterConverter()
+        logger.info("Initialized AttachmentExtractMiddleware")
 
 
     async def _get_backend(self, runtime: ToolRuntime) -> BackendProtocol:
@@ -76,15 +77,34 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                 for item in self.images
             ])
 
-            # 开始转换
-            uploads: list[FileUploadResponse] = await backend.aupload_files(files)
-            for upload in uploads:
-                # 真实全部路径
-                real_path = Path(backend.get_root_dir()) / upload.path
-                await asyncio.to_thread(self.adapterConverter.convert, str(real_path))
+            if len(files) > 0:
+                # 开始转换
+                logger.info(f"开始上传 {len(files)} 个文件")
+                uploads: list[FileUploadResponse] = await backend.aupload_files(files)
+                logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
 
+                # 并行转换所有文件以提高性能
+                conversion_tasks = []
+                for upload in uploads:
+                    # 真实全部路径
+                    real_path = Path(backend.get_root_dir()) / upload.path
+                    logger.info(f"准备转换文件: {real_path}")
+                    conversion_tasks.append(
+                        asyncio.to_thread(self.adapterConverter.convert, str(real_path))
+                    )
+
+                # 等待所有转换任务完成
+                if conversion_tasks:
+                    logger.info(f"开始并行转换 {len(conversion_tasks)} 个文件")
+                    await asyncio.gather(*conversion_tasks)
+                    logger.info("所有文件转换完成")
+
+        except asyncio.TimeoutError as e:
+            logger.error(f"文件转换超时: {e}")
+            raise
         except Exception as e:
-            logger.error(f"Error uploading files: {e}")
+            logger.error(f"上传或转换文件时发生错误: {e}", exc_info=True)
+            raise
 
         # 调用原始处理函数
         return await handler(request)
