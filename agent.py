@@ -25,6 +25,7 @@ from langgraph.prebuilt import ToolRuntime
 
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
+from interceptor import AttachmentExtractMiddleware
 from tools import think_tool, fetch_url
 from prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
@@ -124,6 +125,8 @@ def get_backend_per_thread(runtime: ToolRuntime):
     )
     return backend
 
+middleware = AttachmentExtractMiddleware(backend = get_backend_per_thread)
+
 # Create the agent
 # 每个对话会获得独立的沙箱路径（sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
@@ -132,4 +135,5 @@ agent = create_deep_agent(
     backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
     subagents=[research_sub_agent],
+    middleware=[middleware],
 )

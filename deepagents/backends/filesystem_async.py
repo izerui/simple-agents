@@ -122,8 +122,14 @@ class AsyncFilesystemBackend(BackendProtocol):
         # List only direct children (non-recursive)
         try:
             child_names = await aios.listdir(dir_path)
+
+            # 在 for child_name in child_names: 循环内部添加过滤
+            SYSTEM_IGNORE_DIRS = {"home", "var", "etc", "usr", "bin", "sbin", "lib", "boot", "dev", "proc", "sys"}
             
             for child_name in child_names:
+                # 强制过滤：如果是虚拟模式，且是系统目录，直接跳过
+                if self.virtual_mode and child_name in SYSTEM_IGNORE_DIRS:
+                    continue
                 child_path = dir_path / child_name
                 try:
                     is_file = await aios.path.isfile(child_path)

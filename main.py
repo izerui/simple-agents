@@ -4,9 +4,11 @@
 这个模块展示了如何使用 BackendFactory 实现每个对话独立的沙箱路径，
 并在对话结束后自动清理临时文件。
 """
-
+import base64
 import uuid
 import asyncio
+
+import aiofiles
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -33,9 +35,31 @@ async def run_agent_with_cleanup(user_message: str):
     print(f"📝 用户消息: {user_message}")
     print(f"{'=' * 80}")
 
+    async with aiofiles.open('files/论文.pdf', mode='rb') as f:
+        # 读取文件内容
+        file_content = await f.read()
+        # 转换为 base64
+        # base64.b64encode 返回的是 bytes，需要解码为 str
+        pdf_content = base64.b64encode(file_content).decode('utf-8')
+
+    async with aiofiles.open('files/跟单宝.png', mode='rb') as f:
+        # 读取文件内容
+        file_content = await f.read()
+        # 转换为 base64
+        # base64.b64encode 返回的是 bytes，需要解码为 str
+        image_content = base64.b64encode(file_content).decode('utf-8')
+
+
+    message = HumanMessage(content=[
+        {"type": "text", "text": user_message},
+        {"type": "file", "data": pdf_content, "metadata": {"filename": "1901180052张卓群毕业论文3.pdf"}, "mimeType": "application/pdf"},
+        {"type": "image", "metadata": {"name": "跟单宝.png"}, "mime_type": "image/png", "data": image_content}
+    ])
+
     inputs = {
-        "messages": [HumanMessage(content=user_message)]
+        "messages": [message]
     }
+
 
     format_messages([HumanMessage(content=user_message)])
 

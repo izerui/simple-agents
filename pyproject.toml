@@ -20,6 +20,8 @@ dependencies = [
     "langchain>=1.1.0,<2.0.0",
     "langchain-core>=1.1.0,<2.0.0",
     "wcmatch",
+    "pdfplumber>=0.11.8",
+    "pymupdf>=1.26.7",
 ]
 
 [dependency-groups]
