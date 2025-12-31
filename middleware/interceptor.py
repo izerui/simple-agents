@@ -1,6 +1,8 @@
+import asyncio
 import base64
 import logging
 import os.path
+from pathlib import Path
 from typing import Any, Callable, Awaitable
 
 from langchain.agents.middleware.types import AgentMiddleware, StateT, ModelCallResult, ModelResponse, ModelRequest
@@ -10,6 +12,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command
 from langgraph.typing import ContextT
 
+from converters.bridge import AdapterConverter
 from deepagents.backends import StateBackend
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
 from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol, FileUploadResponse
@@ -27,6 +30,7 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         self.images = []
         # Use provided backend or default to StateBackend factory
         self.backend = backend
+        self.adapterConverter = AdapterConverter()
 
 
     async def _get_backend(self, runtime: ToolRuntime) -> BackendProtocol:
@@ -72,7 +76,12 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                 for item in self.images
             ])
 
+            # 开始转换
             uploads: list[FileUploadResponse] = await backend.aupload_files(files)
+            for upload in uploads:
+                # 真实全部路径
+                real_path = Path(backend.get_root_dir()) / upload.path
+                await asyncio.to_thread(self.adapterConverter.convert, str(real_path))
 
         except Exception as e:
             logger.error(f"Error uploading files: {e}")

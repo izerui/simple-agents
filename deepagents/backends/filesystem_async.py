@@ -56,10 +56,15 @@ class AsyncFilesystemBackend(BackendProtocol):
                      all file paths will be resolved relative to this directory.
                      If not provided, uses the current working directory.
         """
+        self.root_dir = root_dir
         # Avoid blocking operations: use Path() directly without resolve() or cwd()
         self.cwd = Path(root_dir) if root_dir else Path(".")
         self.virtual_mode = virtual_mode
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
+
+    def get_root_dir(self) -> str:
+        """Get the root directory for file operations."""
+        return str(self.root_dir)
 
     def _resolve_path(self, key: str) -> Path:
         """Resolve a file path with security checks.

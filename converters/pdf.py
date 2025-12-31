@@ -1,12 +1,15 @@
 from pathlib import Path
+from typing import override
 
 import pdfplumber
 import pymupdf
 import os
 import re
 
+from converters.base import BaseConverter
 
-class PDF2Markdown:
+
+class PDF2Markdown(BaseConverter):
     def __init__(self, debug=False):
         self.debug = debug
 
@@ -17,6 +20,10 @@ class PDF2Markdown:
 
         # 占位符列表，存储待替换的信息
         self.placeholders = {}
+
+    @override
+    def support(self, suffix):
+        return suffix == ".pdf"
 
     def _is_bold(self, char):
         """判断字符是否加粗"""
