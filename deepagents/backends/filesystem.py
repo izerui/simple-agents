@@ -54,7 +54,7 @@ class FilesystemBackend(BackendProtocol):
                      If not provided, uses the current working directory.
         """
         # Avoid blocking operations: use Path() directly without resolve() or cwd()
-        self.cwd = Path(root_dir) if root_dir else Path(".")
+        self.cwd = Path(root_dir).resolve() if root_dir else Path.cwd()
         self.virtual_mode = virtual_mode
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
 
