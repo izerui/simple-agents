@@ -6,10 +6,20 @@ for conducting web research with strategic thinking and context management.
 Supports per-conversation sandbox isolation using BackendFactory.
 """
 import os
+# # === 只有在开发调试时才打开这段代码 ===
+# if os.getenv("DEBUG_ENABLE"): # 设置个开关，防止上线后还跑这段
+#     try:
+#         import pydevd_pycharm
+#         pydevd_pycharm.settrace('localhost', port=5678, stdout_to_server=True, stderr_to_server=True)
+#     except Exception as e:
+#         print(f"Debugger error: {e}")
+# # ======================================
 from datetime import datetime
 
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
+from langchain_anthropic import ChatAnthropic
+
 from deepagents import create_deep_agent, SubAgent
 from langgraph.prebuilt import ToolRuntime
 
@@ -57,13 +67,20 @@ research_sub_agent = SubAgent(
 )
 
 # Model Claude 4.5
-model = init_chat_model(
-    model_provider=os.getenv('MODEL_PROVIDER'),
+chat_model = init_chat_model(
     model=os.getenv('MODEL_MODEL_ID'),
+    model_provider=os.getenv('MODEL_PROVIDER'),
     base_url=os.getenv('MODEL_BASE_URL'),
     api_key=os.getenv('MODEL_API_KEY'),
     temperature=0.0)
 
+# chat_model = ChatAnthropic(
+#     model_name=os.getenv('MODEL_MODEL_ID'),
+#     base_url=os.getenv('MODEL_BASE_URL'),
+#     api_key=os.getenv('MODEL_API_KEY'),
+#     max_tokens=20000,
+#     temperature=0.0,
+# )
 
 # 定义一个工厂函数
 def get_backend_per_thread(runtime: ToolRuntime):
@@ -110,10 +127,9 @@ def get_backend_per_thread(runtime: ToolRuntime):
 # Create the agent
 # 每个对话会获得独立的沙箱路径（sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
-    model=model,  # 使用模型实例
+    model=chat_model,  # 使用模型实例
     tools=[think_tool, fetch_url],
     backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
     subagents=[research_sub_agent],
 )
-
