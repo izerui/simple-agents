@@ -25,7 +25,7 @@ from langgraph.prebuilt import ToolRuntime
 
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
-from interceptor import AttachmentExtractMiddleware
+from middleware.interceptor import AttachmentExtractMiddleware
 from tools import think_tool, fetch_url
 from prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
