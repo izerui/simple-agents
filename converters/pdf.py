@@ -18,9 +18,6 @@ class PDF2Markdown(BaseConverter):
         self.heading_multiplier = 1.2  # 标题字号至少是正文的几倍
         self.small_font_size = 9  # 页眉页脚字号阈值
 
-        # 占位符列表，存储待替换的信息
-        self.placeholders = {}
-
     @override
     def support(self, suffix):
         return suffix == ".pdf"
@@ -97,7 +94,7 @@ class PDF2Markdown(BaseConverter):
             print(f"  - 提取图片时出错: {str(e)}")
             return None
 
-    def process_page(self, pdf_file, images_dir, page_num):
+    def process_page(self, pdf_file, images_dir, page_num, placeholders):
         """处理单个页面，使用 pdfplumber 提取文本，使用 pymupdf 确定图片位置"""
         page_md = ""
 
@@ -120,7 +117,7 @@ class PDF2Markdown(BaseConverter):
 
                 # 创建图片占位符
                 placeholder_key = f"__PAGE{page_num}_IMAGES__"
-                self.placeholders[placeholder_key] = image_positions
+                placeholders[placeholder_key] = image_positions
 
                 # 3. 遍历每一行文本，根据行高插入图片占位符
                 current_img_index = 0
@@ -147,7 +144,7 @@ class PDF2Markdown(BaseConverter):
                                                                     img['xref'])
                             if img_path:
                                 # 存储占位符和图片路径的映射
-                                self.placeholders[placeholder] = img_path
+                                placeholders[placeholder] = img_path
 
                             current_img_index += 1
                         else:
@@ -180,7 +177,7 @@ class PDF2Markdown(BaseConverter):
                     img_path = self._extract_and_save_image(pdf_file, images_dir, img['page'], img['index'],
                                                             img['xref'])
                     if img_path:
-                        self.placeholders[placeholder] = img_path
+                        placeholders[placeholder] = img_path
 
                     current_img_index += 1
 
@@ -189,14 +186,14 @@ class PDF2Markdown(BaseConverter):
 
         return page_md
 
-    def _replace_placeholders(self, content):
+    def _replace_placeholders(self, content, placeholders):
         """替换所有占位符为实际的图片 Markdown 语法"""
 
         # 使用正则表达式替换所有占位符
         def replace_match(match):
             placeholder = match.group(0)
-            if placeholder in self.placeholders:
-                img_path = self.placeholders[placeholder]
+            if placeholder in placeholders:
+                img_path = placeholders[placeholder]
                 return f"\n\n![图片]({img_path})\n\n"
             return placeholder
 
@@ -207,6 +204,9 @@ class PDF2Markdown(BaseConverter):
     def convert(self, pdf_file: str, output_file: str):
         """执行转换"""
         full_text = ""
+        
+        # 占位符列表，存储待替换的信息（局部变量，避免线程安全问题）
+        placeholders = {}
 
         # 图片目录
         images_dir = Path(pdf_file).parent / "images"
@@ -223,11 +223,11 @@ class PDF2Markdown(BaseConverter):
             # 处理每一页
             for i in range(total_pages):
                 print(f"正在处理第 {i + 1}/{total_pages} 页...")
-                page_text = self.process_page(pdf_file, images_dir, i)
+                page_text = self.process_page(pdf_file, images_dir, i, placeholders)
                 full_text += page_text + "\n\n"
 
             # 替换所有占位符
-            full_text = self._replace_placeholders(full_text)
+            full_text = self._replace_placeholders(full_text, placeholders)
 
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(full_text)

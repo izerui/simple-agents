@@ -16,7 +16,7 @@ class AdapterConverter:
         """
         将模型请求转换为适配器的输入
         """
-        source_path = Path(file_path)
+        source_path = Path(file_path).resolve()
         # 获取后缀名
         suffix = source_path.suffix
         output_path = source_path.with_suffix(".md")
