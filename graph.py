@@ -110,7 +110,7 @@ middleware = AttachmentExtractMiddleware(backend_factory= get_backend_per_thread
 # 创建路径解析中间件
 path_resolver = ToolPathResolverMiddleware(
     backend_factory=get_backend_per_thread,
-    tools_to_resolve=['convert_pdf_to_markdown', 'convert_docx_markdown']
+    tools_to_resolve=['convert_pdf_to_markdown', 'convert_docx_to_markdown']
 )
 
 # 创建研究子代理
