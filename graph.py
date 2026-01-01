@@ -53,15 +53,6 @@ limiter = ToolCallLimitMiddleware(
     exit_behavior="continue"  # 达到 30 次后，强制终止并返回当前结果
 )
 
-# 创建研究子代理
-research_sub_agent = SubAgent(
-    name= "子智能体",
-    description = "将研究委托给子代理研究员，每次仅限一个主题。",
-    system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
-    tools = [think_tool, fetch_markdown],
-    middleware= [limiter],
-)
-
 # Model Claude 4.5
 chat_model = init_chat_model(
     model=os.getenv('MODEL_MODEL_ID'),
@@ -70,13 +61,6 @@ chat_model = init_chat_model(
     api_key=os.getenv('MODEL_API_KEY'),
     temperature=0.0)
 
-# chat_model = ChatAnthropic(
-#     model_name=os.getenv('MODEL_MODEL_ID'),
-#     base_url=os.getenv('MODEL_BASE_URL'),
-#     api_key=os.getenv('MODEL_API_KEY'),
-#     max_tokens=20000,
-#     temperature=0.0,
-# )
 
 # 定义一个工厂函数
 def get_backend_per_thread(runtime: ToolRuntime):
@@ -129,6 +113,15 @@ path_resolver = ToolPathResolverMiddleware(
     tools_to_resolve=['convert_pdf_to_markdown']
 )
 
+# 创建研究子代理
+sub_agent = SubAgent(
+    name= "子智能体",
+    description = "将研究委托给子代理研究员，每次仅限一个主题。",
+    system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
+    tools = [think_tool, fetch_markdown],
+    middleware= [limiter],
+)
+
 # Create the agent
 # 每个对话会获得独立的沙箱路径（sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
@@ -137,6 +130,7 @@ agent = create_deep_agent(
     tools=[think_tool, fetch_markdown, convert_pdf_to_markdown],
     backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
-    subagents=[research_sub_agent],
+    subagents=[sub_agent],
     middleware=[middleware, path_resolver],
+    debug=int(os.getenv('ENABLED_AGENT_DEBUG', 0)) == 1,
 )
