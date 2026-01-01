@@ -22,7 +22,7 @@ async def run_test():
     thread_id = "test_pdf_analysis"
     
     # 用户问题
-    user_message = """先将pdf论文转换成markdown格式，然后读取markdown格式论文，
+    user_message = """读取markdown格式论文，
         基于论文指导手册，从专业角度评价该学生论文的以下方面：
         1. 文献综述质量：是否全面、是否准确、是否有批判性思维
         2. 研究方法与实施：方法是否科学、是否可行、数据分析是否合理

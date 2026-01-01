@@ -12,7 +12,7 @@ from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_anthropic import ChatAnthropic
 
-from core.tools.converts import convert_pdf_to_markdown
+from core.tools.converts import convert_pdf_to_markdown, convert_docx_to_markdown
 from core.tools.fetch import fetch_markdown
 from core.tools.think import think_tool
 from deepagents import create_deep_agent, SubAgent
@@ -110,7 +110,7 @@ middleware = AttachmentExtractMiddleware(backend_factory= get_backend_per_thread
 # 创建路径解析中间件
 path_resolver = ToolPathResolverMiddleware(
     backend_factory=get_backend_per_thread,
-    tools_to_resolve=['convert_pdf_to_markdown']
+    tools_to_resolve=['convert_pdf_to_markdown', 'convert_docx_markdown']
 )
 
 # 创建研究子代理
@@ -127,7 +127,7 @@ sub_agent = SubAgent(
 agent = create_deep_agent(
     name="协调者",
     model=chat_model,  # 使用模型实例
-    tools=[think_tool, fetch_markdown, convert_pdf_to_markdown],
+    tools=[think_tool, fetch_markdown, convert_pdf_to_markdown, convert_docx_to_markdown],
     backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
     subagents=[sub_agent],

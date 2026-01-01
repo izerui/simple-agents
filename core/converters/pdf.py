@@ -240,7 +240,7 @@ class PDF2Markdown:
 
 if __name__ == "__main__":
     # 替换为你的 PDF 文件路径
-    pdf_file = "../files/论文.pdf"
+    pdf_file = "../../files/论文.pdf"
     output_file = str(Path(pdf_file).with_suffix(".md"))
 
     converter = PDF2Markdown()
