@@ -282,13 +282,12 @@ if __name__ == "__main__":
 
     # 替换为你的 DOCX 文件路径
     docx_file = "../../files/1901180052张卓群毕业论文3.docx"
-    if len(sys.argv) > 1:
-        docx_file = sys.argv[1]
+    output_file = str(Path(docx_file).with_suffix(".md"))
 
     try:
         # 方式1：创建转换器并转换（默认输出到同名 .md 文件）
         converter = DOCX2Markdown(debug=False)
-        result = converter.convert(docx_file)
+        result = converter.convert(docx_file, output_file)
         print(f"\n转换结果长度: {len(result)} 字符")
 
         # 方式2：指定输出文件路径
