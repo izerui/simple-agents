@@ -80,9 +80,25 @@ class AttachmentExtractMiddleware(AgentMiddleware):
             ])
 
             if len(files) > 0:
-                logger.info(f"开始上传 {len(files)} 个文件")
-                uploads: list[FileUploadResponse] = await backend.aupload_files(files)
-                logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
+                # 获取已上传的文件集合，避免重复上传
+                uploaded_files = request.state.setdefault('uploaded_files', set())
+                
+                # 过滤掉已上传的文件
+                files_to_upload = []
+                for filename, content in files:
+                    if filename not in uploaded_files:
+                        files_to_upload.append((filename, content))
+                        uploaded_files.add(filename)
+                    else:
+                        logger.info(f"文件 {filename} 已上传，跳过")
+                
+                if len(files_to_upload) > 0:
+                    logger.info(f"开始上传 {len(files_to_upload)} 个文件")
+                    uploads: list[FileUploadResponse] = await backend.aupload_files(files_to_upload)
+                    logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
+                else:
+                    logger.info(f"所有文件都已上传，无需重复上传")
+                
                 request.state['uploaded'] = True
         except asyncio.TimeoutError as e:
             logger.error(f"文件转换超时: {e}")

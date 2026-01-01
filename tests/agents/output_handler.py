@@ -6,6 +6,26 @@
 import json
 
 
+def show_agent_info(event):
+    """显示智能体信息（智能体名称和 thread_id）。
+    
+    Args:
+        event: LangGraph 事件对象
+        
+    功能：
+        - 显示智能体名称和 thread_id
+    """
+    thread_id = event.get("metadata", {}).get("thread_id", "unknown")
+    tags = event.get("tags", [])
+    metadata = event.get("metadata", {})
+    agent_name = metadata.get("agent_name") or metadata.get("name") or "AI"
+
+    # 使用 run_id 去重，确保每个消息只显示一次
+    print(f"\n🤖 智能体: {agent_name}")
+    print(f"🧵 Thread ID: {thread_id}")
+    print(f"🧵 Tags: {tags}")
+
+
 def output_handler(event):
     """事件输出处理器（流式输出优先）。
     
@@ -13,6 +33,7 @@ def output_handler(event):
         event: LangGraph 事件对象
         
     功能：
+        - 显示智能体名称
         - 实时流式输出 AI 回复（打字机效果）
         - 显示工具调用及参数
         - 显示工具执行结果
@@ -22,6 +43,8 @@ def output_handler(event):
     
     # 1. 流式输出（打字机效果）- 优先处理
     if kind == "on_chat_model_stream":
+        # 显示智能体信息
+        # show_agent_info(event)
         chunk = event["data"]["chunk"]
         # 使用 content_blocks 属性（更可靠）
         if hasattr(chunk, "content_blocks"):
@@ -44,9 +67,11 @@ def output_handler(event):
     
     # 3. 显示工具调用（增强透明度）
     elif kind == "on_tool_start":
+        # 显示智能体信息
+        show_agent_info(event)
         tool_name = event["name"]
         tool_input = event["data"].get("input", {})
-        print(f"\n\n🔧 工具调用: {tool_name}")
+        print(f"🔧 工具调用: {tool_name}")
         if tool_input:
             # 简洁显示工具参数
             try:
@@ -60,6 +85,8 @@ def output_handler(event):
     
     # 4. 显示工具执行结果
     elif kind == "on_tool_end":
+        # 显示智能体信息
+        show_agent_info(event)
         tool_name = event["name"]
         tool_output = event["data"].get("output", "")
         print(f"✅ 工具 {tool_name} 执行完成")
@@ -71,8 +98,10 @@ def output_handler(event):
     
     # 5. 错误处理
     elif kind.endswith("_error"):
+        # 显示智能体信息
+        show_agent_info(event)
         error = event["data"].get("error")
-        print(f"\n❌ 出错: {error}")
+        print(f"❌ 出错: {error}")
         if event.get("name"):
             print(f"   发生在: {event['name']}")
 
