@@ -55,7 +55,7 @@ limiter = ToolCallLimitMiddleware(
 
 # 创建研究子代理
 research_sub_agent = SubAgent(
-    name= "子代理研究员",
+    name= "子智能体",
     description = "将研究委托给子代理研究员，每次仅限一个主题。",
     system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
     tools = [think_tool, fetch_markdown],
@@ -132,6 +132,7 @@ path_resolver = ToolPathResolverMiddleware(
 # Create the agent
 # 每个对话会获得独立的沙箱路径（sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
+    name="协调者",
     model=chat_model,  # 使用模型实例
     tools=[think_tool, fetch_markdown, convert_pdf_to_markdown],
     backend=get_backend_per_thread,
