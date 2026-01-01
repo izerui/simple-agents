@@ -6,10 +6,8 @@ import pymupdf
 import os
 import re
 
-from converters.base import BaseConverter
 
-
-class PDF2Markdown(BaseConverter):
+class PDF2Markdown:
     def __init__(self, debug=False):
         self.debug = debug
 
@@ -222,7 +220,7 @@ class PDF2Markdown(BaseConverter):
 
             # 处理每一页
             for i in range(total_pages):
-                print(f"正在处理第 {i + 1}/{total_pages} 页...")
+                print(f"pdf2markdown - {i + 1}/{total_pages} 页...")
                 page_text = self.process_page(pdf_file, images_dir, i, placeholders)
                 full_text += page_text + "\n\n"
 

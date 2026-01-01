@@ -12,7 +12,6 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command
 from langgraph.typing import ContextT
 
-from converters.bridge import AdapterConverter
 from deepagents.backends import StateBackend
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
 from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol, FileUploadResponse
@@ -23,14 +22,9 @@ logger = logging.getLogger(__name__)
 class AttachmentExtractMiddleware(AgentMiddleware):
     """提取消息中的附件的中间件"""
 
-    def __init__(self, backend: BACKEND_TYPES | None = None):
-        # {"type": "file", "metadata": {'filename': 'myfile.pdf'}, "data": "base64_string", "mimeType": "application/pdf", "cache_control": {'ttl': '5m', 'type': 'ephemeral'}}
-        self.attachments = []
-        # {"type": "image", "metadata": {"name": "1.jpg"}, "mime_type": "image/jpeg", "data": "base64_string"}
-        self.images = []
+    def __init__(self, backend_factory: BACKEND_TYPES | None = None):
         # Use provided backend or default to StateBackend factory
-        self.backend = backend
-        self.adapterConverter = AdapterConverter()
+        self.backend_factory = backend_factory
         logger.info("Initialized AttachmentExtractMiddleware")
 
 
@@ -43,9 +37,12 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         Returns:
             Resolved backend instance.
         """
-        if callable(self.backend):
-            return self.backend(runtime)
-        return self.backend
+        if callable(self.backend_factory):
+            return self.backend_factory(runtime)
+        return self.backend_factory
+
+    async def abefore_model(self, state: StateT, runtime: Runtime[ContextT]) -> dict[str, Any] | None:
+        return {"aaa": "bbb"}
 
     async def awrap_tool_call(
             self,
@@ -53,52 +50,40 @@ class AttachmentExtractMiddleware(AgentMiddleware):
             handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command]],
     ) -> ToolMessage | Command:
         backend: AsyncFilesystemBackend = await self._get_backend(request.runtime)
+        thread_id = backend.get_thread_id()
         # 处理附件
         messages = request.state['messages']
         # 获取这个list 里面 类型是 HumanMessage 的 对象,通过推导式
         human_messages: list[HumanMessage] = [msg for msg in messages if msg.type == 'human']
+        # {"type": "file", "metadata": {'filename': 'myfile.pdf'}, "data": "base64_string", "mimeType": "application/pdf", "cache_control": {'ttl': '5m', 'type': 'ephemeral'}}
+        attachments = []
+        # {"type": "image", "metadata": {"name": "1.jpg"}, "mime_type": "image/jpeg", "data": "base64_string"}
+        images = []
         for msg in human_messages:
             if msg.content:
                 for block in msg.content:
                     if isinstance(block, dict):
                         if block.get("type") == "file":
-                            self.attachments.append(block)
+                            attachments.append(block)
                         elif block.get("type") == "image":
-                            self.images.append(block)
+                            images.append(block)
 
-        # 将 self.attachments 和 self.images 按原有文件名写入到 backend 的 /home目录下
+        # 将 attachments 和 images 按原有文件名写入到 backend 的 /home目录下
         try:
             files = [
                 (item['metadata']['filename'], base64.b64decode(item['data']))
-                for item in self.attachments
+                for item in attachments
             ]
             files.extend([
                 (item['metadata']['name'], base64.b64decode(item['data']))
-                for item in self.images
+                for item in images
             ])
 
             if len(files) > 0:
-                # 开始转换
                 logger.info(f"开始上传 {len(files)} 个文件")
                 uploads: list[FileUploadResponse] = await backend.aupload_files(files)
                 logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
-
-                # 并行转换所有文件以提高性能
-                conversion_tasks = []
-                for upload in uploads:
-                    # 真实全部路径
-                    real_path = Path(backend.get_root_dir()) / upload.path
-                    logger.info(f"准备转换文件: {real_path}")
-                    conversion_tasks.append(
-                        asyncio.to_thread(self.adapterConverter.convert, str(real_path))
-                    )
-
-                # 等待所有转换任务完成
-                if conversion_tasks:
-                    logger.info(f"开始并行转换 {len(conversion_tasks)} 个文件")
-                    await asyncio.gather(*conversion_tasks)
-                    logger.info("所有文件转换完成")
-
+                request.state['uploaded'] = True
         except asyncio.TimeoutError as e:
             logger.error(f"文件转换超时: {e}")
             raise

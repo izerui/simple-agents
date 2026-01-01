@@ -6,27 +6,22 @@ for conducting web research with strategic thinking and context management.
 Supports per-conversation sandbox isolation using BackendFactory.
 """
 import os
-# # === 只有在开发调试时才打开这段代码 ===
-# if os.getenv("DEBUG_ENABLE"): # 设置个开关，防止上线后还跑这段
-#     try:
-#         import pydevd_pycharm
-#         pydevd_pycharm.settrace('localhost', port=5678, stdout_to_server=True, stderr_to_server=True)
-#     except Exception as e:
-#         print(f"Debugger error: {e}")
-# # ======================================
 from datetime import datetime
 
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_anthropic import ChatAnthropic
 
+from core.tools.converts import convert_pdf_to_markdown
+from core.tools.fetch import fetch_markdown
+from core.tools.think import think_tool
 from deepagents import create_deep_agent, SubAgent
 from langgraph.prebuilt import ToolRuntime
 
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
-from middleware.interceptor import AttachmentExtractMiddleware
-from tools import think_tool, fetch_url
+from core.middleware.attachment_extract import AttachmentExtractMiddleware
+from core.middleware.tool_path_resolver import ToolPathResolverMiddleware
 from prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
     SUBAGENT_INSTRUCTIONS,
@@ -54,8 +49,8 @@ INSTRUCTIONS = (
 
 # 1. 创建限制器：例如单次运行最多允许 5 次工具调用
 limiter = ToolCallLimitMiddleware(
-    run_limit=50,
-    exit_behavior="continue"  # 达到 50 次后，强制终止并返回当前结果
+    run_limit=20,
+    exit_behavior="continue"  # 达到 30 次后，强制终止并返回当前结果
 )
 
 # 创建研究子代理
@@ -63,7 +58,7 @@ research_sub_agent = SubAgent(
     name= "子代理研究员",
     description = "将研究委托给子代理研究员，每次仅限一个主题。",
     system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
-    tools = [think_tool, fetch_url],
+    tools = [think_tool, fetch_markdown],
     middleware= [limiter],
 )
 
@@ -122,18 +117,25 @@ def get_backend_per_thread(runtime: ToolRuntime):
         root_dir=user_root_dir,
         virtual_mode=True,
         max_file_size_mb=50,
+        thread_id=thread_id,
     )
     return backend
 
-middleware = AttachmentExtractMiddleware(backend = get_backend_per_thread)
+middleware = AttachmentExtractMiddleware(backend_factory= get_backend_per_thread)
+
+# 创建路径解析中间件
+path_resolver = ToolPathResolverMiddleware(
+    backend_factory=get_backend_per_thread,
+    tools_to_resolve=['convert_pdf_to_markdown']
+)
 
 # Create the agent
 # 每个对话会获得独立的沙箱路径（sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
     model=chat_model,  # 使用模型实例
-    tools=[think_tool, fetch_url],
+    tools=[think_tool, fetch_markdown, convert_pdf_to_markdown],
     backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
     subagents=[research_sub_agent],
-    middleware=[middleware],
+    middleware=[middleware, path_resolver],
 )

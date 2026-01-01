@@ -13,12 +13,12 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
-from utils import format_messages
+from core.utils import format_messages
 
 # 在所有其他导入之前加载环境变量
 load_dotenv(dotenv_path='.env', verbose=True)
 
-from agent import agent
+from graph import agent
 
 async def run_agent_with_cleanup(user_message: str):
     """
@@ -225,11 +225,11 @@ if __name__ == "__main__":
     # asyncio.run(run_with_user_input())
 
     # 模式 3: 单次对话（自定义消息）
-    message = """基于论文指导手册，从专业角度评价该学生论文的以下方面：
+    message = """先将pdf论文转换成markdown格式，然后读取markdown格式论文，基于论文指导手册，从专业角度评价该学生论文的以下方面：
 1. 文献综述质量：是否全面、是否准确、是否有批判性思维
 2. 研究方法与实施：方法是否科学、是否可行、数据分析是否合理
 3. 论文结构与逻辑：逻辑是否清晰、结构是否合理
 4. 学术规范与表达：专业术语使用是否准确、表达是否清晰
 5. 总结：整体评价和核心改进建议, 结论针对五个方面各自给出评价和改进建议，每个模块建议字数不超过300字。并依托指导手册针对该论文进行打分。"""
-    message = '列出根目录文件'
+    # message = '列出根目录文件'
     asyncio.run(run_agent_with_cleanup(message))

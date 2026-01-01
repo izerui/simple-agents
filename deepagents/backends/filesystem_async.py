@@ -44,10 +44,11 @@ class AsyncFilesystemBackend(BackendProtocol):
     """
 
     def __init__(
-        self,
-        root_dir: str | Path | None = None,
-        virtual_mode: bool = False,
-        max_file_size_mb: int = 10,
+            self,
+            root_dir: str | Path | None = None,
+            virtual_mode: bool = False,
+            max_file_size_mb: int = 10,
+            thread_id: str | None = None,
     ) -> None:
         """Initialize filesystem backend.
 
@@ -56,11 +57,16 @@ class AsyncFilesystemBackend(BackendProtocol):
                      all file paths will be resolved relative to this directory.
                      If not provided, uses the current working directory.
         """
+        self.thread_id = thread_id
         self.root_dir = root_dir
         # Avoid blocking operations: use Path() directly without resolve() or cwd()
         self.cwd = Path(root_dir) if root_dir else Path(".")
         self.virtual_mode = virtual_mode
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
+
+    def get_thread_id(self) -> str:
+        """Get the thread ID for this backend."""
+        return self.thread_id
 
     def get_root_dir(self) -> str:
         """Get the root directory for file operations."""
@@ -107,13 +113,13 @@ class AsyncFilesystemBackend(BackendProtocol):
             Directories have a trailing / in their path and is_dir=True.
         """
         dir_path = self._resolve_path(path)
-        
+
         try:
             exists = await aios.path.exists(dir_path)
             is_dir = await aios.path.isdir(dir_path)
         except (OSError, PermissionError):
             return []
-        
+
         if not exists or not is_dir:
             return []
 
@@ -130,7 +136,7 @@ class AsyncFilesystemBackend(BackendProtocol):
 
             # 在 for child_name in child_names: 循环内部添加过滤
             SYSTEM_IGNORE_DIRS = {"home", "var", "etc", "usr", "bin", "sbin", "lib", "boot", "dev", "proc", "sys"}
-            
+
             for child_name in child_names:
                 # 强制过滤：如果是虚拟模式，且是系统目录，直接跳过
                 if self.virtual_mode and child_name in SYSTEM_IGNORE_DIRS:
@@ -175,10 +181,10 @@ class AsyncFilesystemBackend(BackendProtocol):
                 else:
                     # Virtual mode: strip cwd prefix
                     if abs_path.startswith(cwd_str):
-                        relative_path = abs_path[len(cwd_str) :]
+                        relative_path = abs_path[len(cwd_str):]
                     elif abs_path.startswith(str(self.cwd)):
                         # Handle case where cwd doesn't end with /
-                        relative_path = abs_path[len(str(self.cwd)) :].lstrip("/")
+                        relative_path = abs_path[len(str(self.cwd)):].lstrip("/")
                     else:
                         # Path is outside cwd, return as-is or skip
                         relative_path = abs_path
@@ -219,10 +225,10 @@ class AsyncFilesystemBackend(BackendProtocol):
         return results
 
     async def aread(
-        self,
-        file_path: str,
-        offset: int = 0,
-        limit: int = 2000,
+            self,
+            file_path: str,
+            offset: int = 0,
+            limit: int = 2000,
     ) -> str:
         """Read file content with line numbers.
 
@@ -267,9 +273,9 @@ class AsyncFilesystemBackend(BackendProtocol):
             return f"Error reading file '{file_path}': {e}"
 
     async def awrite(
-        self,
-        file_path: str,
-        content: str,
+            self,
+            file_path: str,
+            content: str,
     ) -> WriteResult:
         """Create a new file with content.
         Returns WriteResult. External storage sets files_update=None.
@@ -282,7 +288,8 @@ class AsyncFilesystemBackend(BackendProtocol):
             return WriteResult(error=f"Error writing file '{file_path}': Permission error")
 
         if exists:
-            return WriteResult(error=f"Cannot write to {file_path} because it already exists. Read and then make an edit, or write to a new path.")
+            return WriteResult(
+                error=f"Cannot write to {file_path} because it already exists. Read and then make an edit, or write to a new path.")
 
         try:
             # Create parent directories if needed
@@ -301,11 +308,11 @@ class AsyncFilesystemBackend(BackendProtocol):
             return WriteResult(error=f"Error writing file '{file_path}': {e}")
 
     async def aedit(
-        self,
-        file_path: str,
-        old_string: str,
-        new_string: str,
-        replace_all: bool = False,
+            self,
+            file_path: str,
+            old_string: str,
+            new_string: str,
+            replace_all: bool = False,
     ) -> EditResult:
         """Edit a file by replacing string occurrences.
         Returns EditResult. External storage sets files_update=None.
@@ -342,10 +349,10 @@ class AsyncFilesystemBackend(BackendProtocol):
             return EditResult(error=f"Error editing file '{file_path}': {e}")
 
     async def agrep_raw(
-        self,
-        pattern: str,
-        path: str | None = None,
-        glob: str | None = None,
+            self,
+            pattern: str,
+            path: str | None = None,
+            glob: str | None = None,
     ) -> list[GrepMatch] | str:
         # Validate regex
         try:
@@ -363,7 +370,7 @@ class AsyncFilesystemBackend(BackendProtocol):
             exists = await aios.path.exists(base_full)
         except (OSError, PermissionError):
             return []
-        
+
         if not exists:
             return []
 
@@ -379,7 +386,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         return matches
 
     async def _ripgrep_search(
-        self, pattern: str, base_full: Path, include_glob: str | None
+            self, pattern: str, base_full: Path, include_glob: str | None
     ) -> dict[str, list[tuple[int, str]]] | None:
         cmd = ["rg", "--json"]
         if include_glob:
@@ -427,7 +434,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         return results
 
     async def _python_search(
-        self, pattern: str, base_full: Path, include_glob: str | None
+            self, pattern: str, base_full: Path, include_glob: str | None
     ) -> dict[str, list[tuple[int, str]]]:
         try:
             regex = re.compile(pattern)
@@ -435,45 +442,45 @@ class AsyncFilesystemBackend(BackendProtocol):
             return {}
 
         results: dict[str, list[tuple[int, str]]] = {}
-        
+
         try:
             is_dir = await aios.path.isdir(base_full)
         except OSError:
             return {}
-        
+
         root = base_full if is_dir else base_full.parent
 
         # Run glob in executor to avoid blocking
         def glob_files():
             return list(root.rglob("*"))
-        
+
         file_paths = await asyncio.to_thread(glob_files)
-        
+
         for fp in file_paths:
             try:
                 is_file = await aios.path.isfile(fp)
             except OSError:
                 continue
-            
+
             if not is_file:
                 continue
-            
+
             if include_glob and not wcglob.globmatch(fp.name, include_glob, flags=wcglob.BRACE):
                 continue
-            
+
             try:
                 st = await aios.stat(fp)
                 if st.st_size > self.max_file_size_bytes:
                     continue
             except OSError:
                 continue
-            
+
             try:
                 # Read in executor for non-blocking operation
                 content = await asyncio.to_thread(fp.read_text)
             except (UnicodeDecodeError, PermissionError, OSError):
                 continue
-            
+
             for line_num, line in enumerate(content.splitlines(), 1):
                 if regex.search(line):
                     if self.virtual_mode:
@@ -494,13 +501,13 @@ class AsyncFilesystemBackend(BackendProtocol):
             pattern = pattern.lstrip("/")
 
         search_path = self.cwd if path == "/" else self._resolve_path(path)
-        
+
         try:
             exists = await aios.path.exists(search_path)
             is_dir = await aios.path.isdir(search_path)
         except (OSError, PermissionError):
             return []
-        
+
         if not exists or not is_dir:
             return []
 
@@ -509,9 +516,9 @@ class AsyncFilesystemBackend(BackendProtocol):
             # Use recursive globbing to match files in subdirectories as tests expect
             def glob_match():
                 return list(search_path.rglob(pattern))
-            
+
             matched_paths = await asyncio.to_thread(glob_match)
-            
+
             for matched_path in matched_paths:
                 try:
                     is_file = await aios.path.isfile(matched_path)
@@ -519,7 +526,7 @@ class AsyncFilesystemBackend(BackendProtocol):
                     continue
                 if not is_file:
                     continue
-                
+
                 abs_path = str(matched_path)
                 if not self.virtual_mode:
                     try:
@@ -539,9 +546,9 @@ class AsyncFilesystemBackend(BackendProtocol):
                     if not cwd_str.endswith("/"):
                         cwd_str += "/"
                     if abs_path.startswith(cwd_str):
-                        relative_path = abs_path[len(cwd_str) :]
+                        relative_path = abs_path[len(cwd_str):]
                     elif abs_path.startswith(str(self.cwd)):
-                        relative_path = abs_path[len(str(self.cwd)) :].lstrip("/")
+                        relative_path = abs_path[len(str(self.cwd)):].lstrip("/")
                     else:
                         relative_path = abs_path
                     virt = "/" + relative_path
