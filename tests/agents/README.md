@@ -16,6 +16,7 @@ simple-agents/
 │   │   ├── run_tool_invocation.py      # 工具调用功能测试
 │   │   ├── run_error_handling.py       # 错误处理测试
 │   │   ├── run_markdown_file_operations.py # Markdown 文件操作测试
+│   │   ├── run_interactive.py         # 交互式测试程序（可实时对话）
 │   │   ├── run_all.py                 # 批量运行所有测试的脚本
 │   │   ├── README.md                  # 详细文档
 │   │   └── QUICKSTART.md              # 快速启动指南
@@ -45,6 +46,26 @@ simple-agents/
 ---
 
 ## 🚀 快速开始
+
+### 运行交互式测试
+
+```bash
+# 启动交互式测试（推荐用于调试和演示）
+python tests/agents/run_interactive.py
+```
+
+**交互式测试特性：**
+- 🎯 实时与 Agent 对话，无需每次修改代码
+- 🔄 支持多轮对话，上下文自动保留
+- 🛠️ 可以测试所有工具功能（文件操作、PDF 分析等）
+- 💬 即时查看 AI 的流式回复
+- 🚫 输入 'quit', 'exit', 'q' 或 Ctrl+C 退出
+
+**使用场景：**
+- 快速测试新的 Prompt 或功能
+- 演示 Agent 能力给他人
+- 调试复杂的多轮对话
+- 探索 Agent 的工具调用行为
 
 ### 运行单个独立测试
 
@@ -128,7 +149,54 @@ project_root = Path(__file__).parent.parent
 load_dotenv(dotenv_path=project_root / '.env', verbose=True)
 ```
 
-### 3. 独立测试运行器
+### 4. 交互式测试程序
+
+`tests/agents/run_interactive.py` 提供了一个完全交互式的测试环境：
+
+```python
+class InteractiveAgent:
+    """交互式Agent会话管理器"""
+    
+    def __init__(self):
+        self.thread_id = "interactive_session_" + ...
+        self.running = True
+        self.config = RunnableConfig(...)
+    
+    async def process_message(self, user_message: str):
+        """处理用户消息"""
+        # 实时显示用户问题和 AI 回复
+        # 支持流式输出和工具调用
+    
+    async def run(self):
+        """运行交互式会话"""
+        while self.running:
+            user_input = input("👤 你: ")
+            if self.should_exit(user_input):
+                break
+            await self.process_message(user_input)
+```
+
+**运行方式：**
+```bash
+python tests/agents/run_interactive.py
+```
+
+**使用示例：**
+```
+👤 你: 列出当前目录的文件
+🤖 AI: 我来帮您列出当前目录的文件...[流式输出]
+
+👤 你: 创建一个 test.md 文件
+🤖 AI: 好的，我来为您创建这个文件...[工具调用]
+
+👤 你: 读取 test.md 的内容
+🤖 AI: 文件内容如下...[显示结果]
+
+👤 你: quit
+👋 再见！
+```
+
+### 5. 独立测试运行器
 
 每个独立测试运行器都遵循相同的模式：
 
@@ -175,21 +243,21 @@ if __name__ == "__main__":
 
 ## 🔄 与 pytest 测试的关系
 
-| 特性 | pytest 测试 | 独立测试运行器 |
-|------|-------------|----------------|
-| **文件位置** | `tests/test_agent.py` | `tests/agents/run_*.py` |
-| **运行方式** | `pytest tests/test_agent.py` | `python tests/agents/run_xxx.py` |
-| **输出** | 默认不显示输出，需 `-s` 参数 | 默认显示详细流式输出 |
-| **断言** | 包含断言验证结果 | 仅展示功能，无断言 |
-| **用途** | 自动化测试、CI/CD | 演示、调试、交互式测试 |
-| **环境变量** | 通过 `conftest.py` 加载 | 每个文件独立加载 |
-| **独立性** | 需要安装 pytest | 纯 Python，无需额外依赖 |
+| 特性 | pytest 测试 | 交互式测试 | 独立测试运行器 |
+|------|-------------|-------------|----------------|
+| **文件位置** | `tests/test_agent.py` | `tests/agents/run_interactive.py` | `tests/agents/run_*.py` |
+| **运行方式** | `pytest tests/test_agent.py` | `python tests/agents/run_interactive.py` | `python tests/agents/run_xxx.py` |
+| **输出** | 默认不显示输出，需 `-s` 参数 | 实时交互，支持多轮对话 | 默认显示详细流式输出 |
+| **断言** | 包含断言验证结果 | 仅展示功能，无断言 | 仅展示功能，无断言 |
+| **用途** | 自动化测试、CI/CD | 实时对话、探索、演示 | 演示、调试、自动化测试 |
+| **环境变量** | 通过 `conftest.py` 加载 | 文件内加载 | 每个文件独立加载 |
+| **独立性** | 需要安装 pytest | 纯 Python，无需额外依赖 | 纯 Python，无需额外依赖 |
 
-### 两者如何协作
+### 三者如何协作
 
-1. **共享输出逻辑** - pytest 测试和独立测试都使用 `tests/agents/output_handler.py`
+1. **共享输出逻辑** - 所有测试都使用 `tests/agents/output_handler.py`
 2. **统一环境配置** - 都使用 `conftest.py` 或文件内的环境变量加载
-3. **互补功能** - pytest 用于自动化测试，独立运行器用于演示和调试
+3. **互补功能** - pytest 用于自动化测试，交互式测试用于实时探索，独立运行器用于演示和调试
 
 ---
 
@@ -338,6 +406,9 @@ TimeoutError: Tool execution timeout
 ## 🚀 立即开始
 
 ```bash
+# 启动交互式测试（推荐）
+python tests/agents/run_interactive.py
+
 # 运行第一个测试
 python tests/agents/run_simple_file_list.py
 
