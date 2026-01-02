@@ -99,7 +99,7 @@ jobs:
           izerui/simple-agents:${{ steps.project.outputs.version }}
         platforms: linux/amd64
         cache-from: type=gha
-        cache-to: type=gha,mode-max
+        cache-to: type=gha,mode=max
 
     # 11. 输出版本号：为 deploy job 提供版本号信息
     - name: Output version for deploy job
