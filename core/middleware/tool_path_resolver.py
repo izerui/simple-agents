@@ -8,6 +8,8 @@ from langgraph.prebuilt.tool_node import ToolCallRequest, ToolRuntime
 from langgraph.types import Command
 from langchain_core.messages import ToolMessage
 
+from deepagents.backends.filesystem_async import AsyncFilesystemBackend
+
 logger = logging.getLogger(__name__)
 
 
@@ -63,7 +65,7 @@ class ToolPathResolverMiddleware(AgentMiddleware):
         
         try:
             # Get the backend instance
-            backend = self.backend_factory(request.runtime)
+            backend: AsyncFilesystemBackend = self.backend_factory(request.runtime)
             
             # Check if backend has virtual mode and path resolution
             if not hasattr(backend, 'virtual_mode') or not backend.virtual_mode:
@@ -73,7 +75,7 @@ class ToolPathResolverMiddleware(AgentMiddleware):
             # Resolve paths in the tool arguments
             resolved_args = self._resolve_paths_in_args(
                 request.tool_call['args'],
-                backend._resolve_path
+                backend.resolve_path
             )
             
             # If no paths were resolved, proceed with original request
@@ -89,7 +91,7 @@ class ToolPathResolverMiddleware(AgentMiddleware):
                 runtime=request.runtime,
                 state=request.state,
             )
-            
+
             logger.info(f"Resolved virtual paths for tool {tool_name}: {request.tool_call['args']} -> {resolved_args}")
             
             return await handler(modified_request)
@@ -120,6 +122,7 @@ class ToolPathResolverMiddleware(AgentMiddleware):
                 try:
                     resolved_path = resolve_func(value)
                     resolved[key] = str(resolved_path)
+                    resolved['sandbox_sessions_dir'] = str(resolve_func('/'))
                 except Exception:
                     # If resolution fails, keep original value
                     resolved[key] = value

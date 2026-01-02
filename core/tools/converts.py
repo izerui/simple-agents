@@ -10,8 +10,39 @@ from core.converters.pdf import PDF2Markdown
 from core.converters.docx import DOCX2Markdown
 
 
+def _remove_matched_prefix(path_str: str, prefix: str = None) -> str:
+    """移除路径字符串中匹配的前缀。
+    
+    如果 path_str 以 prefix 开头，则移除该前缀。
+    否则，返回原始字符串。
+
+    Args:
+        path_str: 原始路径字符串
+        prefix: 要匹配的前缀
+
+    Returns:
+        移除匹配前缀后的字符串（如果没有匹配，则返回原字符串）
+
+    Examples:
+        >>> _remove_matched_prefix("/home/user/file.txt", "/home")
+        '/user/file.txt'
+        
+        >>> _remove_matched_prefix("/tmp/data/file.txt", "/tmp")
+        '/data/file.txt'
+        
+        >>> _remove_matched_prefix("/var/log/file.txt", "/home")
+        '/var/log/file.txt'
+    """
+    if not prefix:
+        return path_str
+    if path_str.startswith(prefix):
+        # 移除匹配的前缀，并清理可能的前导斜杠
+        return path_str[len(prefix):].lstrip('/')
+    return path_str
+
+
 @tool(parse_docstring=True)
-def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
+def convert_pdf_to_markdown(pdf_path: str, sandbox_sessions_dir: str = None) -> dict[str, Any]:
     """将 PDF 文件转换为 Markdown 格式以便研究。
 
     该工具将 PDF 文档转换为 Markdown 格式，保留标题、段落、图片和其他格式。
@@ -44,7 +75,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"PDF file not found: {pdf_path}",
-                "pdf_path": str(pdf_file),
+                "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
             }
 
         # Check if it's a PDF file
@@ -52,7 +83,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"File is not a PDF: {pdf_path}",
-                "pdf_path": str(pdf_file),
+                "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
             }
 
         # Determine output file path
@@ -63,8 +94,8 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
             return {
                 "success": True,
                 "message": "File already ready",
-                "pdf_path": str(pdf_file),
-                "output_file": str(output_file),
+                "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
+                "output_file": _remove_matched_prefix(str(output_file), sandbox_sessions_dir),
             }
 
         # Create converter instance
@@ -77,7 +108,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"PDF conversion error: {str(e)}",
-                "pdf_path": str(pdf_file),
+                "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
             }
 
         # Read the output file to get content length and count images
@@ -89,8 +120,8 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
 
         return {
             "success": True,
-            "pdf_path": str(pdf_file),
-            "output_file": str(output_file),
+            "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
+            "output_file": _remove_matched_prefix(str(output_file), sandbox_sessions_dir),
             "content_length": len(content),
             "images_extracted": images_count,
         }
@@ -99,12 +130,12 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
         return {
             "success": False,
             "error": f"PDF conversion error: {str(e)}",
-            "pdf_path": pdf_path,
+            "pdf_path": _remove_matched_prefix(pdf_path, sandbox_sessions_dir),
         }
 
 
 @tool(parse_docstring=True)
-def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
+def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -> dict[str, Any]:
     """将 Word 文档（DOCX）转换为 Markdown 格式以便研究。
 
     该工具将 Word 文档转换为 Markdown 格式，保留标题、段落、列表、表格和其他格式。
@@ -171,7 +202,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"PDF conversion error: {str(e)}",
-                "docx_path": str(docx_file),
+                "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
             }
 
         # Read the output file to get content length
@@ -183,8 +214,8 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
 
         return {
             "success": True,
-            "docx_path": str(docx_file),
-            "output_file": str(output_file),
+            "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
+            "output_file": _remove_matched_prefix(str(output_file), sandbox_sessions_dir),
             "content_length": len(content),
             "messages": messages,
         }
@@ -193,5 +224,5 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
         return {
             "success": False,
             "error": f"DOCX conversion error: {str(e)}",
-            "docx_path": docx_path,
+            "docx_path": _remove_matched_prefix(docx_path, sandbox_sessions_dir),
         }

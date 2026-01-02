@@ -72,7 +72,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         """Get the root directory for file operations."""
         return str(self.root_dir)
 
-    def _resolve_path(self, key: str) -> Path:
+    def resolve_path(self, key: str) -> Path:
         """Resolve a file path with security checks.
 
         When virtual_mode=True, treat incoming paths as virtual absolute paths under
@@ -112,7 +112,7 @@ class AsyncFilesystemBackend(BackendProtocol):
             List of FileInfo-like dicts for files and directories directly in the directory.
             Directories have a trailing / in their path and is_dir=True.
         """
-        dir_path = self._resolve_path(path)
+        dir_path = self.resolve_path(path)
 
         try:
             exists = await aios.path.exists(dir_path)
@@ -240,7 +240,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         Returns:
             Formatted file content with line numbers, or error message.
         """
-        resolved_path = self._resolve_path(file_path)
+        resolved_path = self.resolve_path(file_path)
 
         try:
             exists = await aios.path.exists(resolved_path)
@@ -280,7 +280,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         """Create a new file with content.
         Returns WriteResult. External storage sets files_update=None.
         """
-        resolved_path = self._resolve_path(file_path)
+        resolved_path = self.resolve_path(file_path)
 
         try:
             exists = await aios.path.exists(resolved_path)
@@ -317,7 +317,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         """Edit a file by replacing string occurrences.
         Returns EditResult. External storage sets files_update=None.
         """
-        resolved_path = self._resolve_path(file_path)
+        resolved_path = self.resolve_path(file_path)
 
         try:
             exists = await aios.path.exists(resolved_path)
@@ -362,7 +362,7 @@ class AsyncFilesystemBackend(BackendProtocol):
 
         # Resolve base path
         try:
-            base_full = self._resolve_path(path or ".")
+            base_full = self.resolve_path(path or ".")
         except ValueError:
             return []
 
@@ -500,7 +500,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         if pattern.startswith("/"):
             pattern = pattern.lstrip("/")
 
-        search_path = self.cwd if path == "/" else self._resolve_path(path)
+        search_path = self.cwd if path == "/" else self.resolve_path(path)
 
         try:
             exists = await aios.path.exists(search_path)
@@ -583,7 +583,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         responses: list[FileUploadResponse] = []
         for path, content in files:
             try:
-                resolved_path = self._resolve_path(path)
+                resolved_path = self.resolve_path(path)
 
                 # Create parent directories if needed
                 parent = resolved_path.parent
@@ -623,7 +623,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         responses: list[FileDownloadResponse] = []
         for path in paths:
             try:
-                resolved_path = self._resolve_path(path)
+                resolved_path = self.resolve_path(path)
                 # Read asynchronously in binary mode
                 async with aiofiles.open(resolved_path, mode="rb") as f:
                     content = await f.read()
