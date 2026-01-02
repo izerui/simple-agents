@@ -1,0 +1,102 @@
+name: Build, Push and Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: izerui/simple-agents
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # 获取所有历史记录
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: |
+        uv sync
+
+    - name: Install LangGraph CLI
+      run: |
+        uv pip install langgraph-cli[all]
+
+    - name: Generate Dockerfile
+      run: |
+        langgraph dockerfile -c langgraph.json ./Dockerfile
+
+    - name: Extract project version
+      id: project
+      run: |
+        VERSION=$(uv run python -c "import tomllib; config = tomllib.load(open('pyproject.toml')); print(config['project']['version'])")
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Project version: ${VERSION}"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Harbor Registry
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_PASSWORD }}
+        
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          serv999.com/feike/simple-agents:latest
+          serv999.com/feike/simple-agents:${{ steps.project.outputs.version }}
+        platforms: linux/amd64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max 
+        
+    - name: Debug Information
+      run: |
+        echo "Current branch: ${{ github.ref }}"
+        echo "Current version: ${{ steps.project.outputs.version }}"
+        
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      
+    - name: Setup kubeconfig
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+        
+    - name: Debug kubeconfig
+      run: |
+        echo "Checking kubeconfig file exists:"
+        ls -la $HOME/.kube/config
+        echo "Checking kubeconfig format (safely):"
+        grep -c "apiVersion:" $HOME/.kube/config || echo "No apiVersion found"
+        grep -c "kind:" $HOME/.kube/config || echo "No kind field found"
+        grep -c "cluster:" $HOME/.kube/config || echo "No cluster section found"
+        
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl rollout restart deployment/simple-agents -n platform-yunji
