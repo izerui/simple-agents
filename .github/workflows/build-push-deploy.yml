@@ -54,6 +54,7 @@ jobs:
     - name: Install dependencies
       run: |
         uv sync
+        source .venv/bin/activate
 
     # 5. 安装 LangGraph CLI：用于生成 Dockerfile 的构建工具
     - name: Install LangGraph CLI
