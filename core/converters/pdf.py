@@ -199,8 +199,17 @@ class PDF2Markdown:
         pattern = r'__IMAGE_PLACEHOLDER_\d+_\d+__'
         return re.sub(pattern, replace_match, content)
 
-    def convert(self, pdf_file: str, output_file: str):
+    def convert(self, pdf_file: str, output_file: str) -> str:
         """执行转换"""
+
+        # 转换为 Path 对象
+        pdf_path = Path(pdf_file)
+
+        # 检查文件是否存在
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDF 文档不存在: {pdf_file}")
+
+
         full_text = ""
         
         # 占位符列表，存储待替换的信息（局部变量，避免线程安全问题）
@@ -213,25 +222,29 @@ class PDF2Markdown:
         if not os.path.exists(images_dir):
             os.makedirs(images_dir)
 
-        try:
-            # 先用 pdfplumber 获取总页数
-            with pdfplumber.open(pdf_file) as pdf:
-                total_pages = len(pdf.pages)
+        # 先用 pdfplumber 获取总页数
+        with pdfplumber.open(pdf_file) as pdf:
+            total_pages = len(pdf.pages)
 
-            # 处理每一页
-            for i in range(total_pages):
-                print(f"pdf2markdown - {i + 1}/{total_pages} 页...")
-                page_text = self.process_page(pdf_file, images_dir, i, placeholders)
-                full_text += page_text + "\n\n"
+        # 处理每一页
+        for i in range(total_pages):
+            print(f"pdf2markdown - {i + 1}/{total_pages} 页...")
+            page_text = self.process_page(pdf_file, images_dir, i, placeholders)
+            full_text += page_text + "\n\n"
 
-            # 替换所有占位符
-            full_text = self._replace_placeholders(full_text, placeholders)
+        # 替换所有占位符
+        full_text = self._replace_placeholders(full_text, placeholders)
 
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write(full_text)
+        # 确定输出路径
+        if output_file is None:
+            output_path = pdf_path.with_suffix('.md')
+        else:
+            output_path = Path(output_file)
 
-        except Exception as e:
-            return f"错误: {str(e)}"
+        # 自动创建父目录
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        # 写入文件
+        output_path.write_text(full_text, encoding='utf-8')
 
         return full_text
 

@@ -71,12 +71,12 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
         converter = PDF2Markdown(debug=False)
 
         # Perform conversion
-        result = converter.convert(str(pdf_file), str(output_file))
-
-        if result.startswith("错误:"):
+        try:
+            converter.convert(str(pdf_file), str(output_file))
+        except Exception as e:
             return {
                 "success": False,
-                "error": result,
+                "error": f"PDF conversion error: {str(e)}",
                 "pdf_path": str(pdf_file),
             }
 
@@ -165,13 +165,12 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
         converter = DOCX2Markdown(debug=False)
 
         # Perform conversion
-        result = converter.convert(str(docx_file), str(output_file))
-
-        # Check for errors
-        if result.startswith("错误:"):
+        try:
+            result = converter.convert(str(docx_file), str(output_file))
+        except Exception as e:
             return {
                 "success": False,
-                "error": result,
+                "error": f"PDF conversion error: {str(e)}",
                 "docx_path": str(docx_file),
             }
 

@@ -64,7 +64,7 @@ async def run_test():
         {"type": "file", "data": docx_content, "metadata": {"filename": "1901180052张卓群毕业论文3.docx"}, "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
         {"type": "image", "metadata": {"name": "跟单宝.png"}, "mime_type": "image/png", "data": image_content}
     ])
-    
+
     inputs = {"messages": [message]}
     config = RunnableConfig(
         configurable={
