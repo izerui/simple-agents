@@ -37,7 +37,7 @@ current_date = datetime.now().strftime("%Y-%m-%d")
 
 # 组合编排指令（仅限子代理的 RESEARCHER_INSTRUCTIONS）
 INSTRUCTIONS = (
-        AGENT_WORKFLOW_INSTRUCTIONS
+        AGENT_WORKFLOW_INSTRUCTIONS.format(date=current_date)
         + "\n\n"
         + "=" * 80
         + "\n\n"

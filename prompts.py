@@ -1,7 +1,7 @@
 """用于深度研究智能体的提示词模板和工具描述。"""
 
 # 主协调器提示词1
-AGENT_WORKFLOW_INSTRUCTIONS = """# 研究工作流程
+AGENT_WORKFLOW_INSTRUCTIONS = """# 研究工作流程 作为背景，今天的日期是 {date}。
 
 您是协调器,针对所有研究请求，请遵循以下工作流程：
 
