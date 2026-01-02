@@ -73,7 +73,7 @@ jobs:
     - name: Extract project version
       id: project
       run: |
-        VERSION=$(uv run python -c "import tomllib; config = tomllib.load(open('pyproject.toml')); print(config['project']['version'])")
+        VERSION=$(uv run python -c "import tomllib; config = tomllib.load(open('pyproject.toml', 'rb')); print(config['project']['version'])")
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
         echo "Project version: ${VERSION}"
 
