@@ -58,7 +58,7 @@ jobs:
     # 5. 安装 LangGraph CLI：用于生成 Dockerfile 的构建工具
     - name: Install LangGraph CLI
       run: |
-        uv pip install langgraph-cli[all]
+        uv add "langgraph-cli[all]"
 
     # 6. 生成 Dockerfile：使用 LangGraph CLI 根据 langgraph.json 生成 Dockerfile
     - name: Generate Dockerfile
