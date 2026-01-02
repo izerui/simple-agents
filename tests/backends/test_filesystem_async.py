@@ -45,16 +45,16 @@ class TestAsyncFilesystemBackend:
         backend = AsyncFilesystemBackend(root_dir=temp_dir, virtual_mode=True)
         
         # Test relative path
-        resolved = backend.resolve_path("test.txt")
+        resolved = await backend.aabs_path("test.txt")
         assert resolved == temp_dir / "test.txt"
         
         # Test virtual absolute path
-        resolved = backend.resolve_path("/subdir/test.txt")
+        resolved = await backend.aabs_path("/subdir/test.txt")
         assert resolved == temp_dir / "subdir" / "test.txt"
         
         # Test path traversal prevention
         with pytest.raises(ValueError, match="Path traversal not allowed"):
-            backend.resolve_path("../outside.txt")
+            await backend.aabs_path("../outside.txt")
 
     @pytest.mark.asyncio
     async def test_resolve_path_non_virtual_mode(self, temp_dir):
@@ -62,11 +62,11 @@ class TestAsyncFilesystemBackend:
         backend = AsyncFilesystemBackend(root_dir=temp_dir, virtual_mode=False)
         
         # Test absolute path
-        resolved = backend.resolve_path(str(temp_dir / "test.txt"))
+        resolved = await backend.aabs_path(str(temp_dir / "test.txt"))
         assert resolved == temp_dir / "test.txt"
         
         # Test relative path
-        resolved = backend.resolve_path("test.txt")
+        resolved = await backend.aabs_path("test.txt")
         assert resolved == temp_dir / "test.txt"
 
     @pytest.mark.asyncio

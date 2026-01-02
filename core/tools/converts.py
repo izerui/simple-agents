@@ -169,7 +169,7 @@ def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -
             return {
                 "success": False,
                 "error": f"DOCX file not found: {docx_path}",
-                "docx_path": str(docx_file),
+                "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
             }
 
         # Check if it's a DOCX file
@@ -177,7 +177,7 @@ def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -
             return {
                 "success": False,
                 "error": f"File is not a DOCX: {docx_path}",
-                "docx_path": str(docx_file),
+                "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
             }
 
         # Determine output file path
@@ -188,8 +188,8 @@ def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -
             return {
                 "success": True,
                 "message": "File already ready",
-                "docx_path": str(docx_file),
-                "output_file": str(output_file),
+                "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
+                "output_file": _remove_matched_prefix(str(output_file), sandbox_sessions_dir),
             }
 
         # Create converter instance
@@ -201,7 +201,7 @@ def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -
         except Exception as e:
             return {
                 "success": False,
-                "error": f"PDF conversion error: {str(e)}",
+                "error": f"DOCX conversion error: {str(e)}",
                 "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
             }
 
