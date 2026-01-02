@@ -11,33 +11,31 @@ from core.converters.docx import DOCX2Markdown
 
 
 def _remove_matched_prefix(path_str: str, prefix: str = None) -> str:
-    """移除路径字符串中匹配的前缀。
-    
-    如果 path_str 以 prefix 开头，则移除该前缀。
+    """移除路径字符串中匹配的前缀，并转换为虚拟路径格式。
+
+    如果 path_str 以 prefix 开头，则移除该前缀并添加 / 前缀。
     否则，返回原始字符串。
 
     Args:
-        path_str: 原始路径字符串
-        prefix: 要匹配的前缀
+        path_str: 原始路径字符串（绝对路径）
+        prefix: 要移除的前缀（通常是 sandbox_sessions_dir）
 
     Returns:
-        移除匹配前缀后的字符串（如果没有匹配，则返回原字符串）
+        虚拟路径字符串（以 / 开头，相对于沙箱根目录）
 
     Examples:
-        >>> _remove_matched_prefix("/home/user/file.txt", "/home")
-        '/user/file.txt'
-        
-        >>> _remove_matched_prefix("/tmp/data/file.txt", "/tmp")
-        '/data/file.txt'
-        
-        >>> _remove_matched_prefix("/var/log/file.txt", "/home")
-        '/var/log/file.txt'
+        >>> _remove_matched_prefix("/abs/path/sandbox_sessions/thread_id/file.pdf", "/abs/path/sandbox_sessions/thread_id/")
+        '/file.pdf'
+
+        >>> _remove_matched_prefix("/abs/path/file.txt", "/abs/path/")
+        '/file.txt'
     """
     if not prefix:
         return path_str
     if path_str.startswith(prefix):
-        # 移除匹配的前缀，并清理可能的前导斜杠
-        return path_str[len(prefix):].lstrip('/')
+        # 移除匹配的前缀，并添加虚拟路径前缀
+        relative_path = path_str[len(prefix):].lstrip('/')
+        return "/" + relative_path if relative_path else "/"
     return path_str
 
 
