@@ -118,7 +118,9 @@ class DOCX2Markdown:
             }
         except Exception as e:
             # 返回空字典，告诉 mammoth 不生成图片标签
-            return {}
+            return {
+                "src": "images/unknow-file.jpg"
+            }
 
 
 
