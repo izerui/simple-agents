@@ -4,7 +4,7 @@ volumes:
 
 services:
     langgraph-redis:
-        image: redis:6
+        image: serv999.com/hub/redis:6
         healthcheck:
             test: redis-cli ping
             interval: 5s
@@ -12,7 +12,7 @@ services:
             retries: 5
 
     langgraph-postgres:
-        image: pgvector/pgvector:pg16
+        image: serv999.com/hub/pgvector/pgvector:pg16
         ports:
             - "5433:5432"
         environment:
@@ -34,7 +34,7 @@ services:
             start_interval: 1s
 
     langgraph-api:
-        image: izerui/simple-agents:latest
+        image: serv999.com/hub/izerui/simple-agents:latest
         ports:
             - "8123:8000"
         depends_on:
