@@ -60,7 +60,7 @@ simple-agents/
 ├── files/                       # 测试文件
 │   ├── 论文.pdf
 │   └── 跟单宝.png
-├── sandbox_sessions/             # 沙箱会话目录
+├── data/             # 数据目录包含沙箱目录
 ├── graph.py                     # 主 Agent 配置
 ├── main.py                     # 主运行脚本
 ├── prompts.py                  # 系统提示词
@@ -390,7 +390,7 @@ cp tests/agents/run_simple_file_list.py tests/agents/run_your_test.py
 
 - 对于长时间运行的测试，增加 `tool_timeout`
 - 使用 `thread_id` 隔离不同的测试会话
-- 定期清理 `sandbox_sessions` 目录
+- 定期清理 `./data/sandbox_sessions` 目录
 - 考虑使用虚拟模式减少磁盘 I/O
 
 ---

@@ -52,4 +52,4 @@ services:
             context: .
             dockerfile: Dockerfile
         volumes:
-            - ./data/sandbox_sessions:/deps/simple-agents/sandbox_sessions
+            - ./data/sandbox_sessions:/deps/simple-agents/data/sandbox_sessions

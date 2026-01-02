@@ -3,7 +3,7 @@
 .idea
 .venv
 .langgraph_api
-sandbox_sessions
+data/
 __pycache__/
 files/
 *.egg-info/

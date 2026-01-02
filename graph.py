@@ -92,8 +92,8 @@ def get_backend_per_thread(runtime: ToolRuntime):
         thread_id = "default"
 
     # 2. 动态构造该用户专属的目录
-    # 结果示例：./sandbox_sessions/thread_abc/
-    user_root_dir = f"./sandbox_sessions/{thread_id}"
+    # 结果示例：./data/sandbox_sessions/thread_abc/
+    user_root_dir = f"./data/sandbox_sessions/{thread_id}"
 
     # 3. 创建新的 Backend 实例并缓存
     # 注意：不预先转换为绝对路径，让 FilesystemBackend.__init__ 处理
@@ -123,7 +123,7 @@ sub_agent = SubAgent(
 )
 
 # Create the agent
-# 每个对话会获得独立的沙箱路径（sandbox_sessions/{thread_id}/）
+# 每个对话会获得独立的沙箱路径（./data/sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
     name="协调者",
     model=chat_model,  # 使用模型实例
