@@ -3,5 +3,6 @@
   "graphs": {
     "research": "./graph.py:agent"
   },
-  "env": ".env"
+  "env": ".env",
+  "python_version": "3.12"
 }

@@ -63,23 +63,11 @@ jobs:
         uv run langgraph --version
 
     # 6. 生成 Dockerfile：使用 LangGraph CLI 根据 langgraph.json 生成 Dockerfile
-    - name: Generate Dockerfile
-      run: |
-        uv run langgraph dockerfile -c langgraph.json --base-image langchain/langgraph-api:3.12 ./Dockerfile
-        # 验证 Dockerfile 是否生成
-        ls -la Dockerfile
-
-    # 6.5. 调试 Dockerfile：验证基础镜像和配置
-    - name: Debug Dockerfile
-      run: |
-        echo "=== Dockerfile 前 30 行 ==="
-        head -n 30 Dockerfile
-        echo ""
-        echo "=== 验证基础镜像版本 ==="
-        grep "^FROM" Dockerfile || echo "未找到 FROM 指令"
-        echo ""
-        echo "=== 检查 Python 版本要求 ==="
-        grep -i "python\|3.12\|3.11" Dockerfile || echo "未找到 Python 版本信息"
+#    - name: Generate Dockerfile
+#      run: |
+#        uv run langgraph dockerfile -c langgraph.json --base-image langchain/langgraph-api:3.12 ./Dockerfile
+#        # 验证 Dockerfile 是否生成
+#        ls -la Dockerfile
 
     # 7. 提取版本号：从 pyproject.toml 中读取项目版本
     - name: Extract project version
