@@ -73,6 +73,10 @@ simple-agents/
 
 ## 🚀 快速开始
 
+```
+langgraph dockerfile --add-docker-compose -c langgraph.json ./Dockerfile
+```
+
 ### 1. 启动服务器（可选）
 
 ```bash

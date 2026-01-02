@@ -82,21 +82,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
         
-    # 9. 创建 .env 文件：从 .env.example 复制，确保服务能正常启动
-    - name: Create .env file from .env.example
-      run: |
-        if [ -f .env.example ]; then
-          echo "Found .env.example, copying to .env"
-          cp .env.example .env
-          echo ".env file created successfully"
-          echo "=== .env file content (first 10 lines) ==="
-          head -n 10 .env
-        else
-          echo "Warning: .env.example not found, creating empty .env"
-          touch .env
-        fi
-
-    # 10. 构建并推送镜像：构建 Docker 镜像并推送到 Docker Hub
+    # 9. 构建并推送镜像：构建 Docker 镜像并推送到 Docker Hub
     - name: Build and Push Docker Image
       uses: docker/build-push-action@v5
       with:
