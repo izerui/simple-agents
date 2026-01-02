@@ -1,0 +1,125 @@
+name: Deploy to Kubernetes
+
+# =============================================================================
+# 触发条件
+# =============================================================================
+# 只能通过手动触发（workflow_dispatch），不会自动执行
+# - image_version: 要部署的镜像版本，默认为 latest
+# - dry_run: 是否只检查不实际部署，默认为 false
+on:
+  workflow_dispatch:
+    inputs:
+      image_version:
+        description: 'Docker image version to deploy'
+        required: false
+        default: 'latest'
+        type: choice
+        options:
+          - latest
+          - '0.1.0'
+          - '0.2.0'
+          - 'custom'
+      custom_version:
+        description: 'Custom version if selected above'
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        description: 'Dry run (check only, no actual deployment)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: izerui/simple-agents
+  NAMESPACE: platform-yunji
+  DEPLOYMENT: simple-agents
+
+# =============================================================================
+# 工作流
+# =============================================================================
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 1. 检出代码
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    # 2. 确定要部署的镜像版本
+    - name: Determine image version
+      id: version
+      run: |
+        if [ "${{ inputs.image_version }}" == "custom" ]; then
+          VERSION="${{ inputs.custom_version }}"
+        else
+          VERSION="${{ inputs.image_version }}"
+        fi
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Will deploy image: izerui/simple-agents:${VERSION}"
+    
+    # 3. 设置 kubectl
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+    
+    # 4. 配置 kubeconfig
+    - name: Setup kubeconfig
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+    
+    # 5. 验证 kubeconfig
+    - name: Verify kubeconfig
+      run: |
+        echo "=== Checking kubeconfig ==="
+        kubectl cluster-info
+        kubectl get namespace ${{ env.NAMESPACE }} || echo "Namespace not found"
+        kubectl get deployment ${{ env.DEPLOYMENT }} -n ${{ env.NAMESPACE }} || echo "Deployment not found"
+    
+    # 6. 显示当前部署状态
+    - name: Show current deployment status
+      run: |
+        echo "=== Current Deployment Status ==="
+        kubectl describe deployment ${{ env.DEPLOYMENT }} -n ${{ env.NAMESPACE }}
+        echo ""
+        echo "=== Current Pods ==="
+        kubectl get pods -n ${{ env.NAMESPACE }} -l app=${{ env.DEPLOYMENT }}
+    
+    # 7. Dry Run 检查（如果启用）
+    - name: Dry run check
+      if: inputs.dry_run == true
+      run: |
+        echo "=== DRY RUN MODE - No actual deployment will be performed ==="
+        echo "Target image: izerui/simple-agents:${{ steps.version.outputs.version }}"
+        echo "To perform actual deployment, run the workflow again with dry_run unchecked"
+        exit 0
+    
+    # 8. 部署到 Kubernetes
+    - name: Deploy to Kubernetes
+      if: inputs.dry_run == false
+      run: |
+        echo "=== Deploying to Kubernetes ==="
+        echo "Image: izerui/simple-agents:${{ steps.version.outputs.version }}"
+        echo "Namespace: ${{ env.NAMESPACE }}"
+        echo "Deployment: ${{ env.DEPLOYMENT }}"
+        
+        # 使用滚动更新重启 deployment（会使用最新镜像）
+        kubectl rollout restart deployment/${{ env.DEPLOYMENT }} -n ${{ env.NAMESPACE }}
+        
+        # 等待滚动更新完成
+        kubectl rollout status deployment/${{ env.DEPLOYMENT }} -n ${{ env.NAMESPACE }} --timeout=5m
+    
+    # 9. 显示部署后状态
+    - name: Show post-deployment status
+      if: inputs.dry_run == false
+      run: |
+        echo "=== Deployment Completed ==="
+        echo ""
+        echo "=== Current Pods ==="
+        kubectl get pods -n ${{ env.NAMESPACE }} -l app=${{ env.DEPLOYMENT }}
+        echo ""
+        echo "=== Pod Details ==="
+        kubectl describe pods -n ${{ env.NAMESPACE }} -l app=${{ env.DEPLOYMENT }}
