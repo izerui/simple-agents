@@ -1,4 +1,4 @@
-name: Build and Push
+name: Build and Push to Docker Hub
 
 # =============================================================================
 # 触发条件
