@@ -9,7 +9,7 @@
 使用 LangGraph CLI 生成 Dockerfile：
 
 ```simple-agents/DEPLOYMENT.md#L8
-langgraph dockerfile -c langgraph.json ./Dockerfile
+langgraph dockerfile -c langgraph.json --base-image langchain/langgraph-api:3.12 ./Dockerfile
 ```
 
 该命令会根据 `langgraph.json` 配置文件在项目根目录生成 `Dockerfile`。
