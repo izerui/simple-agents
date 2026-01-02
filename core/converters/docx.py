@@ -34,7 +34,9 @@ class DOCX2Markdown:
 
         # 默认 mammoth 配置
         self.mammoth_options = {
-            "ignore_empty_paragraphs": True,
+            "ignore_empty_paragraphs": False,
+            "external_file_access": True,
+            "ignore_empty_paragraphs": False,
         }
 
         # 默认 html2text 配置
@@ -83,69 +85,38 @@ class DOCX2Markdown:
             raise ImportError("html2text 未安装。请运行: pip install html2text")
 
     def convert_image(self, image):
-
-        if self.debug:
-            print(f"========== 开始处理图片 ==========")
-            print(f"当前输出路径: {self._current_output_path}")
-
+        """处理图片并保存到 images 目录"""
         try:
             # 检查输出路径是否已设置
             if self._current_output_path is None:
-                if self.debug:
-                    print(f"警告: 当前输出路径未设置，无法保存图片")
                 return {}
-
             # 使用 image.open() 获取文件对象
             with image.open() as image_file:
                 content_type = image.content_type  # 获取 MIME 类型 (e.g., image/png)
-
-                if self.debug:
-                    print(f"图片 MIME 类型: {content_type}")
-
+                
                 # 根据 content_type 获取扩展名
                 ext = content_type.split('/')[-1]
                 if ext == 'jpeg':
                     ext = 'jpg'  # 修正常见类型
-
-                if self.debug:
-                    print(f"图片扩展名: {ext}")
-
+                
                 # 使用计数器生成文件名
                 self._image_counter += 1
                 filename = f"image_{self._image_counter}.{ext}"
-
-                if self.debug:
-                    print(f"生成的文件名: {filename}")
-
+                
                 # 创建 images 目录（相对于输出目录）
                 images_dir = self._current_output_path.parent / "images"
                 images_dir.mkdir(parents=True, exist_ok=True)
-
-                if self.debug:
-                    print(f"图片保存目录: {images_dir}")
-                    print(f"目录是否存在: {images_dir.exists()}")
-
+                
                 # 保存图片文件
                 image_path = images_dir / filename
                 with open(image_path, 'wb') as f:
                     f.write(image_file.read())
-
-            if self.debug:
-                print(f"保存图片: {image_path}")
-                print(f"图片是否已保存: {image_path.exists()}")
-                print(f"图片大小: {image_path.stat().st_size} bytes")
-                print(f"========== 图片处理完成 ==========\n")
-
+            
             # 返回相对路径，用于生成 HTML img 标签
             return {
                 "src": f"images/{filename}"
             }
         except Exception as e:
-            if self.debug:
-                print(f"图片保存失败: {e}")
-                import traceback
-                traceback.print_exc()
-                print(f"========== 图片处理失败 ==========\n")
             # 返回空字典，告诉 mammoth 不生成图片标签
             return {}
 
@@ -162,36 +133,17 @@ class DOCX2Markdown:
         Returns:
             HTML 内容字符串
         """
-        if self.debug:
-            print(f"========== 开始 DOCX 转 HTML ==========")
-            print(f"DOCX 文件路径: {docx_path}")
-            print(f"是否保存图片: {self._save_images}")
-        
         try:
             with open(docx_path, "rb") as docx_file:
                 # 如果需要保存图片，则传入图片处理器
                 if self._save_images:
                     options = self.mammoth_options.copy()
                     options['convert_image'] = mammoth.images.img_element(self.convert_image)
-                    if self.debug:
-                        print(f"启用图片保存，图片处理器已设置")
                 else:
                     options = self.mammoth_options
-                    if self.debug:
-                        print(f"未启用图片保存")
-                
-                if self.debug:
-                    print(f"调用 mammoth.convert_to_html...")
                 
                 html_result = mammoth.convert_to_html(docx_file, **options)
                 html_content = html_result.value
-
-                if self.debug:
-                    print(f"HTML 转换完成，长度: {len(html_content)} 字符")
-                    print(f"转换消息数量: {len(html_result.messages)}")
-                    for msg in html_result.messages:
-                        print(f"  [{msg.type}] {msg.message}")
-                    print(f"========== DOCX 转 HTML 完成 ==========\n")
 
                 # 存储转换消息
                 self.messages = [
@@ -204,9 +156,6 @@ class DOCX2Markdown:
 
                 return html_content
         except Exception as e:
-            if self.debug:
-                import traceback
-                traceback.print_exc()
             raise Exception(f"DOCX 转 HTML 失败: {e}")
 
     def _convert_html_to_markdown(self, html_content: str) -> str:
@@ -233,12 +182,7 @@ class DOCX2Markdown:
         except Exception as e:
             raise Exception(f"HTML 转 Markdown 失败: {e}")
 
-    def _print_messages(self):
-        """打印转换消息（如果开启调试模式或有错误）"""
-        if self.debug or self.messages:
-            print(f"转换消息: {len(self.messages)} 条")
-            for msg in self.messages:
-                print(f"  [{msg['type']}] {msg['message']}")
+
 
     def set_style_map(self, style_map: str):
         """设置 mammoth 自定义样式映射
@@ -290,31 +234,16 @@ class DOCX2Markdown:
         # 启用图片保存
         self._save_images = True
 
-        if self.debug:
-            print(f"开始转换: {docx_path}")
-
         # 步骤1: DOCX 转 HTML
         html_content = self._convert_docx_to_html(docx_path)
 
-        if self.debug:
-            print(f"HTML 内容长度: {len(html_content)} 字符")
-
         # 步骤2: HTML 转 Markdown
         markdown_content = self._convert_html_to_markdown(html_content)
-
-        if self.debug:
-            print(f"Markdown 内容长度: {len(markdown_content)} 字符")
-
-        # 打印转换消息
-        self._print_messages()
 
         # 自动创建父目录
         output_path.parent.mkdir(parents=True, exist_ok=True)
         # 写入文件
         output_path.write_text(markdown_content, encoding='utf-8')
-
-        if self.debug:
-            print(f"转换完成，已保存到: {output_path}")
 
         return markdown_content
 
