@@ -26,8 +26,7 @@ services:
             start_period: 10s
             timeout: 1s
             retries: 5
-            interval: 60s
-            start_interval: 1s
+            interval: 5s
 
     simple-agents-api:
         image: serv999.com/hub/izerui/simple-agents:latest
@@ -38,16 +37,15 @@ services:
                 condition: service_healthy
             simple-agents-postgres:
                 condition: service_healthy
-        environment:
-            REDIS_URI: redis://simple-agents-redis:6379
-            POSTGRES_URI: postgres://postgres:postgres@simple-agents-postgres:5432/postgres?sslmode=disable
-        healthcheck:
-            test: python /api/healthcheck.py
-            interval: 60s
-            start_interval: 1s
-            start_period: 10s
         env_file:
             - .env
+        environment:
+            REDIS_URI: redis://simple-agents-redis:6379
+            DATABASE_URI: postgres://postgres:postgres@simple-agents-postgres:5432/postgres?sslmode=disable
+        healthcheck:
+            test: python /api/healthcheck.py
+            interval: 30s
+            start_period: 10s
         build:
             context: .
             dockerfile: Dockerfile
