@@ -25,7 +25,6 @@ from deepagents.backends import FilesystemBackend
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
 from core.middleware.attachment_extract import AttachmentExtractMiddleware
 from langgraph.config import get_config
-from core.middleware.tool_path_resolver import ToolPathResolverMiddleware
 from prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
     SUBAGENT_INSTRUCTIONS,
@@ -75,12 +74,6 @@ def cus_tool_limiter(tool_name: str, run_limit:int) -> ToolCallLimitMiddleware:
 
 upload_files = AttachmentExtractMiddleware(backend_factory= get_backend_per_thread)
 
-# 创建路径解析中间件
-path_resolver = ToolPathResolverMiddleware(
-    backend_factory=get_backend_per_thread,
-    tools_to_resolve=['convert_pdf_to_markdown', 'convert_docx_to_markdown']
-)
-
 # 创建研究子代理
 sub_agent = SubAgent(
     name= "子智能体",
@@ -88,7 +81,6 @@ sub_agent = SubAgent(
     system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
     tools = [think_tool, fetch_markdown],
     middleware=[
-        path_resolver,
         tool_limiter
     ],  # 完整的中间件配置
 )
@@ -104,7 +96,6 @@ agent = create_deep_agent(
     subagents=[sub_agent],
     middleware=[
         upload_files,
-        path_resolver,
         tool_limiter,
         cus_tool_limiter('glob', 5)
     ],  # 完整的中间件配置

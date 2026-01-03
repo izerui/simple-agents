@@ -60,7 +60,13 @@ class AsyncFilesystemBackend(BackendProtocol):
         """
         self.thread_id = thread_id
         # 简化路径处理：使用字符串而不是 Path 对象
-        self.thread_dir = str(thread_dir) if thread_dir else "."
+        # 规范化 thread_dir，移除 ./ 前缀
+        thread_dir_str = str(thread_dir) if thread_dir else "."
+        if thread_dir_str.startswith("./"):
+            thread_dir_str = thread_dir_str[2:]
+        elif thread_dir_str == ".":
+            thread_dir_str = ""
+        self.thread_dir = thread_dir_str
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
 
     def get_thread_id(self) -> str | None:
@@ -100,7 +106,9 @@ class AsyncFilesystemBackend(BackendProtocol):
             raise ValueError("不允许路径遍历")
         
         # 拼接路径
-        if self.thread_dir.endswith("/") or key.startswith("/"):
+        if not self.thread_dir:
+            return key
+        elif self.thread_dir.endswith("/") or key.startswith("/"):
             return self.thread_dir + key
         else:
             return self.thread_dir + "/" + key
@@ -118,6 +126,8 @@ class AsyncFilesystemBackend(BackendProtocol):
             虚拟路径字符串（相对于 thread_dir，以 / 开头）
         """
         # 确保 thread_dir 以 / 结尾，方便拼接
+        if not self.thread_dir:
+            return "/" + abs_path if not abs_path.startswith("/") else abs_path
         thread_dir = self.thread_dir if self.thread_dir.endswith("/") else self.thread_dir + "/"
         
         # 移除 thread_dir 前缀
