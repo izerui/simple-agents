@@ -4,9 +4,15 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 
+from langchain_core.runnables import RunnableConfig
+from langgraph.config import get_config
+from langgraph.prebuilt import ToolRuntime
+from langgraph.runtime import Runtime
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
+
+from deepagents.backends.filesystem_async import AsyncFilesystemBackend
 
 console = Console()
 
@@ -94,3 +100,60 @@ def show_prompt(prompt_text: str, title: str = "Prompt", border_style: str = "bl
             padding=(1, 2),
         )
     )
+
+
+# 定义一个工厂函数
+def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig | dict = None) -> AsyncFilesystemBackend:
+    """
+    根据当前对话的 thread_id 创建一个 FilesystemBackend 实例。
+
+    这个函数处理以下情况：
+    1. runtime 可能是 ToolRuntime 或 Runtime 类型
+    2. config 可能为空或不包含 configurable
+    3. thread_id 可能为 None 或包含非法字符
+    4. 路径可能无法解析
+
+    Args:
+        runtime: LangGraph 的 Runtime 对象（ToolRuntime 或 Runtime）
+
+    Returns:
+        FilesystemBackend 实例，配置了独立的沙箱路径
+    """
+    # 1. 从配置中获取当前对话的 thread_id
+    # 使用 .get() 方法避免 KeyError
+    if isinstance(runtime, ToolRuntime):
+        if hasattr(runtime, 'config'):
+            config = runtime.config
+        else:
+            config = {}
+    elif isinstance(runtime, Runtime):
+        config = {}
+    else:
+        config = runtime
+    thread_id = config.get('configurable', {}).get('thread_id')
+
+    # 如果从 runtime 获取不到 thread_id，尝试从 langgraph.config.get_config() 获取
+    if thread_id is None:
+        try:
+            cfg = get_config()
+            if isinstance(cfg, dict):
+                thread_id = cfg.get('configurable', {}).get('thread_id')
+        except Exception:
+            pass
+
+    # 如果没有 thread_id，使用默认值防止路径异常
+    if thread_id is None:
+        thread_id = "default"
+
+    # 2. 动态构造该用户专属的目录
+    # 结果示例：./data/sandbox_sessions/thread_abc/
+    thread_dir = f"./data/sandbox_sessions/{thread_id}"
+
+    # 3. 创建新的 Backend 实例并缓存
+    # 注意：不预先转换为绝对路径，让 FilesystemBackend.__init__ 处理
+    backend = AsyncFilesystemBackend(
+        thread_dir=thread_dir,
+        max_file_size_mb=50,
+        thread_id=thread_id,
+    )
+    return backend

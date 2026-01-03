@@ -4,14 +4,15 @@
 from typing import Any
 
 from langchain_core.tools import tool
+from langgraph.config import get_config
 
 from core.converters.docx import DOCX2Markdown
 from core.converters.pdf import PDF2Markdown
-from deepagents.backends.filesystem_async import AsyncFilesystemBackend
+from core.utils import get_backend_per_thread
 
 
 @tool(parse_docstring=True)
-def convert_pdf_to_markdown(pdf_path: str, _backend: AsyncFilesystemBackend = None) -> dict[str, Any]:
+def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
     """将 PDF 文件转换为 Markdown 格式以便研究。
 
     该工具将 PDF 文档转换为 Markdown 格式，保留标题、段落、图片和其他格式。
@@ -36,21 +37,22 @@ def convert_pdf_to_markdown(pdf_path: str, _backend: AsyncFilesystemBackend = No
         - 转换器会根据字体大小和加粗格式自动检测标题
     """
     try:
-        if not _backend:
+        backend = get_backend_per_thread({})
+        if not backend:
             return {
                 "success": False,
                 "error": f"cannot find backend: {pdf_path}",
                 "pdf_path": pdf_path,
             }
         # Resolve absolute path
-        abs_pdf_file = _backend.prepend_thread_dir(pdf_path)
+        abs_pdf_file = backend.prepend_thread_dir(pdf_path)
 
         # Check if PDF exists
         if not abs_pdf_file.exists():
             return {
                 "success": False,
                 "error": f"PDF file not found: {pdf_path}",
-                "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
+                "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
             }
 
         # Check if it's a PDF file
@@ -58,7 +60,7 @@ def convert_pdf_to_markdown(pdf_path: str, _backend: AsyncFilesystemBackend = No
             return {
                 "success": False,
                 "error": f"File is not a PDF: {pdf_path}",
-                "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
+                "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
             }
 
         # Determine output file path
@@ -69,8 +71,8 @@ def convert_pdf_to_markdown(pdf_path: str, _backend: AsyncFilesystemBackend = No
             return {
                 "success": True,
                 "message": "File already ready",
-                "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
-                "abs_output_file": _backend.remove_thread_dir_prefix(str(abs_output_file)),
+                "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
+                "abs_output_file": backend.remove_thread_dir_prefix(str(abs_output_file)),
             }
 
         # Create converter instance
@@ -83,7 +85,7 @@ def convert_pdf_to_markdown(pdf_path: str, _backend: AsyncFilesystemBackend = No
             return {
                 "success": False,
                 "error": f"PDF conversion error: {str(e)}",
-                "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
+                "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
             }
 
         # Read the output file to get content length and count images
@@ -95,8 +97,8 @@ def convert_pdf_to_markdown(pdf_path: str, _backend: AsyncFilesystemBackend = No
 
         return {
             "success": True,
-            "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
-            "abs_output_file": _backend.remove_thread_dir_prefix(str(abs_output_file)),
+            "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
+            "abs_output_file": backend.remove_thread_dir_prefix(str(abs_output_file)),
             "content_length": len(content),
             "images_extracted": images_count,
         }
@@ -105,12 +107,12 @@ def convert_pdf_to_markdown(pdf_path: str, _backend: AsyncFilesystemBackend = No
         return {
             "success": False,
             "error": f"PDF conversion error: {str(e)}",
-            "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
+            "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
         }
 
 
 @tool(parse_docstring=True)
-def convert_docx_to_markdown(docx_path: str, _backend: AsyncFilesystemBackend = None) -> dict[str, Any]:
+def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
     """将 Word 文档（DOCX）转换为 Markdown 格式以便研究。
 
     该工具将 Word 文档转换为 Markdown 格式，保留标题、段落、列表、表格和其他格式。
@@ -136,21 +138,22 @@ def convert_docx_to_markdown(docx_path: str, _backend: AsyncFilesystemBackend = 
         - 转换过程中可能会生成警告或信息消息，这些会被包含在返回结果中
     """
     try:
-        if not _backend:
+        backend = get_backend_per_thread(get_config())
+        if not backend:
             return {
                 "success": False,
                 "error": f"cannot find backend: {docx_path}",
                 "docx_path": docx_path,
             }
         # Resolve absolute path
-        abs_docx_file = _backend.prepend_thread_dir(docx_path)
+        abs_docx_file = backend.prepend_thread_dir(docx_path)
 
         # Check if DOCX exists
         if not abs_docx_file.exists():
             return {
                 "success": False,
                 "error": f"DOCX file not found: {docx_path}",
-                "docx_path": _backend.remove_thread_dir_prefix(docx_path),
+                "docx_path": backend.remove_thread_dir_prefix(docx_path),
             }
 
         # Check if it's a DOCX file
@@ -158,7 +161,7 @@ def convert_docx_to_markdown(docx_path: str, _backend: AsyncFilesystemBackend = 
             return {
                 "success": False,
                 "error": f"File is not a DOCX: {docx_path}",
-                "docx_path": _backend.remove_thread_dir_prefix(docx_path),
+                "docx_path": backend.remove_thread_dir_prefix(docx_path),
             }
 
         # Determine output file path
@@ -169,8 +172,8 @@ def convert_docx_to_markdown(docx_path: str, _backend: AsyncFilesystemBackend = 
             return {
                 "success": True,
                 "message": "File already ready",
-                "docx_path": _backend.remove_thread_dir_prefix(docx_path),
-                "output_file": _backend.remove_thread_dir_prefix(str(output_file)),
+                "docx_path": backend.remove_thread_dir_prefix(docx_path),
+                "output_file": backend.remove_thread_dir_prefix(str(output_file)),
             }
 
         # Create converter instance
@@ -183,7 +186,7 @@ def convert_docx_to_markdown(docx_path: str, _backend: AsyncFilesystemBackend = 
             return {
                 "success": False,
                 "error": f"DOCX conversion error: {str(e)}",
-                "docx_path": _backend.remove_thread_dir_prefix(docx_path),
+                "docx_path": backend.remove_thread_dir_prefix(docx_path),
             }
 
         # Read the output file to get content length
@@ -195,8 +198,8 @@ def convert_docx_to_markdown(docx_path: str, _backend: AsyncFilesystemBackend = 
 
         return {
             "success": True,
-            "docx_path": _backend.remove_thread_dir_prefix(docx_path),
-            "output_file": _backend.remove_thread_dir_prefix(str(output_file)),
+            "docx_path": backend.remove_thread_dir_prefix(docx_path),
+            "output_file": backend.remove_thread_dir_prefix(str(output_file)),
             "content_length": len(content),
             "messages": messages,
         }
@@ -205,5 +208,5 @@ def convert_docx_to_markdown(docx_path: str, _backend: AsyncFilesystemBackend = 
         return {
             "success": False,
             "error": f"DOCX conversion error: {str(e)}",
-            "docx_path": _backend.remove_thread_dir_prefix(docx_path),
+            "docx_path": backend.remove_thread_dir_prefix(docx_path),
         }
