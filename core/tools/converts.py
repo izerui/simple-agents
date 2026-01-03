@@ -52,7 +52,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"PDF file not found: {pdf_path}",
-                "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
+                "pdf_path": pdf_path,
             }
 
         # Check if it's a PDF file
@@ -60,7 +60,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"File is not a PDF: {pdf_path}",
-                "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
+                "pdf_path": pdf_path,
             }
 
         # Determine output file path
@@ -71,7 +71,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
             return {
                 "success": True,
                 "message": "File already ready",
-                "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
+                "pdf_path": pdf_path,
                 "abs_output_file": backend.remove_thread_dir_prefix(str(abs_output_file)),
             }
 
@@ -85,7 +85,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"PDF conversion error: {str(e)}",
-                "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
+                "pdf_path": pdf_path,
             }
 
         # Read the output file to get content length and count images
@@ -97,7 +97,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
 
         return {
             "success": True,
-            "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
+            "pdf_path": pdf_path,
             "abs_output_file": backend.remove_thread_dir_prefix(str(abs_output_file)),
             "content_length": len(content),
             "images_extracted": images_count,
@@ -107,7 +107,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
         return {
             "success": False,
             "error": f"PDF conversion error: {str(e)}",
-            "pdf_path": backend.remove_thread_dir_prefix(pdf_path),
+            "pdf_path": pdf_path,
         }
 
 
@@ -153,7 +153,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"DOCX file not found: {docx_path}",
-                "docx_path": backend.remove_thread_dir_prefix(docx_path),
+                "docx_path": docx_path,
             }
 
         # Check if it's a DOCX file
@@ -161,7 +161,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"File is not a DOCX: {docx_path}",
-                "docx_path": backend.remove_thread_dir_prefix(docx_path),
+                "docx_path": docx_path,
             }
 
         # Determine output file path
@@ -172,7 +172,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
             return {
                 "success": True,
                 "message": "File already ready",
-                "docx_path": backend.remove_thread_dir_prefix(docx_path),
+                "docx_path": docx_path,
                 "output_file": backend.remove_thread_dir_prefix(str(output_file)),
             }
 
@@ -186,7 +186,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
             return {
                 "success": False,
                 "error": f"DOCX conversion error: {str(e)}",
-                "docx_path": backend.remove_thread_dir_prefix(docx_path),
+                "docx_path": docx_path,
             }
 
         # Read the output file to get content length
@@ -198,7 +198,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
 
         return {
             "success": True,
-            "docx_path": backend.remove_thread_dir_prefix(docx_path),
+            "docx_path": docx_path,
             "output_file": backend.remove_thread_dir_prefix(str(output_file)),
             "content_length": len(content),
             "messages": messages,
@@ -208,5 +208,5 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
         return {
             "success": False,
             "error": f"DOCX conversion error: {str(e)}",
-            "docx_path": backend.remove_thread_dir_prefix(docx_path),
+            "docx_path": docx_path,
         }

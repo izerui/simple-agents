@@ -62,22 +62,10 @@ class AsyncFilesystemBackend(BackendProtocol):
         # 避免阻塞操作：直接使用 Path() 而不调用 resolve() 或 cwd()
         self.thread_dir = Path(thread_dir) if thread_dir else Path(".")
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
-        # 缓存 thread_dir 的绝对路径字符串,用于路径比较
-        self._abs_thread_dir_str: str | None = None
 
     def get_thread_id(self) -> str | None:
         """获取此后端的线程 ID。"""
         return self.thread_id
-
-    def _get_abs_thread_dir_str(self) -> str:
-        """获取 thread_dir 的绝对路径字符串。
-
-        Returns:
-            thread_dir 的绝对路径字符串
-        """
-        if self._abs_thread_dir_str is None:
-            self._abs_thread_dir_str = str(self.thread_dir.absolute())
-        return self._abs_thread_dir_str
 
     def prepend_thread_dir(self, key: str) -> Path:
         """拼接 thread_dir 前缀并进行安全检查。
@@ -169,9 +157,6 @@ class AsyncFilesystemBackend(BackendProtocol):
             return []
 
         results: list[FileInfo] = []
-
-        # 获取 thread_dir 的绝对路径字符串用于比较
-        thread_dir_str = self._get_abs_thread_dir_str()
 
         # 仅列出直接子项(非递归)
         try:
