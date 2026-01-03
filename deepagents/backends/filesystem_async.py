@@ -136,6 +136,33 @@ class AsyncFilesystemBackend(BackendProtocol):
         except (OSError, RuntimeError):
             return await asyncio.to_thread(resolved.absolute)
 
+    async def ato_virt_path(self, abs_path: str) -> str:
+        """将绝对路径转换为虚拟路径（异步版本）。
+
+        这是 aabs_path 的反向操作，将绝对路径转换为虚拟路径。
+        当你需要虚拟路径时使用此方法（仅在 virtual_mode=True 时有效）。
+
+        Args:
+            abs_path: 绝对路径字符串
+
+        Returns:
+            虚拟路径字符串（以 / 开头）
+        """
+        if not self.virtual_mode:
+            # 非虚拟模式：返回原始绝对路径
+            return abs_path
+
+        # 获取 cwd 的绝对路径字符串
+        cwd_str = await self._get_abs_cwd_str()
+
+        if abs_path.startswith(cwd_str):
+            # 路径在 cwd 内部，去除 cwd 前缀
+            relative_path = abs_path[len(cwd_str):]
+            return "/" + relative_path
+        else:
+            # 路径在 cwd 外部，按原样返回
+            return abs_path
+
     async def als_info(self, path: str) -> list[FileInfo]:
         """列出指定目录中的文件和目录(非递归)。
 
@@ -211,14 +238,8 @@ class AsyncFilesystemBackend(BackendProtocol):
                         except OSError:
                             results.append({"path": abs_path + "/", "is_dir": True})
                 else:
-                    # 虚拟模式：去除 cwd 前缀
-                    if abs_path.startswith(cwd_str):
-                        relative_path = abs_path[len(cwd_str):]
-                    else:
-                        # 路径在 cwd 之外，按原样返回
-                        relative_path = abs_path
-
-                    virt_path = "/" + relative_path
+                    # 虚拟模式：使用 ato_virt_path 方法转换为虚拟路径
+                    virt_path = await self.ato_virt_path(abs_path)
 
                     if is_file:
                         try:
@@ -262,7 +283,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         """读取带行号的文件内容。
 
         Args:
-            file_path: 文件路径(绝对或相对路径)。
+            file_path: 文件路径(虚拟路径)。
             offset: 开始读取的行偏移量(从0开始索引)。
             limit: 要读取的最大行数。
 
@@ -449,9 +470,8 @@ class AsyncFilesystemBackend(BackendProtocol):
                 try:
                     # Use try_resolve to avoid blocking
                     resolved = await asyncio.to_thread(lambda: p.resolve())
-                    # 获取解析后的 cwd 绝对路径
-                    abs_cwd = Path(await self._get_abs_cwd_str().rstrip("/"))
-                    virt = "/" + str(resolved.relative_to(abs_cwd))
+                    # 使用 ato_virt_path 方法转换为虚拟路径
+                    virt = await self.ato_virt_path(str(resolved))
                 except Exception:
                     continue
             else:
@@ -518,9 +538,8 @@ class AsyncFilesystemBackend(BackendProtocol):
                         try:
                             # Use try_resolve to avoid blocking
                             resolved = await asyncio.to_thread(lambda: fp.resolve())
-                            # 获取解析后的 cwd 绝对路径
-                            abs_cwd = Path(await self._get_abs_cwd_str().rstrip("/"))
-                            virt_path = "/" + str(resolved.relative_to(abs_cwd))
+                            # 使用 ato_virt_path 方法转换为虚拟路径
+                            virt_path = await self.ato_virt_path(str(resolved))
                         except Exception:
                             continue
                     else:
@@ -575,12 +594,7 @@ class AsyncFilesystemBackend(BackendProtocol):
                     except OSError:
                         results.append({"path": abs_path, "is_dir": False})
                 else:
-                    cwd_str = await self._get_abs_cwd_str()
-                    if abs_path.startswith(cwd_str):
-                        relative_path = abs_path[len(cwd_str):]
-                    else:
-                        relative_path = abs_path
-                    virt = "/" + relative_path
+                    virt = await self.ato_virt_path(abs_path)
                     try:
                         st = await aios.stat(matched_path)
                         results.append(

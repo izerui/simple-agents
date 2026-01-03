@@ -6,8 +6,10 @@ import pymupdf
 import os
 import re
 
+from core.converters.base import BaseConverter
 
-class PDF2Markdown:
+
+class PDF2Markdown(BaseConverter):
     def __init__(self, debug=False):
         self.debug = debug
 

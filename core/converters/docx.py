@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import override, Optional, Dict, Any, List
 
+from core.converters.base import BaseConverter
+
 # mammoth 需要先安装：pip install mammoth
 try:
     import mammoth
@@ -18,7 +20,7 @@ except ImportError:
     print("警告: html2text 未安装。请运行: pip install html2text")
 
 
-class DOCX2Markdown:
+class DOCX2Markdown(BaseConverter):
     """DOCX 转 Markdown 工具类
     基于 mammoth 和 html2text 实现
     mammoth 将 DOCX 转换为 HTML，html2text 将 HTML 转换为 Markdown
