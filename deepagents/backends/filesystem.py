@@ -351,7 +351,7 @@ class FilesystemBackend(BackendProtocol):
                 timeout=30,
                 check=False,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except (TimeoutError, FileNotFoundError):
             return None
 
         results: dict[str, list[tuple[int, str]]] = {}
