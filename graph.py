@@ -47,12 +47,6 @@ INSTRUCTIONS = (
     )
 )
 
-# 1. 创建限制器：例如单次运行最多允许 5 次工具调用
-limiter = ToolCallLimitMiddleware(
-    run_limit=20,
-    exit_behavior="continue"  # 达到 30 次后，强制终止并返回当前结果
-)
-
 # Model Claude 4.5
 chat_model = init_chat_model(
     model=os.getenv('MODEL_MODEL_ID'),
@@ -105,7 +99,21 @@ def get_backend_per_thread(runtime: ToolRuntime):
     )
     return backend
 
-middleware = AttachmentExtractMiddleware(backend_factory= get_backend_per_thread)
+# thread_id 内工具限制中间件
+tool_limiter = ToolCallLimitMiddleware(
+    run_limit=20,
+    exit_behavior="continue"  # 达到 30 次后，强制终止并返回当前结果
+)
+
+# 创建自定义工具限制中间件
+def cus_tool_limiter(tool_name: str, run_limit:int) -> ToolCallLimitMiddleware:
+    return ToolCallLimitMiddleware(
+        tool_name=tool_name,
+        run_limit=run_limit,
+        exit_behavior="continue"  # 强制终止并返回当前结果
+    )
+
+upload_files = AttachmentExtractMiddleware(backend_factory= get_backend_per_thread)
 
 # 创建路径解析中间件
 path_resolver = ToolPathResolverMiddleware(
@@ -119,7 +127,10 @@ sub_agent = SubAgent(
     description = "将研究委托给子代理研究员，每次仅限一个主题。",
     system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
     tools = [think_tool, fetch_markdown],
-    middleware= [limiter],
+    middleware=[
+        path_resolver,
+        tool_limiter
+    ],  # 完整的中间件配置
 )
 
 # Create the agent
@@ -131,6 +142,11 @@ agent = create_deep_agent(
     backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
     subagents=[sub_agent],
-    middleware=[middleware, path_resolver],
+    middleware=[
+        upload_files,
+        path_resolver,
+        tool_limiter,
+        cus_tool_limiter('glob', 5)
+    ],  # 完整的中间件配置
     debug=int(os.getenv('ENABLED_AGENT_DEBUG', 0)) == 1,
 )
