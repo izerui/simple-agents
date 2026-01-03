@@ -450,7 +450,7 @@ class AsyncFilesystemBackend(BackendProtocol):
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-        except (asyncio.TimeoutExpired, FileNotFoundError):
+        except (asyncio.TimeoutError, FileNotFoundError):
             return None
 
         results: dict[str, list[tuple[int, str]]] = {}
