@@ -11,6 +11,7 @@ from datetime import datetime
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_anthropic import ChatAnthropic
+from langchain_core.runnables import RunnableConfig
 
 from core.tools.converts import convert_pdf_to_markdown, convert_docx_to_markdown
 from core.tools.fetch import fetch_markdown
@@ -57,7 +58,7 @@ chat_model = init_chat_model(
 
 
 # 定义一个工厂函数
-def get_backend_per_thread(runtime: ToolRuntime):
+def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig):
     """
     根据当前对话的 thread_id 创建一个 FilesystemBackend 实例。
     
@@ -75,10 +76,13 @@ def get_backend_per_thread(runtime: ToolRuntime):
     """
     # 1. 从配置中获取当前对话的 thread_id
     # 使用 .get() 方法避免 KeyError
-    if hasattr(runtime, 'config'):
-        config = runtime.config
+    if isinstance(runtime, ToolRuntime):
+        if hasattr(runtime, 'config'):
+            config = runtime.config
+        else:
+            config = {}
     else:
-        config = {}
+        config = runtime
     thread_id = config.get('configurable', {}).get('thread_id')
 
     # 如果没有 thread_id，使用默认值防止路径异常

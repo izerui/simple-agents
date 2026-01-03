@@ -6,6 +6,7 @@ from typing import Any, Callable, Awaitable
 
 from langchain.agents.middleware.types import AgentMiddleware, StateT
 from langchain_core.messages import ToolMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.types import Overwrite
 from langgraph.prebuilt.tool_node import ToolCallRequest, ToolRuntime
 from langgraph.runtime import Runtime
@@ -17,6 +18,7 @@ from core.converters.docx import DOCX2Markdown
 from core.converters.pdf import PDF2Markdown
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
 from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol, FileUploadResponse
+from langgraph.config import get_config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,8 +42,8 @@ class AttachmentExtractMiddleware(AgentMiddleware):
     def __init__(self, backend_factory: BACKEND_TYPES | None = None):
         self.backend_factory = backend_factory
         logger.info("Initialized AttachmentExtractMiddleware")
-    
-    async def _get_backend(self, runtime: ToolRuntime) -> BackendProtocol:
+
+    async def _get_backend(self, runtime: ToolRuntime | RunnableConfig | dict) -> BackendProtocol:
         """从后端工厂获取后端实例"""
         if self.backend_factory is None:
             raise ValueError("backend_factory must be provided")
@@ -52,7 +54,6 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         if backend is None:
             raise ValueError("Backend factory returned None")
         return backend
-    
 
     async def abefore_model(self, state: StateT, runtime: Runtime[ContextT]) -> dict[str, Any] | None:
         """在模型调用前处理：提取附件到 state，清理消息内容
@@ -73,7 +74,7 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         messages = state.get('messages', [])
         updated_messages = []
         extracted_attachments = []
-        
+
         # 遍历消息，处理 HumanMessage
         for msg in messages:
             if msg.type == 'human' and msg.content and isinstance(msg.content, list):
@@ -111,84 +112,84 @@ class AttachmentExtractMiddleware(AgentMiddleware):
             else:
                 # 非人类消息或非列表内容，保持原样
                 updated_messages.append(msg)
-        
+
         # 如果有提取的附件，更新 state
         if extracted_attachments:
-            logger.info(f"提取了 {len(extracted_attachments)} 个附件到 state: {[a['filename'] for a in extracted_attachments]}")
-            return {
-                'messages': updated_messages,
-                'pending_attachments': extracted_attachments
-            }
-        
+            config: RunnableConfig = get_config()
+            #  获取后端实例
+            backend = await self._get_backend(config)
+            pass
+
         # 没有附件，只更新消息
         return {'messages': updated_messages}
-    
-    async def awrap_tool_call(
-            self,
-            request: ToolCallRequest,
-            handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command]],
-    ) -> ToolMessage | Command:
-        """处理工具调用：从 state 上传附件，完成后清理
-        
-        这个函数：
-        1. 从 state['pending_attachments'] 获取之前提取的附件
-        2. 解码 base64 数据并上传到后端
-        3. 避免重复上传（通过 state['uploaded_files'] 集合）
-        4. 处理完成后清理 state['pending_attachments']
-        
-        Args:
-            request: 工具调用请求
-            handler: 原始处理函数
-            
-        Returns:
-            工具消息或命令
-        """
-        # 检查是否有待处理的附件
-        pending_attachments = request.state.get('pending_attachments', [])
-        
-        if not pending_attachments:
-            # 没有附件，直接调用原始处理函数
-            return await handler(request)
-        
-        try:
-            backend: AsyncFilesystemBackend = await self._get_backend(request.runtime)
-            
-            # 获取已上传的文件集合，避免重复上传
-            uploaded_files = request.state.setdefault('uploaded_files', set())
-            
-            # 准备上传的文件列表
-            files_to_upload = []
-            for attachment in pending_attachments:
-                filename = attachment['filename']
-                if filename not in uploaded_files:
-                    # 解码 base64 数据
-                    data = base64.b64decode(attachment['data'])
-                    files_to_upload.append((filename, data))
-                    uploaded_files.add(filename)
-                else:
-                    logger.info(f"文件 {filename} 已上传，跳过")
-            
-            # 上传文件
-            if files_to_upload:
-                logger.info(
-                    f"开始上传 {len(files_to_upload)} 个文件: "
-                    f"{[Path(filename).name for filename, _ in files_to_upload]}"
-                )
-                uploads: list[FileUploadResponse] = await backend.aupload_files(files_to_upload)
-                logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
-            
-            # 标记已上传
-            request.state['uploaded'] = True
-            
-            # 清理待处理的附件（处理完成后移除）
-            request.state.pop('pending_attachments', None)
-            logger.info("附件处理完成，已从 state 中清理 pending_attachments")
-        
-        except Exception as e:
-            logger.error(f"处理附件时发生错误: {e}", exc_info=True)
-            # 发生错误时也清理附件，避免卡住
-            request.state.pop('pending_attachments', None)
-            raise
-        
-        # 调用原始处理函数
+
+
+async def awrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command]],
+) -> ToolMessage | Command:
+    """处理工具调用：从 state 上传附件，完成后清理
+
+    这个函数：
+    1. 从 state['pending_attachments'] 获取之前提取的附件
+    2. 解码 base64 数据并上传到后端
+    3. 避免重复上传（通过 state['uploaded_files'] 集合）
+    4. 处理完成后清理 state['pending_attachments']
+
+    Args:
+        request: 工具调用请求
+        handler: 原始处理函数
+
+    Returns:
+        工具消息或命令
+    """
+    # 检查是否有待处理的附件
+    pending_attachments = request.state.get('pending_attachments', [])
+
+    if not pending_attachments:
+        # 没有附件，直接调用原始处理函数
         return await handler(request)
+
+    try:
+        backend: AsyncFilesystemBackend = await self._get_backend(request.runtime)
+
+        # 获取已上传的文件集合，避免重复上传
+        uploaded_files = request.state.setdefault('uploaded_files', set())
+
+        # 准备上传的文件列表
+        files_to_upload = []
+        for attachment in pending_attachments:
+            filename = attachment['filename']
+            if filename not in uploaded_files:
+                # 解码 base64 数据
+                data = base64.b64decode(attachment['data'])
+                files_to_upload.append((filename, data))
+                uploaded_files.add(filename)
+            else:
+                logger.info(f"文件 {filename} 已上传，跳过")
+
+        # 上传文件
+        if files_to_upload:
+            logger.info(
+                f"开始上传 {len(files_to_upload)} 个文件: "
+                f"{[Path(filename).name for filename, _ in files_to_upload]}"
+            )
+            uploads: list[FileUploadResponse] = await backend.aupload_files(files_to_upload)
+            logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
+
+        # 标记已上传
+        request.state['uploaded'] = True
+
+        # 清理待处理的附件（处理完成后移除）
+        request.state.pop('pending_attachments', None)
+        logger.info("附件处理完成，已从 state 中清理 pending_attachments")
+
+    except Exception as e:
+        logger.error(f"处理附件时发生错误: {e}", exc_info=True)
+        # 发生错误时也清理附件，避免卡住
+        request.state.pop('pending_attachments', None)
+        raise
+
+    # 调用原始处理函数
+    return await handler(request)
