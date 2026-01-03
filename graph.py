@@ -12,6 +12,7 @@ from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_anthropic import ChatAnthropic
 from langchain_core.runnables import RunnableConfig
+from langgraph.runtime import Runtime
 
 from core.tools.converts import convert_pdf_to_markdown, convert_docx_to_markdown
 from core.tools.fetch import fetch_markdown
@@ -81,6 +82,8 @@ def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig):
             config = runtime.config
         else:
             config = {}
+    elif isinstance(runtime, Runtime):
+        config = {}
     else:
         config = runtime
     thread_id = config.get('configurable', {}).get('thread_id')

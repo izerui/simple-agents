@@ -1,16 +1,14 @@
-import asyncio
+import base64
 import base64
 import logging
 from pathlib import Path
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware, StateT
-from langchain_core.messages import ToolMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.types import Overwrite
-from langgraph.prebuilt.tool_node import ToolCallRequest, ToolRuntime
+from langgraph.config import get_config
+from langgraph.prebuilt.tool_node import ToolRuntime
 from langgraph.runtime import Runtime
-from langgraph.types import Command
 from langgraph.typing import ContextT
 
 from core.converters.base import BaseConverter
@@ -18,7 +16,6 @@ from core.converters.docx import DOCX2Markdown
 from core.converters.pdf import PDF2Markdown
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
 from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol, FileUploadResponse
-from langgraph.config import get_config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -113,61 +110,25 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                 # 非人类消息或非列表内容，保持原样
                 updated_messages.append(msg)
 
-        # 如果有提取的附件，更新 state
+        # 如果有提取的附件，上传到沙箱目录
         if extracted_attachments:
             config: RunnableConfig = get_config()
             #  获取后端实例
-            backend = await self._get_backend(config)
+            backend: AsyncFilesystemBackend = await self._get_backend(config)
+            await self.upload_files(backend, extracted_attachments)
             pass
 
-        # 没有附件，只更新消息
+        # 更新消息
         return {'messages': updated_messages}
 
-
-async def awrap_tool_call(
-        self,
-        request: ToolCallRequest,
-        handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command]],
-) -> ToolMessage | Command:
-    """处理工具调用：从 state 上传附件，完成后清理
-
-    这个函数：
-    1. 从 state['pending_attachments'] 获取之前提取的附件
-    2. 解码 base64 数据并上传到后端
-    3. 避免重复上传（通过 state['uploaded_files'] 集合）
-    4. 处理完成后清理 state['pending_attachments']
-
-    Args:
-        request: 工具调用请求
-        handler: 原始处理函数
-
-    Returns:
-        工具消息或命令
-    """
-    # 检查是否有待处理的附件
-    pending_attachments = request.state.get('pending_attachments', [])
-
-    if not pending_attachments:
-        # 没有附件，直接调用原始处理函数
-        return await handler(request)
-
-    try:
-        backend: AsyncFilesystemBackend = await self._get_backend(request.runtime)
-
-        # 获取已上传的文件集合，避免重复上传
-        uploaded_files = request.state.setdefault('uploaded_files', set())
-
+    async def upload_files(self, backend: AsyncFilesystemBackend, extracted_attachments: list[dict]):
         # 准备上传的文件列表
         files_to_upload = []
-        for attachment in pending_attachments:
+        for attachment in extracted_attachments:
             filename = attachment['filename']
-            if filename not in uploaded_files:
-                # 解码 base64 数据
-                data = base64.b64decode(attachment['data'])
-                files_to_upload.append((filename, data))
-                uploaded_files.add(filename)
-            else:
-                logger.info(f"文件 {filename} 已上传，跳过")
+            # 解码 base64 数据
+            data = base64.b64decode(attachment['data'])
+            files_to_upload.append((filename, data))
 
         # 上传文件
         if files_to_upload:
@@ -177,19 +138,3 @@ async def awrap_tool_call(
             )
             uploads: list[FileUploadResponse] = await backend.aupload_files(files_to_upload)
             logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
-
-        # 标记已上传
-        request.state['uploaded'] = True
-
-        # 清理待处理的附件（处理完成后移除）
-        request.state.pop('pending_attachments', None)
-        logger.info("附件处理完成，已从 state 中清理 pending_attachments")
-
-    except Exception as e:
-        logger.error(f"处理附件时发生错误: {e}", exc_info=True)
-        # 发生错误时也清理附件，避免卡住
-        request.state.pop('pending_attachments', None)
-        raise
-
-    # 调用原始处理函数
-    return await handler(request)
