@@ -97,9 +97,6 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         # 遍历消息，处理 HumanMessage
         for msg in messages:
             if msg.type == 'human' and msg.content and isinstance(msg.content, list):
-                # 提取附件和文本内容
-                text_content = self._extract_text_from_content(msg.content)
-                
                 # 提取文件和图片附件
                 for block in msg.content:
                     if isinstance(block, dict):
