@@ -202,9 +202,8 @@ class PDF2Markdown(BaseConverter):
         # 图片目录
         images_dir = Path(pdf_file).parent / "images"
 
-        # 创建 images 目录
-        if not os.path.exists(images_dir):
-            os.makedirs(images_dir)
+        # 创建 images 目录（使用 exist_ok=True 避免并发冲突）
+        os.makedirs(images_dir, exist_ok=True)
 
         pdf_base_name = Path(pdf_file).stem
 
