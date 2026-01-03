@@ -5,6 +5,7 @@ import pdfplumber
 import pymupdf
 import os
 import re
+from typing import Dict, List
 
 from core.converters.base import BaseConverter
 
@@ -38,151 +39,136 @@ class PDF2Markdown(BaseConverter):
         # 统计出现频率最高的字体大小
         return max(set(sizes), key=sizes.count)
 
-    def _get_image_positions(self, pdf_file, page_num):
-        """使用 pymupdf 获取页面中所有图片的位置信息"""
-        positions = []
+    def _get_all_image_positions(self, pymupdf_doc) -> Dict[int, List[Dict]]:
+        """一次性获取所有页面的图片位置信息"""
+        all_positions = {}
         try:
-            doc = pymupdf.open(pdf_file)
-            page = doc[page_num]
-            image_list = page.get_images(full=True)
+            for page_num in range(len(pymupdf_doc)):
+                page = pymupdf_doc[page_num]
+                image_list = page.get_images(full=True)
 
-            if image_list:
-                for img_index, img in enumerate(image_list, 1):
-                    xref = img[0]
-                    # 获取图片的实例（位置）信息
-                    rects = page.get_image_rects(xref)
-                    if rects:
-                        rect = rects[0]  # 直接取第一个 Rect 对象
-                        # 计算图片中心点的 y 坐标
-                        center_y = (rect.y0 + rect.y1) / 2
-                        positions.append({
-                            'y': center_y,
-                            'page': page_num,
-                            'index': img_index,
-                            'xref': xref
-                        })
+                positions = []
+                if image_list:
+                    for img_index, img in enumerate(image_list, 1):
+                        xref = img[0]
+                        # 获取图片的实例（位置）信息
+                        rects = page.get_image_rects(xref)
+                        if rects:
+                            rect = rects[0]  # 直接取第一个 Rect 对象
+                            # 计算图片中心点的 y 坐标
+                            center_y = (rect.y0 + rect.y1) / 2
+                            positions.append({
+                                'y': center_y,
+                                'page': page_num,
+                                'index': img_index,
+                                'xref': xref
+                            })
 
-            # 按 y 坐标排序（从上到下）
-            positions.sort(key=lambda x: x['y'])
-            doc.close()
+                # 按 y 坐标排序（从上到下）
+                positions.sort(key=lambda x: x['y'])
+                all_positions[page_num] = positions
         except Exception as e:
             print(f"  - 获取图片位置时出错: {str(e)}")
 
-        return positions
+        return all_positions
 
-    def _extract_and_save_image(self, pdf_file, images_dir, page_num, img_index, xref):
-        """使用 pymupdf 提取并保存单个图片"""
+    def _extract_and_save_all_images(self, pymupdf_doc, all_positions: Dict[int, List[Dict]], 
+                                     images_dir, pdf_base_name: str) -> Dict[str, str]:
+        """一次性提取并保存所有图片"""
+        placeholder_to_path = {}
+        
         try:
-            doc = pymupdf.open(pdf_file)
-            base_image = doc.extract_image(xref)
-            image_bytes = base_image["image"]
-            image_ext = base_image["ext"]
+            for page_num, positions in all_positions.items():
+                for img in positions:
+                    base_image = pymupdf_doc.extract_image(img['xref'])
+                    if not base_image:
+                        continue
+                        
+                    image_bytes = base_image["image"]
+                    image_ext = base_image["ext"]
 
-            pdf_base_name = Path(pdf_file).stem
+                    # 生成图片文件名
+                    image_filename = f"{pdf_base_name}_page{page_num + 1}_img{img['index']}.{image_ext}"
+                    image_path = os.path.join(images_dir, image_filename)
 
-            # 生成图片文件名
-            image_filename = f"{pdf_base_name}_page{page_num + 1}_img{img_index}.{image_ext}"
-            image_path = os.path.join(images_dir, image_filename)
+                    # 保存图片
+                    with open(image_path, "wb") as img_file:
+                        img_file.write(image_bytes)
 
-            # 保存图片
-            with open(image_path, "wb") as img_file:
-                img_file.write(image_bytes)
-
-            doc.close()
-            return f"images/{image_filename}"
+                    # 存储占位符和图片路径的映射
+                    placeholder = f"__IMAGE_PLACEHOLDER_{img['page']}_{img['index']}__"
+                    placeholder_to_path[placeholder] = f"images/{image_filename}"
         except Exception as e:
-            print(f"  - 提取图片时出错: {str(e)}")
-            return None
+            print(f"  - 批量提取图片时出错: {str(e)}")
 
-    def process_page(self, pdf_file, images_dir, page_num, placeholders):
-        """处理单个页面，使用 pdfplumber 提取文本，使用 pymupdf 确定图片位置"""
+        return placeholder_to_path
+
+
+
+    def process_page(self, pdfplumber_page, image_positions: List[Dict], page_num: int):
+        """处理单个页面，使用 pdfplumber 提取文本，插入图片占位符"""
         page_md = ""
 
-        # 1. 使用 pdfplumber 提取文本
         try:
-            with pdfplumber.open(pdf_file) as pdf:
-                page = pdf.pages[page_num]
+            chars = pdfplumber_page.chars
+            if not chars:
+                return ""
 
-                chars = page.chars
-                if not chars:
-                    return ""
+            lines = pdfplumber_page.extract_text_lines()
 
-                lines = page.extract_text_lines()
+            # 确定正文的基准字号
+            median_size = self._get_median_font_size(chars)
 
-                # 确定正文的基准字号
-                median_size = self._get_median_font_size(chars)
+            # 遍历每一行文本，根据行高插入图片占位符
+            current_img_index = 0
 
-                # 2. 使用 pymupdf 获取该页面的图片位置
-                image_positions = self._get_image_positions(pdf_file, page_num)
+            for i, line in enumerate(lines):
+                text = line['text'].strip()
+                if not text:
+                    continue
 
-                # 创建图片占位符
-                placeholder_key = f"__PAGE{page_num}_IMAGES__"
-                placeholders[placeholder_key] = image_positions
+                # 获取行的顶部 y 坐标
+                line_y = line['top']  # pdfplumber 的 top 坐标
 
-                # 3. 遍历每一行文本，根据行高插入图片占位符
-                current_img_index = 0
-
-                for i, line in enumerate(lines):
-                    text = line['text'].strip()
-                    if not text:
-                        continue
-
-                    # 获取行的顶部 y 坐标
-                    line_y = line['top']  # pdfplumber 的 top 坐标
-
-                    # 检查是否需要插入图片占位符
-                    while current_img_index < len(image_positions):
-                        img = image_positions[current_img_index]
-                        # 如果图片的中心点在当前行的下方，插入占位符
-                        if img['y'] <= line_y:
-                            # 生成占位符
-                            placeholder = f"__IMAGE_PLACEHOLDER_{img['page']}_{img['index']}__"
-                            page_md += f"\n\n{placeholder}\n\n"
-
-                            # 提取并保存图片
-                            img_path = self._extract_and_save_image(pdf_file, images_dir, img['page'], img['index'],
-                                                                    img['xref'])
-                            if img_path:
-                                # 存储占位符和图片路径的映射
-                                placeholders[placeholder] = img_path
-
-                            current_img_index += 1
-                        else:
-                            break
-
-                    # 处理文本行
-                    first_char = line['chars'][0] if line['chars'] else {}
-                    font_size = first_char.get('size', median_size)
-                    is_bold = self._is_bold(first_char)
-
-                    # 识别标题
-                    if font_size > median_size * 1.1 and is_bold:
-                        level = 3 if font_size < median_size * 1.5 else 2
-                        page_md += f"{'#' * level} {text}\n\n"
-                    else:
-                        # 识别正文
-                        if text[-1] in ['。', '！', '？', '…', '"', '”', '.', '?', '!']:
-                            page_md += text + "\n\n"
-                        elif text[-1] in [',', '，', ';', '；', ':', '：']:
-                            page_md += text + " "
-                        else:
-                            page_md += text + "  \n"
-
-                # 处理页面底部剩余的图片
+                # 检查是否需要插入图片占位符
                 while current_img_index < len(image_positions):
                     img = image_positions[current_img_index]
-                    placeholder = f"__IMAGE_PLACEHOLDER_{img['page']}_{img['index']}__"
-                    page_md += f"\n\n{placeholder}\n\n"
+                    # 如果图片的中心点在当前行的下方，插入占位符
+                    if img['y'] <= line_y:
+                        # 生成占位符
+                        placeholder = f"__IMAGE_PLACEHOLDER_{img['page']}_{img['index']}__"
+                        page_md += f"\n\n{placeholder}\n\n"
+                        current_img_index += 1
+                    else:
+                        break
 
-                    img_path = self._extract_and_save_image(pdf_file, images_dir, img['page'], img['index'],
-                                                            img['xref'])
-                    if img_path:
-                        placeholders[placeholder] = img_path
+                # 处理文本行
+                first_char = line['chars'][0] if line['chars'] else {}
+                font_size = first_char.get('size', median_size)
+                is_bold = self._is_bold(first_char)
 
-                    current_img_index += 1
+                # 识别标题
+                if font_size > median_size * 1.1 and is_bold:
+                    level = 3 if font_size < median_size * 1.5 else 2
+                    page_md += f"{'#' * level} {text}\n\n"
+                else:
+                    # 识别正文
+                    if text[-1] in ['。', '！', '？', '…', '"', '”', '.', '?', '!']:
+                        page_md += text + "\n\n"
+                    elif text[-1] in [',', '，', ';', '；', ':', '：']:
+                        page_md += text + " "
+                    else:
+                        page_md += text + "  \n"
+
+            # 处理页面底部剩余的图片
+            while current_img_index < len(image_positions):
+                img = image_positions[current_img_index]
+                placeholder = f"__IMAGE_PLACEHOLDER_{img['page']}_{img['index']}__"
+                page_md += f"\n\n{placeholder}\n\n"
+                current_img_index += 1
 
         except Exception as e:
-            print(f"  - 处理页面时出错: {str(e)}")
+            print(f"  - 处理页面 {page_num} 时出错: {str(e)}")
 
         return page_md
 
@@ -211,11 +197,7 @@ class PDF2Markdown(BaseConverter):
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF 文档不存在: {pdf_file}")
 
-
         full_text = ""
-        
-        # 占位符列表，存储待替换的信息（局部变量，避免线程安全问题）
-        placeholders = {}
 
         # 图片目录
         images_dir = Path(pdf_file).parent / "images"
@@ -224,18 +206,47 @@ class PDF2Markdown(BaseConverter):
         if not os.path.exists(images_dir):
             os.makedirs(images_dir)
 
-        # 先用 pdfplumber 获取总页数
-        with pdfplumber.open(pdf_file) as pdf:
-            total_pages = len(pdf.pages)
+        pdf_base_name = Path(pdf_file).stem
 
-        # 处理每一页
-        for i in range(total_pages):
-            print(f"pdf2markdown - {i + 1}/{total_pages} 页...")
-            page_text = self.process_page(pdf_file, images_dir, i, placeholders)
-            full_text += page_text + "\n\n"
+        # 优化：只打开 PDF 文件一次
+        print(f"pdf2markdown - 开始打开 PDF 文件...")
+        
+        # 使用 pdfplumber 打开 PDF（用于文本提取）
+        pdfplumber_doc = pdfplumber.open(pdf_file)
+        total_pages = len(pdfplumber_doc.pages)
 
-        # 替换所有占位符
-        full_text = self._replace_placeholders(full_text, placeholders)
+        # 使用 pymupdf 打开 PDF（用于图片提取）
+        pymupdf_doc = pymupdf.open(pdf_file)
+
+        print(f"pdf2markdown - PDF 共 {total_pages} 页，开始提取图片位置...")
+
+        try:
+            # 1. 一次性获取所有页面的图片位置
+            all_image_positions = self._get_all_image_positions(pymupdf_doc)
+            print(f"pdf2markdown - 图片位置提取完成，开始批量提取图片...")
+
+            # 2. 一次性提取并保存所有图片
+            placeholder_to_path = self._extract_and_save_all_images(
+                pymupdf_doc, all_image_positions, images_dir, pdf_base_name
+            )
+            print(f"pdf2markdown - 图片提取完成，共 {len(placeholder_to_path)} 张图片")
+
+            # 3. 处理每一页的文本（复用已打开的 pdfplumber_doc）
+            for i in range(total_pages):
+                print(f"pdf2markdown - 处理第 {i + 1}/{total_pages} 页...")
+                page = pdfplumber_doc.pages[i]
+                image_positions = all_image_positions.get(i, [])
+                page_text = self.process_page(page, image_positions, i)
+                full_text += page_text + "\n\n"
+
+            # 4. 替换所有占位符
+            print(f"pdf2markdown - 替换占位符...")
+            full_text = self._replace_placeholders(full_text, placeholder_to_path)
+
+        finally:
+            # 确保关闭 PDF 文件
+            pdfplumber_doc.close()
+            pymupdf_doc.close()
 
         # 确定输出路径
         if output_file is None:
@@ -245,7 +256,9 @@ class PDF2Markdown(BaseConverter):
 
         # 自动创建父目录
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        
         # 写入文件
+        print(f"pdf2markdown - 写入输出文件...")
         output_path.write_text(full_text, encoding='utf-8')
 
         return full_text

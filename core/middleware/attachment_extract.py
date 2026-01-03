@@ -131,7 +131,8 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                                 for converter in converters:
                                     if converter.support(file_ext):
                                         output_file = file_path.with_suffix('.md')
-                                        converter.convert(str(file_path), str(output_file))
+                                        # 使用 asyncio.to_thread 在线程池中执行同步的转换方法，避免阻塞事件循环
+                                        await asyncio.to_thread(converter.convert, str(file_path), str(output_file))
                                         logger.info(f"转换成功: {file_path.name} -> {output_file.name}")
                                         # 转换为虚拟路径
                                         virt_file = await backend.ato_virt_path(str(file_path))
