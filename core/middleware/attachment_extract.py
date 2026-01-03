@@ -126,10 +126,7 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                 ]
 
                 # 创建新的 HumanMessage，只包含纯文本（兼容通义千问等模型）
-                new_msg = HumanMessage(content=filtered_content)
-                new_msg.id = msg.id
-                new_msg.additional_kwargs = msg.additional_kwargs
-                new_msg.response_metadata = msg.response_metadata
+                new_msg = msg.copy(update={"content": filtered_content})
                 updated_messages.append(new_msg)
             else:
                 # 非人类消息或非列表内容，保持原样
