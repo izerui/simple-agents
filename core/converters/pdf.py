@@ -232,7 +232,7 @@ class PDF2Markdown(BaseConverter):
 
             # 3. 处理每一页的文本（复用已打开的 pdfplumber_doc）
             for i in range(total_pages):
-                print(f"pdf2markdown - 处理第 {i + 1}/{total_pages} 页...")
+                print(f"pdf2markdown - [{pdf_base_name}] 处理第 {i + 1}/{total_pages} 页...")
                 page = pdfplumber_doc.pages[i]
                 image_positions = all_image_positions.get(i, [])
                 page_text = self.process_page(page, image_positions, i)
