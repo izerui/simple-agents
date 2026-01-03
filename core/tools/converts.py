@@ -45,7 +45,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
                 "pdf_path": pdf_path,
             }
         # Resolve absolute path
-        abs_pdf_file = backend.prepend_thread_dir(pdf_path)
+        abs_pdf_file = Path(backend.prepend_thread_dir(pdf_path))
 
         # Check if PDF exists
         if not abs_pdf_file.exists():
@@ -146,7 +146,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
                 "docx_path": docx_path,
             }
         # Resolve absolute path
-        abs_docx_file = backend.prepend_thread_dir(docx_path)
+        abs_docx_file = Path(backend.prepend_thread_dir(docx_path))
 
         # Check if DOCX exists
         if not abs_docx_file.exists():

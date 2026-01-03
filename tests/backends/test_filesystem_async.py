@@ -24,27 +24,27 @@ class TestAsyncFilesystemBackend:
     @pytest.fixture
     def backend(self, temp_dir):
         """Create a backend instance with temp directory."""
-        return AsyncFilesystemBackend(thread_dir=temp_dir)
+        return AsyncFilesystemBackend(thread_dir=str(temp_dir))
 
     @pytest.mark.asyncio
     async def test_initialization(self, temp_dir):
         """Test backend initialization."""
         backend = AsyncFilesystemBackend(thread_dir=temp_dir)
-        assert backend.thread_dir == temp_dir
+        assert backend.thread_dir == str(temp_dir)
         assert backend.max_file_size_bytes == 10 * 1024 * 1024
 
     @pytest.mark.asyncio
     async def test_resolve_path(self, temp_dir):
         """Test path resolution."""
-        backend = AsyncFilesystemBackend(thread_dir=temp_dir)
+        backend = AsyncFilesystemBackend(thread_dir=str(temp_dir))
         
         # Test relative path
         resolved = backend.prepend_thread_dir("test.txt")
-        assert resolved == temp_dir / "test.txt"
+        assert resolved == str(temp_dir / "test.txt")
         
         # Test virtual absolute path (with /)
         resolved = backend.prepend_thread_dir("/subdir/test.txt")
-        assert resolved == temp_dir / "subdir" / "test.txt"
+        assert resolved == str(temp_dir / "subdir" / "test.txt")
         
         # Test path traversal prevention
         with pytest.raises(ValueError, match="不允许路径遍历"):

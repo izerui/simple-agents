@@ -59,15 +59,15 @@ class AsyncFilesystemBackend(BackendProtocol):
             thread_id: 线程ID(用于标识会话)
         """
         self.thread_id = thread_id
-        # 避免阻塞操作：直接使用 Path() 而不调用 resolve() 或 cwd()
-        self.thread_dir = Path(thread_dir) if thread_dir else Path(".")
+        # 简化路径处理：使用字符串而不是 Path 对象
+        self.thread_dir = str(thread_dir) if thread_dir else "."
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
 
     def get_thread_id(self) -> str | None:
         """获取此后端的线程 ID。"""
         return self.thread_id
 
-    def prepend_thread_dir(self, key: str) -> Path:
+    def prepend_thread_dir(self, key: str) -> str:
         """拼接 thread_dir 前缀并进行安全检查。
 
         将输入的虚拟路径与 thread_dir 拼接为实际路径。
@@ -82,7 +82,7 @@ class AsyncFilesystemBackend(BackendProtocol):
             key: 文件路径
 
         Returns:
-            thread_dir 下的实际 Path 对象
+            thread_dir 下的实际路径字符串
 
         Raises:
             ValueError: 如果尝试路径遍历（使用 ../）
@@ -100,7 +100,10 @@ class AsyncFilesystemBackend(BackendProtocol):
             raise ValueError("不允许路径遍历")
         
         # 拼接路径
-        return self.thread_dir / key
+        if self.thread_dir.endswith("/") or key.startswith("/"):
+            return self.thread_dir + key
+        else:
+            return self.thread_dir + "/" + key
 
     def remove_thread_dir_prefix(self, abs_path: str) -> str:
         """移除 thread_dir 前缀。
@@ -112,24 +115,20 @@ class AsyncFilesystemBackend(BackendProtocol):
             abs_path: 实际路径字符串
 
         Returns:
-            虚拟路径字符串（相对于 thread_dir）
+            虚拟路径字符串（相对于 thread_dir，以 / 开头）
         """
-        # 转换为 Path 对象
-        input_path = Path(abs_path)
+        # 确保 thread_dir 以 / 结尾，方便拼接
+        thread_dir = self.thread_dir if self.thread_dir.endswith("/") else self.thread_dir + "/"
         
-        # 计算相对于 thread_dir 的路径
-        try:
-            relative_path = input_path.relative_to(self.thread_dir)
-        except ValueError:
-            # 如果路径不在 thread_dir 下，尝试计算相对路径
-            import os
-            relative_path = Path(os.path.relpath(str(input_path), str(self.thread_dir)))
+        # 移除 thread_dir 前缀
+        if abs_path.startswith(thread_dir):
+            virtual_path = abs_path[len(thread_dir):]
+        else:
+            # 如果不在 thread_dir 下，直接使用原路径（或返回 /）
+            virtual_path = abs_path
         
-        # 转换为字符串，使用 / 作为分隔符
-        virtual_path = str(relative_path).replace("\\", "/")
-        
-        # 如果不是 . 或包含 ../，确保以 / 开头
-        if virtual_path != "." and not virtual_path.startswith("../"):
+        # 规范化：确保以 / 开头（除了 . 和 ../）
+        if virtual_path and virtual_path != "." and not virtual_path.startswith("../"):
             if not virtual_path.startswith("/"):
                 virtual_path = "/" + virtual_path
         
@@ -145,7 +144,7 @@ class AsyncFilesystemBackend(BackendProtocol):
             FileInfo 字典列表，包含目录中的文件和目录。
             目录路径以 / 结尾且 is_dir=True。
         """
-        abs_dir_path = self.prepend_thread_dir(path)
+        abs_dir_path = Path(self.prepend_thread_dir(path))
 
         try:
             exists = await aios.path.exists(abs_dir_path)
@@ -230,7 +229,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         Returns:
             带行号的格式化文件内容，或错误消息。
         """
-        abs_file_path = self.prepend_thread_dir(file_path)
+        abs_file_path = Path(self.prepend_thread_dir(file_path))
 
         try:
             exists = await aios.path.exists(abs_file_path)
@@ -270,7 +269,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         """创建包含内容的新文件，如果文件已存在则覆盖。
         返回 WriteResult。外部存储设置 files_update=None。
         """
-        abs_file_path = self.prepend_thread_dir(file_path)
+        abs_file_path = Path(self.prepend_thread_dir(file_path))
 
         try:
             # 如果需要，创建父目录
@@ -298,7 +297,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         """通过替换字符串来编辑文件。
         返回 EditResult。外部存储设置 files_update=None。
         """
-        abs_file_path = self.prepend_thread_dir(file_path)
+        abs_file_path = Path(self.prepend_thread_dir(file_path))
 
         try:
             exists = await aios.path.exists(abs_file_path)
@@ -343,7 +342,7 @@ class AsyncFilesystemBackend(BackendProtocol):
 
         # Resolve base path
         try:
-            base_full = self.prepend_thread_dir(path or ".")
+            base_full = Path(self.prepend_thread_dir(path or "."))
         except ValueError:
             return []
 
@@ -475,7 +474,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         if pattern.startswith("/"):
             pattern = pattern.lstrip("/")
 
-        abs_search_path = self.thread_dir if path == "/" else self.prepend_thread_dir(path)
+        abs_search_path = Path(self.thread_dir) if path == "/" else Path(self.prepend_thread_dir(path))
 
         try:
             exists = await aios.path.exists(abs_search_path)
@@ -535,7 +534,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         responses: list[FileUploadResponse] = []
         for path, content in files:
             try:
-                abs_file_path = self.prepend_thread_dir(path)
+                abs_file_path = Path(self.prepend_thread_dir(path))
 
                 # Create parent directories if needed
                 parent = abs_file_path.parent
@@ -575,7 +574,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         responses: list[FileDownloadResponse] = []
         for path in paths:
             try:
-                abs_file_path = self.prepend_thread_dir(path)
+                abs_file_path = Path(self.prepend_thread_dir(path))
                 # Read asynchronously in binary mode
                 async with aiofiles.open(abs_file_path, mode="rb") as f:
                     content = await f.read()
