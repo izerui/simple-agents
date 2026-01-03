@@ -111,73 +111,12 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                     f"开始上传 {len(files_to_upload)} 个文件: {[Path(filename).name for filename, _ in files_to_upload]}")
                 uploads: list[FileUploadResponse] = await backend.aupload_files(files_to_upload)
                 logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
-
-                # 上传成功后立即开始并行转换
-                # 筛选出成功上传的文件
-                successful_uploads = [u for u in uploads if u.error is None]
-
-                if len(successful_uploads) > 0:
-                    logger.info(f"开始并行转换 {len(successful_uploads)} 个文件")
-
-                    # 创建转换任务
-                    convert_tasks = []
-                    for upload in successful_uploads:
-                        file_path = Path(await backend.prepend_thread_dir(upload.path))
-                        file_ext = file_path.suffix.lower()
-
-                        async def convert_file(file_path: Path, file_ext: str):
-                            try:
-                                # 遍历所有转换器，找到支持该文件类型的转换器
-                                for converter in converters:
-                                    if converter.support(file_ext):
-                                        output_file = file_path.with_suffix('.md')
-                                        # 使用 asyncio.to_thread 在线程池中执行同步的转换方法，避免阻塞事件循环
-                                        await asyncio.to_thread(converter.convert, str(file_path), str(output_file))
-                                        logger.info(f"转换成功: {file_path.name} -> {output_file.name}")
-                                        # 转换为虚拟路径
-                                        virt_file = await backend.remove_thread_dir_prefix(str(file_path))
-                                        virt_output = await backend.remove_thread_dir_prefix(str(output_file))
-                                        return {"file": virt_file, "output": virt_output, "status": "success"}
-                                
-                                # 所有转换器都不支持该文件类型
-                                logger.info(f"跳过不支持的文件类型: {file_path.name}")
-                                virt_file = await backend.remove_thread_dir_prefix(str(file_path))
-                                return {"file": virt_file, "status": "skipped",
-                                        "reason": f"不支持的文件类型: {file_ext}"}
-                            except Exception as e:
-                                logger.error(f"文件转换失败 {file_path.name}: {e}")
-                                # 转换为虚拟路径
-                                virt_file = await backend.remove_thread_dir_prefix(str(file_path))
-                                return {"file": virt_file, "status": "failed", "error": str(e)}
-
-                        convert_tasks.append(convert_file(file_path, file_ext))
-
-                    # 并行执行所有转换任务
-                    if convert_tasks:
-                        convert_results = await asyncio.gather(*convert_tasks, return_exceptions=True)
-
-                        # 统计转换结果
-                        success_count = sum(
-                            1 for r in convert_results if isinstance(r, dict) and r.get("status") == "success")
-                        failed_count = sum(
-                            1 for r in convert_results if isinstance(r, dict) and r.get("status") == "failed")
-                        skipped_count = sum(
-                            1 for r in convert_results if isinstance(r, dict) and r.get("status") == "skipped")
-
-                        logger.info(f"转换完成: 成功 {success_count}, 失败 {failed_count}, 跳过 {skipped_count}")
-
-                        # 将转换结果存入 state，供后续使用
-                        conversion_results = [r for r in convert_results if isinstance(r, dict)]
-                        request.state.setdefault('conversion_results', []).extend(conversion_results)
             else:
                 logger.info("所有文件都已上传，无需重复上传")
 
             request.state['uploaded'] = True
-        except asyncio.TimeoutError as e:
-            logger.error(f"文件转换超时: {e}")
-            raise
         except Exception as e:
-            logger.error(f"上传或转换文件时发生错误: {e}", exc_info=True)
+            logger.error(f"上传文件时发生错误: {e}", exc_info=True)
             raise
 
         # 调用原始处理函数
