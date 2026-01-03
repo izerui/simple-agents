@@ -310,19 +310,10 @@ class AsyncFilesystemBackend(BackendProtocol):
             file_path: str,
             content: str,
     ) -> WriteResult:
-        """创建包含内容的新文件。
+        """创建包含内容的新文件，如果文件已存在则覆盖。
         返回 WriteResult。外部存储设置 files_update=None。
         """
         abs_file_path = await self.prepend_thread_dir(file_path)
-
-        try:
-            exists = await aios.path.exists(abs_file_path)
-        except (OSError, PermissionError):
-            return WriteResult(error=f"写入文件 '{file_path}' 时出错：权限错误")
-
-        if exists:
-            return WriteResult(
-                error=f"无法写入 {file_path}，因为文件已存在。请先读取然后编辑，或写入新路径。")
 
         try:
             # 如果需要，创建父目录
@@ -338,7 +329,7 @@ class AsyncFilesystemBackend(BackendProtocol):
 
             file_path = self.remove_thread_dir_prefix(file_path)
             return WriteResult(path=file_path, files_update=None)
-        except (OSError, UnicodeEncodeError) as e:
+        except (OSError, PermissionError, UnicodeEncodeError) as e:
             return WriteResult(error=f"写入文件 '{file_path}' 时出错：{e}")
 
     async def aedit(
