@@ -72,10 +72,10 @@ class ToolPathResolverMiddleware(AgentMiddleware):
                 # 不在虚拟模式下,无需解析路径
                 return await handler(request)
 
-            # 使用异步解析器解析工具参数中的路径
+            # 使用异步解析器解析工具参数中的路径，并转换为真实路径
             resolved_args = await self._resolve_paths_in_args(
                 request.tool_call['args'],
-                backend.aresolve_path
+                backend.aabs_path
             )
 
             # 如果没有解析任何路径,继续使用原始请求
