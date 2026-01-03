@@ -1,10 +1,10 @@
 """AsyncFilesystemBackend: 异步直接从文件系统读取和写入文件。
 
 安全性和搜索升级：
-- 在 virtual_mode 下安全解析路径并限制在 cwd 内(沙箱隔离)
+- 安全解析路径并限制在 thread_dir 内(沙箱隔离)
 - 防止文件 I/O 时跟随符号链接(在可用时使用 O_NOFOLLOW)
 - 基于 ripgrep 的搜索功能(支持 JSON 解析)以及 Python 正则回退
-- 支持可选的 glob 过滤，同时保留虚拟路径行为
+- 支持可选的 glob 过滤，所有路径都使用虚拟路径格式（相对于 thread_dir）
 """
 
 import asyncio
@@ -38,142 +38,154 @@ from deepagents.backends.utils import (
 class AsyncFilesystemBackend(BackendProtocol):
     """异步直接从文件系统读取和写入文件的后端。
 
-    文件通过实际的文件系统路径访问。相对路径将相对于当前工作目录解析。
+    所有文件操作都相对于 thread_dir 进行，提供沙箱隔离。
+    入参和返回的路径都是虚拟路径（相对于 thread_dir，以 / 开头或相对路径）。
     内容以纯文本形式读/写，元数据(时间戳)从文件系统统计信息派生。
     """
 
     def __init__(
             self,
-            root_dir: str | Path | None = None,
-            virtual_mode: bool = False,
+            thread_dir: str | Path | None = None,
             max_file_size_mb: int = 10,
             thread_id: str | None = None,
     ) -> None:
         """初始化文件系统后端。
 
         Args:
-            root_dir: 文件操作的可选根目录。如果提供，
-                     所有文件路径将相对于此目录解析。
-                     如果未提供，则使用当前工作目录。
-            virtual_mode: 是否启用虚拟模式(沙箱隔离)
+            thread_dir: 文件操作的根目录。如果提供，
+                       所有文件路径将相对于此目录解析。
+                       如果未提供，则使用当前工作目录。
             max_file_size_mb: 最大文件大小(MB)
             thread_id: 线程ID(用于标识会话)
         """
         self.thread_id = thread_id
         # 避免阻塞操作：直接使用 Path() 而不调用 resolve() 或 cwd()
-        self.cwd = Path(root_dir) if root_dir else Path(".")
-        self.virtual_mode = virtual_mode
+        self.thread_dir = Path(thread_dir) if thread_dir else Path(".")
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
-        # 缓存 cwd 的绝对路径字符串,用于路径比较
-        self._abs_cwd_str: str | None = None
+        # 缓存 thread_dir 的绝对路径字符串,用于路径比较
+        self._abs_thread_dir_str: str | None = None
 
-
-    def get_virtual_mode(self) -> bool:
-        """获取文件系统后端的虚拟模式状态。"""
-        return self.virtual_mode
-
-    def get_thread_id(self) -> str:
+    def get_thread_id(self) -> str | None:
         """获取此后端的线程 ID。"""
         return self.thread_id
 
-    async def _get_abs_cwd_str(self) -> str:
-        """获取 cwd 的绝对路径字符串(用于比较)。
+    async def _get_abs_thread_dir_str(self) -> str:
+        """获取 thread_dir 的解析后绝对路径字符串(用于比较)。
 
         Returns:
-            cwd 的绝对路径字符串,确保以 / 结尾
+            thread_dir 的解析后绝对路径字符串（统一基准，确保一致性）
         """
-        if self._abs_cwd_str is None:
-            # 异步解析 cwd 为绝对路径
-            abs_cwd = await asyncio.to_thread(self.cwd.resolve)
-            self._abs_cwd_str = str(abs_cwd)
-            if not self._abs_cwd_str.endswith("/"):
-                self._abs_cwd_str += "/"
-        return self._abs_cwd_str
+        if self._abs_thread_dir_str is None:
+            # 异步解析 thread_dir 为绝对路径（统一解析基准）
+            abs_thread_dir = await asyncio.to_thread(self.thread_dir.resolve)
+            self._abs_thread_dir_str = str(abs_thread_dir)
+        return self._abs_thread_dir_str
 
-    async def aabs_path(self, key: str) -> Path:
-        """解析文件路径并进行安全检查(异步版本)。
+    async def prepend_thread_dir(self, key: str) -> Path:
+        """拼接 thread_dir 前缀并进行安全检查。
 
-        这是异步版本，解析符号链接以获取真实路径。
-        当你需要实际文件系统路径时使用此方法。
+        将输入的虚拟路径与 thread_dir 拼接为实际路径。
+        支持多种路径格式：
+        - / 开头的绝对虚拟路径（相对于 thread_dir）
+        - ./ 开头的相对路径
+        - ../ 开头的相对父目录路径
+        - 直接文件名（相对路径）
+
+        不管传什么路径，都会限制在 thread_dir 范围内。
+        对于超出范围的路径（如 ../..），会被截断到 thread_dir。
+        
+        使用 _get_abs_thread_dir_str() 获取的统一基准路径，确保与
+        remove_thread_dir_prefix 的一致性。
 
         Args:
-            key: 文件路径(绝对路径、相对路径，或 virtual_mode=True 时的虚拟路径)
+            key: 文件路径
 
         Returns:
-            解析后的绝对 Path 对象(已解析符号链接)
-
-        Raises:
-            ValueError: 如果路径遍历尝试或路径超出根目录
+            thread_dir 下的实际 Path 对象（保证总是在 thread_dir 内部）
         """
-        if self.virtual_mode:
-            # 虚拟模式：将输入路径视为虚拟绝对路径
-            vpath = key if key.startswith("/") else "/" + key
-            if ".." in vpath or vpath.startswith("~"):
-                raise ValueError("不允许路径遍历")
-            full = self.cwd / vpath.lstrip("/")
-            try:
-                full.relative_to(self.cwd)
-            except ValueError:
-                raise ValueError(f"路径:{full} 超出根目录: {self.cwd}") from None
-            # 在执行器中解析以获取真实的绝对路径(跟随符号链接)
-            try:
-                return await asyncio.to_thread(full.resolve)
-            except (OSError, RuntimeError):
-                # 如果解析失败(例如路径尚不存在)，返回绝对路径
-                return await asyncio.to_thread(full.absolute)
-
-        path = Path(key)
-        if path.is_absolute():
-            # 解析以获取真实的绝对路径
-            try:
-                return await asyncio.to_thread(path.resolve)
-            except (OSError, RuntimeError):
-                return await asyncio.to_thread(path.absolute)
-        # 相对路径：从 cwd 解析
-        resolved = self.cwd / path
+        # 规范化输入路径，移除开头的 / 和 ./（这些是虚拟路径的标记，不影响实际拼接）
+        vpath = key.lstrip("/")
+        vpath = vpath.lstrip("./")
+        
+        # 拼接路径
+        full = self.thread_dir / vpath
+        
+        # 规范化路径
         try:
-            return await asyncio.to_thread(resolved.resolve)
+            # 解析为绝对路径（跟随符号链接）
+            resolved = await asyncio.to_thread(full.resolve)
         except (OSError, RuntimeError):
-            return await asyncio.to_thread(resolved.absolute)
+            # 如果解析失败（例如路径尚不存在），使用绝对路径
+            resolved = await asyncio.to_thread(full.absolute)
+        
+        # 使用统一的 thread_dir 基准（与 remove_thread_dir_prefix 一致）
+        thread_dir_str = await self._get_abs_thread_dir_str()
+        thread_dir_resolved = Path(thread_dir_str)
+        
+        # 检查解析后的路径是否在 thread_dir 内部
+        try:
+            resolved.relative_to(thread_dir_resolved)
+            # 路径在 thread_dir 内部，直接返回
+            return resolved
+        except ValueError:
+            # 路径超出 thread_dir，返回 thread_dir 本身（自动限制）
+            return thread_dir_resolved
 
-    async def ato_virt_path(self, abs_path: str) -> str:
-        """将绝对路径转换为虚拟路径（异步版本）。
+    async def remove_thread_dir_prefix(self, abs_path: str) -> str:
+        """移除 thread_dir 前缀（异步版本）。
 
-        这是 aabs_path 的反向操作，将绝对路径转换为虚拟路径。
-        当你需要虚拟路径时使用此方法（仅在 virtual_mode=True 时有效）。
+        将实际路径转换为相对于 thread_dir 的虚拟路径。
+        不管实际路径在哪，返回的总是相对于 thread_dir 的路径。
+        使用 _get_abs_thread_dir_str() 获取统一基准，保证与 prepend_thread_dir 的一致性。
 
         Args:
-            abs_path: 绝对路径字符串
+            abs_path: 实际路径字符串
 
         Returns:
-            虚拟路径字符串（以 / 开头）
+            虚拟路径字符串（相对于 thread_dir）
         """
-        if not self.virtual_mode:
-            # 非虚拟模式：返回原始绝对路径
-            return abs_path
+        # 使用统一的 thread_dir 基准（与 prepend_thread_dir 一致）
+        thread_dir_str = await self._get_abs_thread_dir_str()
+        thread_dir_resolved = Path(thread_dir_str)
+        
+        # 解析输入路径，保证与 prepend_thread_dir 的输出一致
+        def resolve_input():
+            input_path = Path(abs_path)
+            try:
+                return input_path.resolve()
+            except (OSError, RuntimeError):
+                return input_path.absolute()
+        
+        resolved_path = await asyncio.to_thread(resolve_input)
 
-        # 获取 cwd 的绝对路径字符串
-        cwd_str = await self._get_abs_cwd_str()
-
-        if abs_path.startswith(cwd_str):
-            # 路径在 cwd 内部，去除 cwd 前缀
-            relative_path = abs_path[len(cwd_str):]
-            return "/" + relative_path
-        else:
-            # 路径在 cwd 外部，按原样返回
-            return abs_path
+        # 使用 os.path.relpath 计算相对路径
+        def compute_relpath():
+            import os
+            return os.path.relpath(str(resolved_path), thread_dir_str)
+        
+        relative_path = await asyncio.to_thread(compute_relpath)
+        
+        # 转换为字符串，使用 / 作为分隔符
+        virtual_path = str(relative_path).replace("\\", "/")
+        
+        # 如果不是 . 或包含 ../，确保以 / 开头
+        if virtual_path != "." and not virtual_path.startswith("../"):
+            if not virtual_path.startswith("/"):
+                virtual_path = "/" + virtual_path
+        
+        return virtual_path
 
     async def als_info(self, path: str) -> list[FileInfo]:
         """列出指定目录中的文件和目录(非递归)。
 
         Args:
-            path: 要列出文件的目录的绝对路径。
+            path: 要列出文件的目录的虚拟路径。
 
         Returns:
             FileInfo 字典列表，包含目录中的文件和目录。
             目录路径以 / 结尾且 is_dir=True。
         """
-        abs_dir_path = await self.aabs_path(path)
+        abs_dir_path = await self.prepend_thread_dir(path)
 
         try:
             exists = await aios.path.exists(abs_dir_path)
@@ -186,8 +198,8 @@ class AsyncFilesystemBackend(BackendProtocol):
 
         results: list[FileInfo] = []
 
-        # 获取 cwd 的绝对路径字符串用于比较
-        cwd_str = await self._get_abs_cwd_str()
+        # 获取 thread_dir 的绝对路径字符串用于比较
+        thread_dir_str = await self._get_abs_thread_dir_str()
 
         # 仅列出直接子项(非递归)
         try:
@@ -197,8 +209,8 @@ class AsyncFilesystemBackend(BackendProtocol):
             SYSTEM_IGNORE_DIRS = {"home", "var", "etc", "usr", "bin", "sbin", "lib", "boot", "dev", "proc", "sys"}
 
             for child_name in child_names:
-                # 强制过滤：如果是虚拟模式，且是系统目录，直接跳过
-                if self.virtual_mode and child_name in SYSTEM_IGNORE_DIRS:
+                # 过滤系统目录
+                if child_name in SYSTEM_IGNORE_DIRS:
                     continue
                 child_path = abs_dir_path / child_name
                 try:
@@ -209,64 +221,35 @@ class AsyncFilesystemBackend(BackendProtocol):
 
                 abs_path = str(child_path)
 
-                if not self.virtual_mode:
-                    # 非虚拟模式：使用绝对路径
-                    if is_file:
-                        try:
-                            st = await aios.stat(child_path)
-                            results.append(
-                                {
-                                    "path": abs_path,
-                                    "is_dir": False,
-                                    "size": int(st.st_size),
-                                    "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
-                                }
-                            )
-                        except OSError:
-                            results.append({"path": abs_path, "is_dir": False})
-                    elif is_dir:
-                        try:
-                            st = await aios.stat(child_path)
-                            results.append(
-                                {
-                                    "path": abs_path + "/",
-                                    "is_dir": True,
-                                    "size": 0,
-                                    "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
-                                }
-                            )
-                        except OSError:
-                            results.append({"path": abs_path + "/", "is_dir": True})
-                else:
-                    # 虚拟模式：使用 ato_virt_path 方法转换为虚拟路径
-                    virt_path = await self.ato_virt_path(abs_path)
+                # 使用 remove_thread_dir_prefix 方法转换为虚拟路径
+                virt_path = await self.remove_thread_dir_prefix(abs_path)
 
-                    if is_file:
-                        try:
-                            st = await aios.stat(child_path)
-                            results.append(
-                                {
-                                    "path": virt_path,
-                                    "is_dir": False,
-                                    "size": int(st.st_size),
-                                    "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
-                                }
-                            )
-                        except OSError:
-                            results.append({"path": virt_path, "is_dir": False})
-                    elif is_dir:
-                        try:
-                            st = await aios.stat(child_path)
-                            results.append(
-                                {
-                                    "path": virt_path + "/",
-                                    "is_dir": True,
-                                    "size": 0,
-                                    "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
-                                }
-                            )
-                        except OSError:
-                            results.append({"path": virt_path + "/", "is_dir": True})
+                if is_file:
+                    try:
+                        st = await aios.stat(child_path)
+                        results.append(
+                            {
+                                "path": virt_path,
+                                "is_dir": False,
+                                "size": int(st.st_size),
+                                "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                            }
+                        )
+                    except OSError:
+                        results.append({"path": virt_path, "is_dir": False})
+                elif is_dir:
+                    try:
+                        st = await aios.stat(child_path)
+                        results.append(
+                            {
+                                "path": virt_path + "/",
+                                "is_dir": True,
+                                "size": 0,
+                                "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                            }
+                        )
+                    except OSError:
+                        results.append({"path": virt_path + "/", "is_dir": True})
         except (OSError, PermissionError):
             pass
 
@@ -290,7 +273,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         Returns:
             带行号的格式化文件内容，或错误消息。
         """
-        abs_file_path = await self.aabs_path(file_path)
+        abs_file_path = await self.prepend_thread_dir(file_path)
 
         try:
             exists = await aios.path.exists(abs_file_path)
@@ -330,7 +313,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         """创建包含内容的新文件。
         返回 WriteResult。外部存储设置 files_update=None。
         """
-        abs_file_path = await self.aabs_path(file_path)
+        abs_file_path = await self.prepend_thread_dir(file_path)
 
         try:
             exists = await aios.path.exists(abs_file_path)
@@ -353,6 +336,7 @@ class AsyncFilesystemBackend(BackendProtocol):
             async with aiofiles.open(abs_file_path, mode="w", encoding="utf-8") as f:
                 await f.write(content)
 
+            file_path = self.remove_thread_dir_prefix(file_path)
             return WriteResult(path=file_path, files_update=None)
         except (OSError, UnicodeEncodeError) as e:
             return WriteResult(error=f"写入文件 '{file_path}' 时出错：{e}")
@@ -367,7 +351,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         """通过替换字符串来编辑文件。
         返回 EditResult。外部存储设置 files_update=None。
         """
-        abs_file_path = await self.aabs_path(file_path)
+        abs_file_path = await self.prepend_thread_dir(file_path)
 
         try:
             exists = await aios.path.exists(abs_file_path)
@@ -393,7 +377,8 @@ class AsyncFilesystemBackend(BackendProtocol):
             # 异步写入
             async with aiofiles.open(abs_file_path, mode="w", encoding="utf-8") as f:
                 await f.write(new_content)
-
+            
+            file_path = self.remove_thread_dir_prefix(file_path)
             return EditResult(path=file_path, files_update=None, occurrences=int(occurrences))
         except (OSError, UnicodeDecodeError, UnicodeEncodeError) as e:
             return EditResult(error=f"编辑文件 '{file_path}' 时出错：{e}")
@@ -412,7 +397,7 @@ class AsyncFilesystemBackend(BackendProtocol):
 
         # Resolve base path
         try:
-            base_full = await self.aabs_path(path or ".")
+            base_full = await self.prepend_thread_dir(path or ".")
         except ValueError:
             return []
 
@@ -466,16 +451,13 @@ class AsyncFilesystemBackend(BackendProtocol):
             if not ftext:
                 continue
             p = Path(ftext)
-            if self.virtual_mode:
-                try:
-                    # Use try_resolve to avoid blocking
-                    resolved = await asyncio.to_thread(lambda: p.resolve())
-                    # 使用 ato_virt_path 方法转换为虚拟路径
-                    virt = await self.ato_virt_path(str(resolved))
-                except Exception:
-                    continue
-            else:
-                virt = str(p)
+            try:
+                # Use try_resolve to avoid blocking
+                resolved = await asyncio.to_thread(lambda: p.resolve())
+                # 将实际路径转换为虚拟路径
+                virt = await self.remove_thread_dir_prefix(str(resolved))
+            except Exception:
+                continue
             ln = pdata.get("line_number")
             lt = pdata.get("lines", {}).get("text", "").rstrip("\n")
             if ln is None:
@@ -534,16 +516,13 @@ class AsyncFilesystemBackend(BackendProtocol):
 
             for line_num, line in enumerate(content.splitlines(), 1):
                 if regex.search(line):
-                    if self.virtual_mode:
-                        try:
-                            # Use try_resolve to avoid blocking
-                            resolved = await asyncio.to_thread(lambda: fp.resolve())
-                            # 使用 ato_virt_path 方法转换为虚拟路径
-                            virt_path = await self.ato_virt_path(str(resolved))
-                        except Exception:
-                            continue
-                    else:
-                        virt_path = str(fp)
+                    try:
+                        # Use try_resolve to avoid blocking
+                        resolved = await asyncio.to_thread(lambda: fp.resolve())
+                        # 将实际路径转换为虚拟路径
+                        virt_path = await self.remove_thread_dir_prefix(str(resolved))
+                    except Exception:
+                        continue
                     results.setdefault(virt_path, []).append((line_num, line))
 
         return results
@@ -552,7 +531,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         if pattern.startswith("/"):
             pattern = pattern.lstrip("/")
 
-        abs_search_path = self.cwd if path == "/" else await self.aabs_path(path)
+        abs_search_path = self.thread_dir if path == "/" else await self.prepend_thread_dir(path)
 
         try:
             exists = await aios.path.exists(abs_search_path)
@@ -580,33 +559,19 @@ class AsyncFilesystemBackend(BackendProtocol):
                     continue
 
                 abs_path = str(matched_path)
-                if not self.virtual_mode:
-                    try:
-                        st = await aios.stat(matched_path)
-                        results.append(
-                            {
-                                "path": abs_path,
-                                "is_dir": False,
-                                "size": int(st.st_size),
-                                "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
-                            }
-                        )
-                    except OSError:
-                        results.append({"path": abs_path, "is_dir": False})
-                else:
-                    virt = await self.ato_virt_path(abs_path)
-                    try:
-                        st = await aios.stat(matched_path)
-                        results.append(
-                            {
-                                "path": virt,
-                                "is_dir": False,
-                                "size": int(st.st_size),
-                                "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
-                            }
-                        )
-                    except OSError:
-                        results.append({"path": virt, "is_dir": False})
+                virt = await self.remove_thread_dir_prefix(abs_path)
+                try:
+                    st = await aios.stat(matched_path)
+                    results.append(
+                        {
+                            "path": virt,
+                            "is_dir": False,
+                            "size": int(st.st_size),
+                            "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                        }
+                    )
+                except OSError:
+                    results.append({"path": virt, "is_dir": False})
         except (OSError, ValueError):
             pass
 
@@ -626,7 +591,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         responses: list[FileUploadResponse] = []
         for path, content in files:
             try:
-                abs_file_path = await self.aabs_path(path)
+                abs_file_path = await self.prepend_thread_dir(path)
 
                 # Create parent directories if needed
                 parent = abs_file_path.parent
@@ -666,7 +631,7 @@ class AsyncFilesystemBackend(BackendProtocol):
         responses: list[FileDownloadResponse] = []
         for path in paths:
             try:
-                abs_file_path = await self.aabs_path(path)
+                abs_file_path = await self.prepend_thread_dir(path)
                 # Read asynchronously in binary mode
                 async with aiofiles.open(abs_file_path, mode="rb") as f:
                     content = await f.read()

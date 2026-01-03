@@ -1,46 +1,17 @@
 """
 转换工具
 """
-from pathlib import Path
 from typing import Any
 
 from langchain_core.tools import tool
 
-from core.converters.pdf import PDF2Markdown
 from core.converters.docx import DOCX2Markdown
-
-
-def _remove_matched_prefix(path_str: str, prefix: str = None) -> str:
-    """移除路径字符串中匹配的前缀，并转换为虚拟路径格式。
-
-    如果 path_str 以 prefix 开头，则移除该前缀并添加 / 前缀。
-    否则，返回原始字符串。
-
-    Args:
-        path_str: 原始路径字符串（绝对路径）
-        prefix: 要移除的前缀（通常是 sandbox_sessions_dir）
-
-    Returns:
-        虚拟路径字符串（以 / 开头，相对于沙箱根目录）
-
-    Examples:
-        >>> _remove_matched_prefix("/abs/path/sandbox_sessions/thread_id/file.pdf", "/abs/path/sandbox_sessions/thread_id/")
-        '/file.pdf'
-
-        >>> _remove_matched_prefix("/abs/path/file.txt", "/abs/path/")
-        '/file.txt'
-    """
-    if not prefix:
-        return path_str
-    if path_str.startswith(prefix):
-        # 移除匹配的前缀，并添加虚拟路径前缀
-        relative_path = path_str[len(prefix):].lstrip('/')
-        return "/" + relative_path if relative_path else "/"
-    return path_str
+from core.converters.pdf import PDF2Markdown
+from deepagents.backends.filesystem_async import AsyncFilesystemBackend
 
 
 @tool(parse_docstring=True)
-def convert_pdf_to_markdown(pdf_path: str, sandbox_sessions_dir: str = None) -> dict[str, Any]:
+def convert_pdf_to_markdown(pdf_path: str, _backend: AsyncFilesystemBackend = None) -> dict[str, Any]:
     """将 PDF 文件转换为 Markdown 格式以便研究。
 
     该工具将 PDF 文档转换为 Markdown 格式，保留标题、段落、图片和其他格式。
@@ -55,7 +26,7 @@ def convert_pdf_to_markdown(pdf_path: str, sandbox_sessions_dir: str = None) -> 
         包含以下内容的字典：
         - success: 转换是否成功
         - pdf_path: PDF 文件的路径
-        - output_file: 生成的 Markdown 文件路径
+        - abs_output_file: 生成的 Markdown 文件路径
         - images_extracted: 提取的图片数量
         - error: 转换失败时的错误信息
 
@@ -65,52 +36,58 @@ def convert_pdf_to_markdown(pdf_path: str, sandbox_sessions_dir: str = None) -> 
         - 转换器会根据字体大小和加粗格式自动检测标题
     """
     try:
+        if not _backend:
+            return {
+                "success": False,
+                "error": f"cannot find backend: {pdf_path}",
+                "pdf_path": pdf_path,
+            }
         # Resolve absolute path
-        pdf_file = Path(pdf_path)
+        abs_pdf_file = _backend.prepend_thread_dir(pdf_path)
 
         # Check if PDF exists
-        if not pdf_file.exists():
+        if not abs_pdf_file.exists():
             return {
                 "success": False,
                 "error": f"PDF file not found: {pdf_path}",
-                "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
+                "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
             }
 
         # Check if it's a PDF file
-        if pdf_file.suffix.lower() != ".pdf":
+        if abs_pdf_file.suffix.lower() != ".pdf":
             return {
                 "success": False,
                 "error": f"File is not a PDF: {pdf_path}",
-                "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
+                "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
             }
 
         # Determine output file path
-        output_file = pdf_file.with_suffix(".md")
+        abs_output_file = abs_pdf_file.with_suffix(".md")
 
         # Check if Markdown file already exists
-        if output_file.exists():
+        if abs_output_file.exists():
             return {
                 "success": True,
                 "message": "File already ready",
-                "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
-                "output_file": _remove_matched_prefix(str(output_file), sandbox_sessions_dir),
+                "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
+                "abs_output_file": _backend.remove_thread_dir_prefix(str(abs_output_file)),
             }
 
         # Create converter instance
-        converter = PDF2Markdown(debug=False)
+        converter = PDF2Markdown()
 
         # Perform conversion
         try:
-            converter.convert(str(pdf_file), str(output_file))
+            converter.convert(str(abs_pdf_file), str(abs_output_file))
         except Exception as e:
             return {
                 "success": False,
                 "error": f"PDF conversion error: {str(e)}",
-                "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
+                "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
             }
 
         # Read the output file to get content length and count images
-        with open(output_file, "r", encoding="utf-8") as f:
+        with open(abs_output_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         # Count images (look for image markdown syntax)
@@ -118,8 +95,8 @@ def convert_pdf_to_markdown(pdf_path: str, sandbox_sessions_dir: str = None) -> 
 
         return {
             "success": True,
-            "pdf_path": _remove_matched_prefix(str(pdf_file), sandbox_sessions_dir),
-            "output_file": _remove_matched_prefix(str(output_file), sandbox_sessions_dir),
+            "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
+            "abs_output_file": _backend.remove_thread_dir_prefix(str(abs_output_file)),
             "content_length": len(content),
             "images_extracted": images_count,
         }
@@ -128,12 +105,12 @@ def convert_pdf_to_markdown(pdf_path: str, sandbox_sessions_dir: str = None) -> 
         return {
             "success": False,
             "error": f"PDF conversion error: {str(e)}",
-            "pdf_path": _remove_matched_prefix(pdf_path, sandbox_sessions_dir),
+            "pdf_path": _backend.remove_thread_dir_prefix(pdf_path),
         }
 
 
 @tool(parse_docstring=True)
-def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -> dict[str, Any]:
+def convert_docx_to_markdown(docx_path: str, _backend: AsyncFilesystemBackend = None) -> dict[str, Any]:
     """将 Word 文档（DOCX）转换为 Markdown 格式以便研究。
 
     该工具将 Word 文档转换为 Markdown 格式，保留标题、段落、列表、表格和其他格式。
@@ -159,35 +136,41 @@ def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -
         - 转换过程中可能会生成警告或信息消息，这些会被包含在返回结果中
     """
     try:
+        if not _backend:
+            return {
+                "success": False,
+                "error": f"cannot find backend: {docx_path}",
+                "docx_path": docx_path,
+            }
         # Resolve absolute path
-        docx_file = Path(docx_path)
+        abs_docx_file = _backend.prepend_thread_dir(docx_path)
 
         # Check if DOCX exists
-        if not docx_file.exists():
+        if not abs_docx_file.exists():
             return {
                 "success": False,
                 "error": f"DOCX file not found: {docx_path}",
-                "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
+                "docx_path": _backend.remove_thread_dir_prefix(docx_path),
             }
 
         # Check if it's a DOCX file
-        if docx_file.suffix.lower() != ".docx":
+        if abs_docx_file.suffix.lower() != ".docx":
             return {
                 "success": False,
                 "error": f"File is not a DOCX: {docx_path}",
-                "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
+                "docx_path": _backend.remove_thread_dir_prefix(docx_path),
             }
 
         # Determine output file path
-        output_file = docx_file.with_suffix(".md")
+        output_file = abs_docx_file.with_suffix(".md")
 
         # Check if Markdown file already exists
         if output_file.exists():
             return {
                 "success": True,
                 "message": "File already ready",
-                "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
-                "output_file": _remove_matched_prefix(str(output_file), sandbox_sessions_dir),
+                "docx_path": _backend.remove_thread_dir_prefix(docx_path),
+                "output_file": _backend.remove_thread_dir_prefix(str(output_file)),
             }
 
         # Create converter instance
@@ -195,12 +178,12 @@ def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -
 
         # Perform conversion
         try:
-            result = converter.convert(str(docx_file), str(output_file))
+            result = converter.convert(str(abs_docx_file), str(output_file))
         except Exception as e:
             return {
                 "success": False,
                 "error": f"DOCX conversion error: {str(e)}",
-                "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
+                "docx_path": _backend.remove_thread_dir_prefix(docx_path),
             }
 
         # Read the output file to get content length
@@ -212,8 +195,8 @@ def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -
 
         return {
             "success": True,
-            "docx_path": _remove_matched_prefix(str(docx_file), sandbox_sessions_dir),
-            "output_file": _remove_matched_prefix(str(output_file), sandbox_sessions_dir),
+            "docx_path": _backend.remove_thread_dir_prefix(docx_path),
+            "output_file": _backend.remove_thread_dir_prefix(str(output_file)),
             "content_length": len(content),
             "messages": messages,
         }
@@ -222,5 +205,5 @@ def convert_docx_to_markdown(docx_path: str, sandbox_sessions_dir: str = None) -
         return {
             "success": False,
             "error": f"DOCX conversion error: {str(e)}",
-            "docx_path": _remove_matched_prefix(docx_path, sandbox_sessions_dir),
+            "docx_path": _backend.remove_thread_dir_prefix(docx_path),
         }

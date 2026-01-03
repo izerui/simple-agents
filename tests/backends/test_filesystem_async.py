@@ -24,50 +24,31 @@ class TestAsyncFilesystemBackend:
     @pytest.fixture
     def backend(self, temp_dir):
         """Create a backend instance with temp directory."""
-        return AsyncFilesystemBackend(root_dir=temp_dir, virtual_mode=True)
-
-    @pytest.fixture
-    def backend_non_virtual(self, temp_dir):
-        """Create a non-virtual mode backend instance."""
-        return AsyncFilesystemBackend(root_dir=temp_dir, virtual_mode=False)
+        return AsyncFilesystemBackend(thread_dir=temp_dir)
 
     @pytest.mark.asyncio
     async def test_initialization(self, temp_dir):
         """Test backend initialization."""
-        backend = AsyncFilesystemBackend(root_dir=temp_dir, virtual_mode=True)
-        assert backend.cwd == temp_dir
-        assert backend.virtual_mode is True
+        backend = AsyncFilesystemBackend(thread_dir=temp_dir)
+        assert backend.thread_dir == temp_dir
         assert backend.max_file_size_bytes == 10 * 1024 * 1024
 
     @pytest.mark.asyncio
-    async def test_resolve_path_virtual_mode(self, temp_dir):
-        """Test path resolution in virtual mode."""
-        backend = AsyncFilesystemBackend(root_dir=temp_dir, virtual_mode=True)
+    async def test_resolve_path(self, temp_dir):
+        """Test path resolution."""
+        backend = AsyncFilesystemBackend(thread_dir=temp_dir)
         
         # Test relative path
-        resolved = await backend.aabs_path("test.txt")
+        resolved = await backend.prepend_thread_dir("test.txt")
         assert resolved == temp_dir / "test.txt"
         
-        # Test virtual absolute path
-        resolved = await backend.aabs_path("/subdir/test.txt")
+        # Test virtual absolute path (with /)
+        resolved = await backend.prepend_thread_dir("/subdir/test.txt")
         assert resolved == temp_dir / "subdir" / "test.txt"
         
         # Test path traversal prevention
-        with pytest.raises(ValueError, match="Path traversal not allowed"):
-            await backend.aabs_path("../outside.txt")
-
-    @pytest.mark.asyncio
-    async def test_resolve_path_non_virtual_mode(self, temp_dir):
-        """Test path resolution in non-virtual mode."""
-        backend = AsyncFilesystemBackend(root_dir=temp_dir, virtual_mode=False)
-        
-        # Test absolute path
-        resolved = await backend.aabs_path(str(temp_dir / "test.txt"))
-        assert resolved == temp_dir / "test.txt"
-        
-        # Test relative path
-        resolved = await backend.aabs_path("test.txt")
-        assert resolved == temp_dir / "test.txt"
+        with pytest.raises(ValueError, match="不允许路径遍历"):
+            await backend.prepend_thread_dir("../outside.txt")
 
     @pytest.mark.asyncio
     async def test_awrite_new_file(self, backend, temp_dir):
@@ -391,23 +372,12 @@ class TestAsyncFilesystemBackend:
         if len(search_results) > 0:
             assert any("Universe" in match["text"] for match in search_results)
 
-    @pytest.mark.asyncio
-    async def test_non_virtual_mode_paths(self, backend_non_virtual, temp_dir):
-        """Test non-virtual mode uses absolute paths."""
-        (temp_dir / "test.txt").write_text("content")
-        
-        # Read with absolute path
-        content = await backend_non_virtual.aread(str(temp_dir / "test.txt"))
-        assert "content" in content
-        
-        # List directory with absolute path
-        result = await backend_non_virtual.als_info(str(temp_dir))
-        assert any("test.txt" in item["path"] for item in result)
+
 
     @pytest.mark.asyncio
     async def test_max_file_size_limit(self, backend, temp_dir):
         """Test that large files are not searched."""
-        backend = AsyncFilesystemBackend(root_dir=temp_dir, virtual_mode=True, max_file_size_mb=1)
+        backend = AsyncFilesystemBackend(thread_dir=temp_dir, max_file_size_mb=1)
         
         # Create a large file
         large_content = "x" * (2 * 1024 * 1024)  # 2MB

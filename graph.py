@@ -87,13 +87,12 @@ def get_backend_per_thread(runtime: ToolRuntime):
 
     # 2. 动态构造该用户专属的目录
     # 结果示例：./data/sandbox_sessions/thread_abc/
-    user_root_dir = f"./data/sandbox_sessions/{thread_id}"
+    thread_dir = f"./data/sandbox_sessions/{thread_id}"
 
     # 3. 创建新的 Backend 实例并缓存
     # 注意：不预先转换为绝对路径，让 FilesystemBackend.__init__ 处理
     backend = AsyncFilesystemBackend(
-        root_dir=user_root_dir,
-        virtual_mode=True,
+        thread_dir=thread_dir,
         max_file_size_mb=50,
         thread_id=thread_id,
     )

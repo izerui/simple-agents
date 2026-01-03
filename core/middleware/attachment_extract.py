@@ -122,7 +122,7 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                     # 创建转换任务
                     convert_tasks = []
                     for upload in successful_uploads:
-                        file_path = Path(await backend.aabs_path(upload.path))
+                        file_path = Path(await backend.prepend_thread_dir(upload.path))
                         file_ext = file_path.suffix.lower()
 
                         async def convert_file(file_path: Path, file_ext: str):
@@ -135,19 +135,19 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                                         await asyncio.to_thread(converter.convert, str(file_path), str(output_file))
                                         logger.info(f"转换成功: {file_path.name} -> {output_file.name}")
                                         # 转换为虚拟路径
-                                        virt_file = await backend.ato_virt_path(str(file_path))
-                                        virt_output = await backend.ato_virt_path(str(output_file))
+                                        virt_file = await backend.remove_thread_dir_prefix(str(file_path))
+                                        virt_output = await backend.remove_thread_dir_prefix(str(output_file))
                                         return {"file": virt_file, "output": virt_output, "status": "success"}
                                 
                                 # 所有转换器都不支持该文件类型
                                 logger.info(f"跳过不支持的文件类型: {file_path.name}")
-                                virt_file = await backend.ato_virt_path(str(file_path))
+                                virt_file = await backend.remove_thread_dir_prefix(str(file_path))
                                 return {"file": virt_file, "status": "skipped",
                                         "reason": f"不支持的文件类型: {file_ext}"}
                             except Exception as e:
                                 logger.error(f"文件转换失败 {file_path.name}: {e}")
                                 # 转换为虚拟路径
-                                virt_file = await backend.ato_virt_path(str(file_path))
+                                virt_file = await backend.remove_thread_dir_prefix(str(file_path))
                                 return {"file": virt_file, "status": "failed", "error": str(e)}
 
                         convert_tasks.append(convert_file(file_path, file_ext))
