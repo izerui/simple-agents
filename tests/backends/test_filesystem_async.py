@@ -39,16 +39,16 @@ class TestAsyncFilesystemBackend:
         backend = AsyncFilesystemBackend(thread_dir=temp_dir)
         
         # Test relative path
-        resolved = await backend.prepend_thread_dir("test.txt")
+        resolved = backend.prepend_thread_dir("test.txt")
         assert resolved == temp_dir / "test.txt"
         
         # Test virtual absolute path (with /)
-        resolved = await backend.prepend_thread_dir("/subdir/test.txt")
+        resolved = backend.prepend_thread_dir("/subdir/test.txt")
         assert resolved == temp_dir / "subdir" / "test.txt"
         
         # Test path traversal prevention
         with pytest.raises(ValueError, match="不允许路径遍历"):
-            await backend.prepend_thread_dir("../outside.txt")
+            backend.prepend_thread_dir("../outside.txt")
 
     @pytest.mark.asyncio
     async def test_awrite_new_file(self, backend, temp_dir):
@@ -66,14 +66,16 @@ class TestAsyncFilesystemBackend:
 
     @pytest.mark.asyncio
     async def test_awrite_existing_file(self, backend, temp_dir):
-        """Test writing to an existing file (should fail)."""
+        """Test writing to an existing file (should overwrite)."""
         file_path = temp_dir / "test.txt"
         file_path.write_text("existing content")
         
         result = await backend.awrite("/test.txt", "new content")
         
-        assert result.error is not None
-        assert "already exists" in result.error
+        assert result.error is None
+        assert result.path == "/test.txt"
+        # Verify file was overwritten
+        assert file_path.read_text() == "new content"
 
     @pytest.mark.asyncio
     async def test_awrite_with_subdirectories(self, backend, temp_dir):
@@ -115,7 +117,7 @@ class TestAsyncFilesystemBackend:
     async def test_aread_nonexistent_file(self, backend):
         """Test reading a non-existent file."""
         content = await backend.aread("/nonexistent.txt")
-        assert "not found" in content
+        assert "未找到文件" in content
 
     @pytest.mark.asyncio
     async def test_aread_offset_exceeds_length(self, backend, temp_dir):
@@ -124,7 +126,7 @@ class TestAsyncFilesystemBackend:
         file_path.write_text("Line 1\nLine 2")
         
         content = await backend.aread("/test.txt", offset=10)
-        assert "exceeds file length" in content
+        assert "超出文件长度" in content
 
     @pytest.mark.asyncio
     async def test_aedit_replace_string(self, backend, temp_dir):
@@ -154,7 +156,7 @@ class TestAsyncFilesystemBackend:
     async def test_aedit_nonexistent_file(self, backend):
         """Test editing a non-existent file."""
         result = await backend.aedit("/nonexistent.txt", "old", "new")
-        assert "not found" in result.error
+        assert "未找到文件" in result.error
 
     @pytest.mark.asyncio
     async def test_als_info_directory(self, backend, temp_dir):
