@@ -54,12 +54,15 @@ async def run_test():
     # 显示用户问题和附件
     attachments = [
         {"type": "file", "data": docx_content, "metadata": {"filename": "1901180052张卓群毕业论文3.docx"}},
+        {"type": "image", "data": image_content, "metadata": {"name": "跟单宝.png"}}
     ]
     print_user_message(user_message, attachments)
     
     # 创建带有附件的消息
     message = HumanMessage(content=[
         {"type": "text", "text": user_message},
+        {"type": "file", "data": docx_content, "metadata": {"filename": "1901180052张卓群毕业论文3.docx"}, "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+        {"type": "image", "metadata": {"name": "跟单宝.png"}, "mime_type": "image/png", "data": image_content}
     ])
 
     inputs = {"messages": [message]}
