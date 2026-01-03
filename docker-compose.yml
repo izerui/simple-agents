@@ -34,13 +34,13 @@ services:
         ports:
             - "8123:8000"
         depends_on:
-            langgraph-redis:
+            simple-agents-redis:
                 condition: service_healthy
-            langgraph-postgres:
+            simple-agents-postgres:
                 condition: service_healthy
         environment:
-            REDIS_URI: redis://langgraph-redis:6379
-            POSTGRES_URI: postgres://postgres:postgres@langgraph-postgres:5432/postgres?sslmode=disable
+            REDIS_URI: redis://simple-agents-redis:6379
+            POSTGRES_URI: postgres://postgres:postgres@simple-agents-postgres:5432/postgres?sslmode=disable
         healthcheck:
             test: python /api/healthcheck.py
             interval: 60s
