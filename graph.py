@@ -101,7 +101,7 @@ def get_backend_per_thread(runtime: ToolRuntime):
 
 # thread_id 内工具限制中间件
 tool_limiter = ToolCallLimitMiddleware(
-    run_limit=20,
+    run_limit=50,
     exit_behavior="continue"  # 达到 30 次后，强制终止并返回当前结果
 )
 
