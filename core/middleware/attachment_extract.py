@@ -53,27 +53,7 @@ class AttachmentExtractMiddleware(AgentMiddleware):
             raise ValueError("Backend factory returned None")
         return backend
     
-    def _extract_text_from_content(self, content) -> str:
-        """从 content 中提取纯文本
-        
-        Args:
-            content: 可以是字符串或列表格式的内容
-            
-        Returns:
-            纯文本字符串
-        """
-        if isinstance(content, str):
-            return content
-        
-        if isinstance(content, list):
-            text_blocks = []
-            for block in content:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    text_blocks.append(block.get("text", ""))
-            return "\n".join(text_blocks)
-        
-        return ""
-    
+
     async def abefore_model(self, state: StateT, runtime: Runtime[ContextT]) -> dict[str, Any] | None:
         """在模型调用前处理：提取附件到 state，清理消息内容
         
