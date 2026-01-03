@@ -1,5 +1,5 @@
 services:
-    langgraph-redis:
+    simple-agents-redis:
         image: serv999.com/hub/redis:6
         healthcheck:
             test: redis-cli ping
@@ -7,7 +7,7 @@ services:
             timeout: 1s
             retries: 5
 
-    langgraph-postgres:
+    simple-agents-postgres:
         image: serv999.com/hub/pgvector/pgvector:pg16
         ports:
             - "5433:5432"
@@ -29,7 +29,7 @@ services:
             interval: 60s
             start_interval: 1s
 
-    langgraph-api:
+    simple-agents-api:
         image: serv999.com/hub/izerui/simple-agents:latest
         ports:
             - "8123:8000"
