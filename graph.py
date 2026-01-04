@@ -92,15 +92,14 @@ sub_agent = SubAgent(
 agent = create_deep_agent(
     name="协调者",
     model=chat_model,  # 使用模型实例
-    tools=[think_tool, convert_pdf_to_markdown, convert_docx_to_markdown],
+    tools=[think_tool, fetch_markdown, convert_pdf_to_markdown, convert_docx_to_markdown],
     backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
     subagents=[sub_agent],
     middleware=[
         upload_files,
         tool_limiter,
-        fetch_markdown,
-        cus_tool_limiter('glob', 5)
+        cus_tool_limiter('glob', 5),
     ],  # 完整的中间件配置
     debug=int(os.getenv('ENABLED_AGENT_DEBUG', 0)) == 1,
 )
