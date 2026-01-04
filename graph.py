@@ -45,9 +45,9 @@ INSTRUCTIONS = (
         + "=" * 80
         + "\n\n"
         + SUBAGENT_DELEGATION_INSTRUCTIONS.format(
-        max_concurrent_research_units=max_concurrent_research_units,
-        max_researcher_iterations=max_researcher_iterations,
-    )
+    max_concurrent_research_units=max_concurrent_research_units,
+    max_researcher_iterations=max_researcher_iterations,
+)
 )
 
 # Model Claude 4.5
@@ -64,22 +64,24 @@ tool_limiter = ToolCallLimitMiddleware(
     exit_behavior="continue"  # 达到 30 次后，强制终止并返回当前结果
 )
 
+
 # 创建自定义工具限制中间件
-def cus_tool_limiter(tool_name: str, run_limit:int) -> ToolCallLimitMiddleware:
+def cus_tool_limiter(tool_name: str, run_limit: int) -> ToolCallLimitMiddleware:
     return ToolCallLimitMiddleware(
         tool_name=tool_name,
         run_limit=run_limit,
         exit_behavior="continue"  # 强制终止并返回当前结果
     )
 
-upload_files = AttachmentExtractMiddleware(backend_factory= get_backend_per_thread)
+
+upload_files = AttachmentExtractMiddleware(backend_factory=get_backend_per_thread)
 
 # 创建研究子智能体
 sub_agent = SubAgent(
-    name= "研究员",
-    description = "用于研究委托任务的研究员，每次仅限一个主题。",
-    system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
-    tools = [think_tool, fetch_markdown],
+    name="研究员",
+    description="用于研究委托任务的研究员，每次仅限一个主题。",
+    system_prompt=SUBAGENT_INSTRUCTIONS.format(date=current_date),
+    tools=[think_tool, fetch_markdown],
     middleware=[
         tool_limiter
     ],  # 完整的中间件配置
@@ -97,6 +99,7 @@ agent = create_deep_agent(
     middleware=[
         upload_files,
         tool_limiter,
+        fetch_markdown,
         cus_tool_limiter('glob', 5)
     ],  # 完整的中间件配置
     debug=int(os.getenv('ENABLED_AGENT_DEBUG', 0)) == 1,
