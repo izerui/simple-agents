@@ -74,10 +74,10 @@ def cus_tool_limiter(tool_name: str, run_limit:int) -> ToolCallLimitMiddleware:
 
 upload_files = AttachmentExtractMiddleware(backend_factory= get_backend_per_thread)
 
-# 创建研究子代理
+# 创建研究子智能体
 sub_agent = SubAgent(
-    name= "子智能体",
-    description = "将研究委托给子代理研究员，每次仅限一个主题。",
+    name= "研究员",
+    description = "用于研究委托任务的研究员，每次仅限一个主题。",
     system_prompt = SUBAGENT_INSTRUCTIONS.format(date=current_date),
     tools = [think_tool, fetch_markdown],
     middleware=[
