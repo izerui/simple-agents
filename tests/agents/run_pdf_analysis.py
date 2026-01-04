@@ -31,7 +31,7 @@ async def run_test():
         5. 总结：整体评价和核心改进建议"""
     
     # 读取并编码 PDF 文件
-    pdf_path = project_root / "files/论文.pdf"
+    pdf_path = project_root / "files/20210705041038_谷雷_冶金与材料学院_地理信息科.pdf"
     try:
         with open(pdf_path, 'rb') as f:
             pdf_content = base64.b64encode(f.read()).decode('utf-8')
@@ -40,7 +40,7 @@ async def run_test():
         return
     
     # 读取并编码图片文件
-    md_path = project_root / "files/指导手册.md"
+    md_path = project_root / "files/文山学院论文指导手册.md"
     try:
         with open(md_path, 'rb') as f:
             md_content = base64.b64encode(f.read()).decode('utf-8')
@@ -53,16 +53,16 @@ async def run_test():
     
     # 显示用户问题和附件
     attachments = [
-        {"type": "file", "data": pdf_content, "metadata": {"filename": "1901180052张卓群毕业论文3.pdf"}},
-        {"type": "image", "data": md_content, "metadata": {"name": "跟单宝.png"}}
+        {"type": "file", "data": pdf_content, "metadata": {"filename": pdf_path.name}},
+        {"type": "image", "data": md_content, "metadata": {"name": md_path.name}}
     ]
     print_user_message(user_message, attachments)
     
     # 创建带有附件的消息
     message = HumanMessage(content=[
         {"type": "text", "text": user_message},
-        {"type": "file", "data": pdf_content, "metadata": {"filename": "1901180052张卓群毕业论文3.pdf"}, "mimeType": "application/pdf"},
-        {"type": "file", "data": md_content, "metadata": {"filename": "指导手册.md"}, "mimeType": "text/markdown"},
+        {"type": "file", "data": pdf_content, "metadata": {"filename": pdf_path.name}, "mimeType": "application/pdf"},
+        {"type": "file", "data": md_content, "metadata": {"filename": md_path.name}, "mimeType": "text/markdown"},
         # {"type": "image", "metadata": {"name": "跟单宝.png"}, "mime_type": "image/png", "data": image_content}
     ])
     
