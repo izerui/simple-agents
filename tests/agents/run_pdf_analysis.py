@@ -40,12 +40,12 @@ async def run_test():
         return
     
     # 读取并编码图片文件
-    image_path = project_root / "files/跟单宝.png"
+    md_path = project_root / "files/指导手册.md"
     try:
-        with open(image_path, 'rb') as f:
-            image_content = base64.b64encode(f.read()).decode('utf-8')
+        with open(md_path, 'rb') as f:
+            md_content = base64.b64encode(f.read()).decode('utf-8')
     except FileNotFoundError:
-        print(f"❌ 错误：图片文件不存在: {image_path}")
+        print(f"❌ 错误：文件不存在: {md_path}")
         return
     
     # 打印测试标题
@@ -54,7 +54,7 @@ async def run_test():
     # 显示用户问题和附件
     attachments = [
         {"type": "file", "data": pdf_content, "metadata": {"filename": "1901180052张卓群毕业论文3.pdf"}},
-        {"type": "image", "data": image_content, "metadata": {"name": "跟单宝.png"}}
+        {"type": "image", "data": md_content, "metadata": {"name": "跟单宝.png"}}
     ]
     print_user_message(user_message, attachments)
     
@@ -62,7 +62,8 @@ async def run_test():
     message = HumanMessage(content=[
         {"type": "text", "text": user_message},
         {"type": "file", "data": pdf_content, "metadata": {"filename": "1901180052张卓群毕业论文3.pdf"}, "mimeType": "application/pdf"},
-        {"type": "image", "metadata": {"name": "跟单宝.png"}, "mime_type": "image/png", "data": image_content}
+        {"type": "file", "data": md_content, "metadata": {"filename": "指导手册.md"}, "mimeType": "text/markdown"},
+        # {"type": "image", "metadata": {"name": "跟单宝.png"}, "mime_type": "image/png", "data": image_content}
     ])
     
     inputs = {"messages": [message]}
@@ -83,4 +84,12 @@ async def run_test():
 
 
 if __name__ == "__main__":
+    import time
+    import shutil
+
+    if Path('data').exists():
+        shutil.rmtree('data', ignore_errors=True)
+
+    start = time.time()
     asyncio.run(run_test())
+    print(f"运行时间：{time.time() - start:.2f} 秒")

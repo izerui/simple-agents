@@ -59,4 +59,12 @@ async def run_test():
 
 
 if __name__ == "__main__":
+    import time
+    import shutil
+
+    if Path('data').exists():
+        shutil.rmtree('data', ignore_errors=True)
+
+    start = time.time()
     asyncio.run(run_test())
+    print(f"运行时间：{time.time() - start:.2f} 秒")
