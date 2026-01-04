@@ -52,3 +52,11 @@ services:
             dockerfile: Dockerfile
         volumes:
             - ./data/sandbox_sessions:/deps/simple-agents/data/sandbox_sessions
+
+    agent-chat-ui:
+        image: serv999.com/hub/izerui/agent-chat-ui:latest
+        ports:
+            - "8124:3000"
+        environment:
+            LANGGRAPH_API_URL: http://simple-agents-api:8000
+            LANGSMITH_API_KEY: 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
