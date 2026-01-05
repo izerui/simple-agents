@@ -4,5 +4,8 @@
     "research": "./graph.py:agent"
   },
   "env": ".env",
-  "python_version": "3.12"
+  "python_version": "3.12",
+  "http": {
+    "app": "./webapp.py:app"
+  }
 }

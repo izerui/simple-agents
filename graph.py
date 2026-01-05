@@ -10,21 +10,14 @@ from datetime import datetime
 
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
-from langchain_anthropic import ChatAnthropic
 from langchain_core.runnables import RunnableConfig
-from langgraph.runtime import Runtime
 
+from core.middleware.attachment_extract import AttachmentExtractMiddleware
 from core.tools.converts import convert_pdf_to_markdown, convert_docx_to_markdown
 from core.tools.fetch import fetch_markdown
 from core.tools.think import think_tool
 from core.utils import get_backend_per_thread
 from deepagents import create_deep_agent, SubAgent
-from langgraph.prebuilt import ToolRuntime
-
-from deepagents.backends import FilesystemBackend
-from deepagents.backends.filesystem_async import AsyncFilesystemBackend
-from core.middleware.attachment_extract import AttachmentExtractMiddleware
-from langgraph.config import get_config
 from prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
     SUBAGENT_INSTRUCTIONS,
@@ -102,4 +95,13 @@ agent = create_deep_agent(
         cus_tool_limiter('glob', 5),
     ],  # 完整的中间件配置
     debug=int(os.getenv('ENABLED_AGENT_DEBUG', 0)) == 1,
+)
+
+agent.with_config(
+    config=RunnableConfig(
+        configurable={
+            "tool_timeout": 300.0
+        },
+        recursion_limit=500,
+    )
 )
