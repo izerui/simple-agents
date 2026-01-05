@@ -60,3 +60,5 @@ services:
         environment:
             LANGGRAPH_API_URL: http://simple-agents-api:8000
             LANGSMITH_API_KEY: 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
+        volumes:
+          - ./data/sandbox_sessions:/home/data/sandbox_sessions
