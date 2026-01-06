@@ -21,7 +21,7 @@ class PDF2Markdown(BaseConverter):
 
     @override
     def support(self, suffix):
-        return suffix == ".pdf"
+        return suffix.lower() == ".pdf"
 
     def _is_bold(self, char):
         """判断字符是否加粗"""

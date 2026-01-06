@@ -76,7 +76,7 @@ class DOCX2Markdown(BaseConverter):
         Returns:
             是否支持该文件类型
         """
-        return suffix == ".docx"
+        return suffix.lower() == ".docx"
 
     def _check_dependencies(self):
         """检查依赖包是否已安装"""
