@@ -5,7 +5,7 @@ import base64
 from pathlib import Path
 import sys
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 # 加载环境变量并添加项目根目录到 Python 路径
@@ -57,6 +57,8 @@ async def run_test():
         {"type": "image", "data": image_content, "metadata": {"name": "跟单宝.png"}}
     ]
     print_user_message(user_message, attachments)
+
+    system = SystemMessage(content="你是一个严厉的考官，请用批判性的语气审查这篇论文。顺便在总结输出记得输出考官名字， 考官名字叫 刘玉华")
     
     # 创建带有附件的消息
     message = HumanMessage(content=[
@@ -65,11 +67,12 @@ async def run_test():
         {"type": "image", "metadata": {"name": "跟单宝.png"}, "mime_type": "image/png", "data": image_content}
     ])
 
-    inputs = {"messages": [message]}
+    inputs = {"messages": [system, message]}
     config = RunnableConfig(
         configurable={
             "thread_id": thread_id,
-            "tool_timeout": 300.0
+            "tool_timeout": 300.0,
+            "system_prompt": "你是一个严厉的考官，请用批判性的语气审查这篇论文。"
         },
         recursion_limit=500,
     )

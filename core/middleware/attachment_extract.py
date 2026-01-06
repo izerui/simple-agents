@@ -1,5 +1,4 @@
 import base64
-import base64
 import logging
 from pathlib import Path
 from typing import Any
@@ -11,20 +10,11 @@ from langgraph.prebuilt.tool_node import ToolRuntime
 from langgraph.runtime import Runtime
 from langgraph.typing import ContextT
 
-from core.converters.base import BaseConverter
-from core.converters.docx import DOCX2Markdown
-from core.converters.pdf import PDF2Markdown
 from deepagents.backends.filesystem_async import AsyncFilesystemBackend
 from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol, FileUploadResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# 注册转换器
-converters: list[BaseConverter] = [
-    PDF2Markdown(),
-    DOCX2Markdown()
-]
 
 
 class AttachmentExtractMiddleware(AgentMiddleware):
