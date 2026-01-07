@@ -9,7 +9,7 @@ router = APIRouter(prefix="/app")
 
 
 # 文件下载端点
-@router.get("/download/{thread_id}", tags=["app"])
+@router.get("/download/{thread_id}", tags=["Webapp"])
 async def download_file(
     thread_id: str,
     file_path: str = Query(..., description="要下载的文件路径（相对于 thread_dir）")
