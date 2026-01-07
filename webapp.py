@@ -12,14 +12,14 @@ router = APIRouter(prefix="/webapp")
 @router.get("/download/{thread_id}", tags=["Webapp"])
 async def download_file(
     thread_id: str,
-    file_path: str = Query(..., description="要下载的文件路径（相对于 thread_dir）")
+    path: str = Query(..., description="要下载的文件路径（相对于 thread_dir）")
 ):
     """
     根据指定的 thread_id 和文件路径下载文件。
     
     Args:
         thread_id: 对话线程 ID
-        file_path: 要下载的文件路径（相对于 thread_dir 的虚拟路径）
+        path: 要下载的文件路径（相对于 thread_dir 的虚拟路径）
     
     Returns:
         StreamingResponse: 文件内容的流式响应
@@ -42,7 +42,7 @@ async def download_file(
     
     try:
         # 使用后端下载文件
-        responses = await backend.adownload_files([file_path])
+        responses = await backend.adownload_files([path])
         
         if not responses:
             raise HTTPException(status_code=404, detail="文件未找到")
@@ -52,13 +52,13 @@ async def download_file(
         if response.error:
             # 根据错误类型返回相应的 HTTP 状态码
             if response.error == "file_not_found":
-                raise HTTPException(status_code=404, detail=f"文件未找到: {file_path}")
+                raise HTTPException(status_code=404, detail=f"文件未找到: {path}")
             elif response.error == "permission_denied":
-                raise HTTPException(status_code=403, detail=f"无权限访问文件: {file_path}")
+                raise HTTPException(status_code=403, detail=f"无权限访问文件: {path}")
             elif response.error == "is_directory":
-                raise HTTPException(status_code=400, detail=f"路径是一个目录，不是文件: {file_path}")
+                raise HTTPException(status_code=400, detail=f"路径是一个目录，不是文件: {path}")
             elif response.error == "invalid_path":
-                raise HTTPException(status_code=400, detail=f"无效的路径: {file_path}")
+                raise HTTPException(status_code=400, detail=f"无效的路径: {path}")
             else:
                 raise HTTPException(status_code=500, detail=f"下载文件失败: {response.error}")
         
@@ -69,20 +69,20 @@ async def download_file(
         file_like = io.BytesIO(response.content)
         
         # 从路径中提取文件名
-        filename = os.path.basename(file_path)
+        filename = os.path.basename(path)
         
         # 根据文件扩展名确定媒体类型
         media_type = "application/octet-stream"
-        if file_path.endswith('.txt'):
+        if path.endswith('.txt'):
             media_type = "text/plain"
-        elif file_path.endswith('.pdf'):
+        elif path.endswith('.pdf'):
             media_type = "application/pdf"
-        elif file_path.endswith('.json'):
+        elif path.endswith('.json'):
             media_type = "application/json"
-        elif file_path.endswith('.csv'):
+        elif path.endswith('.csv'):
             media_type = "text/csv"
-        elif file_path.endswith(('.png', '.jpg', '.jpeg', '.gif')):
-            media_type = f"image/{file_path.split('.')[-1]}"
+        elif path.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            media_type = f"image/{path.split('.')[-1]}"
         
         # 处理文件名编码，支持中文和其他非 ASCII 字符
         # 使用 RFC 5987 标准：filename*=UTF-8''url_encoded_filename
