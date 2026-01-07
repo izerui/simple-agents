@@ -1,6 +1,7 @@
 """用于在 Jupyter notebooks 中显示消息和提示词的工具函数。"""
 
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 
@@ -119,7 +120,7 @@ def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig | dict = None) 
     Returns:
         FilesystemBackend 实例，配置了独立的沙箱路径
     """
-    # 1. 从配置中获取当前对话的 thread_id
+    # 从配置中获取当前对话的 thread_id
     # 使用 .get() 方法避免 KeyError
     if isinstance(runtime, ToolRuntime):
         if hasattr(runtime, 'config'):
@@ -145,11 +146,13 @@ def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig | dict = None) 
     if thread_id is None:
         thread_id = "default"
 
-    # 2. 动态构造该用户专属的目录
-    # 结果示例：./data/sandbox_sessions/thread_abc/
-    thread_dir = f"./data/sandbox_sessions/{thread_id}"
+    sandbox_root_dir = os.getenv('SANDBOX_ROOT_DIR', './data/sandbox_sessions')
 
-    # 3. 创建新的 Backend 实例并缓存
+    # 动态构造该用户专属的目录
+    # 结果示例：./data/sandbox_sessions/thread_abc/
+    thread_dir = f"{sandbox_root_dir}/{thread_id}"
+
+    # 创建新的 Backend 实例并缓存
     # 注意：不预先转换为绝对路径，让 FilesystemBackend.__init__ 处理
     backend = AsyncFilesystemBackend(
         thread_dir=thread_dir,

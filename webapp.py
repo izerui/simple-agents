@@ -1,144 +1,104 @@
-from fastapi import FastAPI, HTTPException, APIRouter
-from pydantic import BaseModel
-from typing import Optional
+from fastapi import FastAPI, HTTPException, APIRouter, Query
+from fastapi.responses import StreamingResponse
+import os
+from urllib.parse import quote
 
-app = FastAPI(title="Simple Agents API", version="0.1.0")
+app = FastAPI(title="Webapp Agents API", version="0.1.0")
 
 router = APIRouter(prefix="/app")
 
-# 健康检查端点
-@router.get("/health", tags=["app"])
-async def health_check():
-    """健康检查端点，用于验证服务是否正常运行"""
-    return {
-        "status": "healthy",
-        "message": "服务运行正常",
-        "version": "0.1.0"
-    }
 
-
-# 根路径端点
-@router.get("/", tags=["app"])
-async def root():
-    """根路径，返回欢迎信息"""
-    return {
-        "message": "欢迎使用 Simple Agents API",
-        "docs": "/docs",
-        "health": "/health"
-    }
-
-
-# 定义请求数据模型
-class User(BaseModel):
-    name: str
-    age: int
-    email: Optional[str] = None
-
-
-# POST 端点 - 创建用户
-@router.post("/users", tags=["app"])
-async def create_user(user: User):
-    """创建用户端点"""
-    return {
-        "message": "用户创建成功",
-        "user": {
-            "name": user.name,
-            "age": user.age,
-            "email": user.email,
-            "id": 1
-        }
-    }
-
-
-# GET 端点 - 获取用户信息（带路径参数）
-@router.get("/users/{user_id}", tags=["app"])
-async def get_user(user_id: int):
-    """根据用户 ID 获取用户信息"""
-    if user_id < 1:
-        raise HTTPException(status_code=400, detail="用户 ID 必须大于 0")
-    
-    return {
-        "user_id": user_id,
-        "name": f"用户{user_id}",
-        "email": f"user{user_id}@example.com"
-    }
-
-
-# GET 端点 - 列表查询（带查询参数）
-@router.get("/items", tags=["app"])
-async def get_items(
-    skip: int = 0,
-    limit: int = 10,
-    keyword: Optional[str] = None
+# 文件下载端点
+@router.get("/download/{thread_id}", tags=["app"])
+async def download_file(
+    thread_id: str,
+    file_path: str = Query(..., description="要下载的文件路径（相对于 thread_dir）")
 ):
-    """获取物品列表，支持分页和关键词搜索"""
-    items = [
-        {"id": i, "name": f"物品{i}", "description": f"这是物品{i}的描述"}
-        for i in range(1, 21)
-    ]
+    """
+    根据指定的 thread_id 和文件路径下载文件。
     
-    # 应用关键词过滤
-    if keyword:
-        items = [item for item in items if keyword in item["name"]]
+    Args:
+        thread_id: 对话线程 ID
+        file_path: 要下载的文件路径（相对于 thread_dir 的虚拟路径）
     
-    # 应用分页
-    items = items[skip:skip + limit]
+    Returns:
+        StreamingResponse: 文件内容的流式响应
+    """
+    from deepagents.backends.filesystem_async import AsyncFilesystemBackend
+    import io
+
+    sandbox_root_dir = os.getenv('SANDBOX_ROOT_DIR', './data/sandbox_sessions')
     
-    return {
-        "total": len(items),
-        "skip": skip,
-        "limit": limit,
-        "keyword": keyword,
-        "items": items
-    }
+    # 动态构造该用户专属的目录
+    # 结果示例：./data/sandbox_sessions/thread_abc/
+    thread_dir = f"{sandbox_root_dir}/{thread_id}"
 
-
-# PUT 端点 - 更新用户信息
-@router.put("/users/{user_id}", tags=["app"])
-async def update_user(user_id: int, user: User):
-    """更新用户信息"""
-    return {
-        "message": "用户信息更新成功",
-        "user_id": user_id,
-        "updated_data": {
-            "name": user.name,
-            "age": user.age,
-            "email": user.email
-        }
-    }
-
-
-# DELETE 端点 - 删除用户
-@router.delete("/users/{user_id}", tags=["app"])
-async def delete_user(user_id: int):
-    """删除用户"""
-    if user_id < 1:
-        raise HTTPException(status_code=400, detail="用户 ID 必须大于 0")
+    # 创建新的 Backend 实例
+    backend = AsyncFilesystemBackend(
+        thread_dir=thread_dir,
+        max_file_size_mb=50,
+        thread_id=thread_id,
+    )
     
-    return {
-        "message": "用户删除成功",
-        "user_id": user_id
-    }
-
-
-# 测试异步端点
-@router.get("/async-test", tags=["app"])
-async def async_test():
-    """测试异步端点"""
-    import asyncio
-    await asyncio.sleep(0.1)
-    return {"message": "异步操作完成"}
-
-
-# POST 端点 - 表单数据处理
-@router.post("/echo", tags=["app"])
-async def echo_data(data: dict):
-    """回显接收到的数据"""
-    return {
-        "message": "数据接收成功",
-        "received_data": data,
-        "data_length": len(data)
-    }
+    try:
+        # 使用后端下载文件
+        responses = await backend.adownload_files([file_path])
+        
+        if not responses:
+            raise HTTPException(status_code=404, detail="文件未找到")
+        
+        response = responses[0]
+        
+        if response.error:
+            # 根据错误类型返回相应的 HTTP 状态码
+            if response.error == "file_not_found":
+                raise HTTPException(status_code=404, detail=f"文件未找到: {file_path}")
+            elif response.error == "permission_denied":
+                raise HTTPException(status_code=403, detail=f"无权限访问文件: {file_path}")
+            elif response.error == "is_directory":
+                raise HTTPException(status_code=400, detail=f"路径是一个目录，不是文件: {file_path}")
+            elif response.error == "invalid_path":
+                raise HTTPException(status_code=400, detail=f"无效的路径: {file_path}")
+            else:
+                raise HTTPException(status_code=500, detail=f"下载文件失败: {response.error}")
+        
+        if response.content is None:
+            raise HTTPException(status_code=404, detail="文件内容为空")
+        
+        # 创建流式响应
+        file_like = io.BytesIO(response.content)
+        
+        # 从路径中提取文件名
+        filename = os.path.basename(file_path)
+        
+        # 根据文件扩展名确定媒体类型
+        media_type = "application/octet-stream"
+        if file_path.endswith('.txt'):
+            media_type = "text/plain"
+        elif file_path.endswith('.pdf'):
+            media_type = "application/pdf"
+        elif file_path.endswith('.json'):
+            media_type = "application/json"
+        elif file_path.endswith('.csv'):
+            media_type = "text/csv"
+        elif file_path.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            media_type = f"image/{file_path.split('.')[-1]}"
+        
+        # 处理文件名编码，支持中文和其他非 ASCII 字符
+        # 使用 RFC 5987 标准：filename*=UTF-8''url_encoded_filename
+        encoded_filename = quote(filename)
+        content_disposition = f"attachment; filename*=UTF-8''{encoded_filename}"
+        
+        return StreamingResponse(
+            file_like,
+            media_type=media_type,
+            headers={"Content-Disposition": content_disposition}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"下载文件时发生错误: {str(e)}")
 
 
 app.include_router(router)
