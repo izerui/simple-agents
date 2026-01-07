@@ -31,4 +31,4 @@ def think_tool(reflection: str) -> str:
     Returns:
         确认反思已被记录以用于决策
     """
-    return f"反思已记录: {reflection}"
+    return f"[反思记录]: {reflection}"
