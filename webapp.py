@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 app = FastAPI(title="Webapp Agents API", version="0.1.0")
 
-router = APIRouter(prefix="/app")
+router = APIRouter(prefix="/webapp")
 
 
 # 文件下载端点
