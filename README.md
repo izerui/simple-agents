@@ -40,21 +40,6 @@ MODEL_API_KEY=your_api_key
 uv sync
 ```
 
-### 项目配置
-
-项目的依赖和配置在 `pyproject.toml` 文件中定义：
-
-```toml
-[project]
-name = "simple-agents"
-version = "0.1.0"
-dependencies = [
-    # 依赖项列表
-]
-```
-
----
-
 ## 🚀 部署
 
 ### 生成Dockerfile
