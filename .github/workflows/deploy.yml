@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       image_version:
-        description: 'Docker image version to deploy'
+        description: '要部署的 Docker 镜像版本'
         required: false
         default: 'latest'
         type: choice
@@ -20,12 +20,12 @@ on:
           - '0.2.0'
           - 'custom'
       custom_version:
-        description: 'Custom version if selected above'
+        description: '如果上面选择了自定义版本，请填写此处'
         required: false
         default: ''
         type: string
       dry_run:
-        description: 'Dry run (check only, no actual deployment)'
+        description: '试运行（仅检查，不实际部署）'
         required: false
         default: false
         type: boolean
