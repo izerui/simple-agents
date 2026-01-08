@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 import os
 from urllib.parse import quote
 
@@ -99,6 +99,53 @@ async def download_file(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"下载文件时发生错误: {str(e)}")
+
+
+# HEAD 端点：检查报告是否存在
+@router.head("/report/{thread_id}", tags=["Webapp"])
+async def check_report_exists(thread_id: str):
+    """
+    检查指定 thread_id 的 final_report.md 文件是否存在（HEAD 方法）。
+    
+    Args:
+        thread_id: 对话线程 ID
+    
+    Returns:
+        Response: 只返回 headers，不返回内容体
+    """
+    data_root_dir = os.getenv('SANDBOX_ROOT_DIR', './data/sandbox_sessions')
+    
+    # 构造文件路径：{DATA_ROOT_DIR}/{thread_id}/.deepthink/final_report.md
+    file_path = os.path.join(data_root_dir, thread_id, '.deepthink', 'final_report.md')
+    
+    # 解析绝对路径
+    resolved_path = os.path.abspath(file_path)
+    resolved_root = os.path.abspath(data_root_dir)
+    
+    # 安全检查：确保文件路径在根目录下
+    if not resolved_path.startswith(resolved_root):
+        raise HTTPException(status_code=403, detail="无权访问该路径")
+    
+    # 检查文件是否存在
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="文件未找到")
+    
+    # 检查是否是文件
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=400, detail="路径不是一个文件")
+    
+    # 获取文件状态
+    file_stat = os.stat(file_path)
+    
+    # 设置响应头
+    headers = {
+        'Content-Type': 'text/markdown',
+        'Content-Length': str(file_stat.st_size),
+        'Last-Modified': os.path.getmtime(file_path).__str__()
+    }
+    
+    # HEAD 请求只返回 headers，不返回内容体
+    return Response(status_code=200, headers=headers)
 
 
 app.include_router(router)

@@ -11,6 +11,7 @@ from datetime import datetime
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
+from langgraph_sdk import Auth
 
 from core.middleware.attachment_extract import AttachmentExtractMiddleware
 from core.tools.converts import convert_pdf_to_markdown, convert_docx_to_markdown
@@ -105,3 +106,33 @@ agent.with_config(
         recursion_limit=500,
     )
 )
+
+
+auth = Auth()
+
+def is_valid_key(api_key: bytes) -> bool:
+    # Implement your own key validation logic here
+    # For example, you can check if the key exists in a database or a file
+    return api_key == os.getenv('LANGGRAPH_API_KEY')
+
+@auth.authenticate
+async def authenticate(headers: dict) -> Auth.types.MinimalUserDict:
+    # Validate credentials (e.g., API key, JWT token)
+    api_key = headers.get(b"x-api-key")
+    if not api_key or not is_valid_key(api_key):
+        raise Auth.exceptions.HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+
+    # Return user info - only identity and is_authenticated are required
+    # Add any additional fields you need for authorization
+    return {
+        "identity": "operator",        # Required: unique user identifier
+        "is_authenticated": True,      # Optional: assumed True by default
+        "permissions": ["read", "write"], # Optional: for permission-based auth
+        # You can add more custom fields if you want to implement other auth patterns
+        "role": "admin",
+        "org_id": "feike"
+
+    }

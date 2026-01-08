@@ -72,9 +72,9 @@ langgraph dockerfile --add-docker-compose -c langgraph.json ./Dockerfile
 
 
 参考文档:
-1. [LangGraph](https://github.com/langgraph/langgraph)
+1. [LangGraph](https://docs.langchain.com/langsmith/monorepo-support#langgraph-json-configuration)
 2. [LangGraph Command](https://docs.langchain.com/langsmith/cli#dockerfile)
 3. [Helm](https://github.com/langchain-ai/helm)
 4. [Custom Docker](https://docs.langchain.com/langsmith/custom-docker)
-5. [Api Auth](https://docs.langchain.com/langsmith/auth)
+5. [Api Auth](https://docs.langchain.com/langsmith/custom-auth)
 5. [skill](https://docs.langchain.com/oss/python/langchain/multi-agent/skills)
