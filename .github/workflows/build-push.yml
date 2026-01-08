@@ -9,8 +9,28 @@ name: Build and Push to Docker Hub
 on:
   push:
     branches: [ main, master ]
+    paths:
+      - 'core/**'
+      - 'deepagents/**'
+      - 'langgraph.json'
+      - '**/*.py'
+      - 'pyproject.toml'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
   pull_request:
     branches: [ main, master ]
+    paths:
+      - 'core/**'
+      - 'deepagents/**'
+      - 'langgraph.json'
+      - '**/*.py'
+      - 'pyproject.toml'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'docker-compose.yaml'
+      - '.dockerignore'
+      - 'docker/**'
   workflow_dispatch:
 
 env:
