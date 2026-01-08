@@ -75,5 +75,6 @@ langgraph dockerfile --add-docker-compose -c langgraph.json ./Dockerfile
 1. [LangGraph](https://github.com/langgraph/langgraph)
 2. [LangGraph Command](https://docs.langchain.com/langsmith/cli#dockerfile)
 3. [Helm](https://github.com/langchain-ai/helm)
-4. [custom-docker](https://docs.langchain.com/langsmith/custom-docker)
+4. [Custom Docker](https://docs.langchain.com/langsmith/custom-docker)
+5. [Api Auth](https://docs.langchain.com/langsmith/auth)
 5. [skill](https://docs.langchain.com/oss/python/langchain/multi-agent/skills)
