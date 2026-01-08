@@ -9,9 +9,8 @@ ADD . /deps/simple-agents
 # -- Installing all local dependencies --
 RUN for dep in /deps/*; do             echo "Installing $dep";             if [ -d "$dep" ]; then                 echo "Installing $dep";                 (cd "$dep" && PYTHONDONTWRITEBYTECODE=1 uv pip install --system --no-cache-dir -c /api/constraints.txt -e .);             fi;         done
 # -- End of local dependencies install --
-# Entrypoint script to load LANGSERVE_GRAPHS from langgraph.json
-COPY docker-entrypoint.sh /deps/simple-agents/entrypoint.sh
-RUN chmod +x /deps/simple-agents/entrypoint.sh
+ENV LANGGRAPH_HTTP='{"app": "/deps/simple-agents/webapp.py:app"}'
+ENV LANGSERVE_GRAPHS='{"research": "/deps/simple-agents/graph.py:agent"}'
 
 
 
@@ -26,5 +25,3 @@ RUN rm -rf /usr/lib/python*/site-packages/pip* /usr/lib/python*/site-packages/se
 RUN uv pip uninstall --system pip setuptools wheel && rm /usr/bin/uv /usr/bin/uvx
 
 WORKDIR /deps/simple-agents
-
-ENTRYPOINT ["/entrypoint.sh"]

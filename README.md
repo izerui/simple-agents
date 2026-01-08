@@ -57,6 +57,11 @@ dependencies = [
 
 ## 🚀 部署
 
+### 生成Dockerfile
+```
+langgraph dockerfile -c langgraph.json Dockerfile
+```
+
 ### Docker 部署
 
 使用 LangGraph CLI 生成 Dockerfile：
@@ -79,3 +84,11 @@ langgraph dockerfile --add-docker-compose -c langgraph.json ./Dockerfile
 # 访问服务器
 # http://localhost:2024
 ```
+
+
+参考文档:
+1. [LangGraph](https://github.com/langgraph/langgraph)
+2. [LangGraph Command](https://docs.langchain.com/langsmith/cli#dockerfile)
+3. [Helm](https://github.com/langchain-ai/helm)
+4. [custom-docker](https://docs.langchain.com/langsmith/custom-docker)
+5. [skill](https://docs.langchain.com/oss/python/langchain/multi-agent/skills)
