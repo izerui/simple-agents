@@ -5,6 +5,7 @@ for conducting web research with strategic thinking and context management.
 
 Supports per-conversation sandbox isolation using BackendFactory.
 """
+import logging
 import os
 from datetime import datetime
 
@@ -119,6 +120,7 @@ def is_valid_key(api_key: bytes) -> bool:
 async def authenticate(headers: dict) -> Auth.types.MinimalUserDict:
     # Validate credentials (e.g., API key, JWT token)
     api_key = headers.get(b"x-api-key")
+    logging.info(f"API key: {api_key}")
     if not api_key or not is_valid_key(api_key):
         raise Auth.exceptions.HTTPException(
             status_code=401,
