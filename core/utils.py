@@ -150,7 +150,7 @@ def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig | dict = None) 
 
     # 动态构造该用户专属的目录
     # 结果示例：./data/sandbox_sessions/thread_abc/
-    thread_dir = f"{sandbox_root_dir}/{thread_id}"
+    thread_dir = os.path.join(sandbox_root_dir, thread_id)
 
     # 创建新的 Backend 实例并缓存
     # 注意：不预先转换为绝对路径，让 FilesystemBackend.__init__ 处理

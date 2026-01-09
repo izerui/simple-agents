@@ -31,7 +31,7 @@ async def download_file(
     
     # 动态构造该用户专属的目录
     # 结果示例：./data/sandbox_sessions/thread_abc/
-    thread_dir = f"{sandbox_root_dir}/{thread_id}"
+    thread_dir = os.path.join(sandbox_root_dir, thread_id)
 
     # 创建新的 Backend 实例
     backend = AsyncFilesystemBackend(

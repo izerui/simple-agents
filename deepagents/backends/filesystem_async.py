@@ -9,6 +9,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -135,6 +136,7 @@ class AsyncFilesystemBackend(BackendProtocol):
             virtual_path = abs_path[len(thread_dir):]
         else:
             # 如果不在 thread_dir 下，直接使用原路径（或返回 /）
+            logging.warning(f"文件 {abs_path} 不在 {thread_dir} 下")
             virtual_path = abs_path
         
         # 规范化：确保以 / 开头（除了 . 和 ../）
