@@ -96,7 +96,7 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                 # 在内容中添加上传文件的提示信息
                 if extracted_attachments:
                     file_names = [att['filename'] for att in extracted_attachments]
-                    file_info = "\n\n" + "\n    ".join(file_names)
+                    file_info = "\n用户上传了以下文件:\n" + "\n    ".join(file_names)
                     # 将文件信息以字典格式添加到 filtered_content 末尾
                     filtered_content.append({"type": "text", "text": file_info})
 
