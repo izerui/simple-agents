@@ -116,8 +116,8 @@ async def check_report_exists(thread_id: str):
     """
     data_root_dir = os.getenv('SANDBOX_ROOT_DIR', './data/sandbox_sessions')
     
-    # 构造文件路径：{DATA_ROOT_DIR}/{thread_id}/.deepthink/final_report.md
-    file_path = os.path.join(data_root_dir, thread_id, '.deepthink', 'final_report.md')
+    # 构造文件路径：{DATA_ROOT_DIR}/{thread_id}/deepthink/final_report.md
+    file_path = os.path.join(data_root_dir, thread_id, 'deepthink', 'final_report.md')
     
     # 解析绝对路径
     resolved_path = os.path.abspath(file_path)
