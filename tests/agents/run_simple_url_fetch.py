@@ -19,7 +19,7 @@ from tests.agents.output_handler import output_handler, print_header, print_user
 async def run_test():
     """运行简单的文件列表查询测试。"""
     thread_id = "test_simple_list"
-    user_message = "分析下 https://docs.copilotkit.ai/  给我出一份详细的分析结果，我想知道这个网站是做什么的，有什么牛逼的地方。"
+    user_message = "https://github.langchain.ac.cn/langgraph/cloud/reference/sdk/python_sdk_ref/#langgraph_sdk.client.AssistantsClient.get_subgraphs 读取这个网址替我汇总下"
     
     # 打印测试标题
     print_header("简单的文件列表查询")

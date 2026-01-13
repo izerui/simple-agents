@@ -10,7 +10,7 @@ from langgraph.prebuilt.tool_node import ToolRuntime
 from langgraph.runtime import Runtime
 from langgraph.typing import ContextT
 
-from deepagents.backends.filesystem_async import AsyncFilesystemBackend
+from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol, FileUploadResponse
 
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +30,7 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         self.backend_factory = backend_factory
         logger.info("Initialized AttachmentExtractMiddleware")
 
-    async def _get_backend(self, runtime: ToolRuntime | RunnableConfig | dict) -> BackendProtocol:
+    def _get_backend(self, runtime: ToolRuntime | RunnableConfig | dict) -> BackendProtocol:
         """从后端工厂获取后端实例"""
         if self.backend_factory is None:
             raise ValueError("backend_factory must be provided")
@@ -111,14 +111,14 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         if extracted_attachments:
             config: RunnableConfig = get_config()
             #  获取后端实例
-            backend: AsyncFilesystemBackend = await self._get_backend(config)
+            backend: FilesystemBackend = self._get_backend(config)
             await self.upload_files(backend, extracted_attachments)
             pass
 
         # 更新消息
         return {'messages': updated_messages}
 
-    async def upload_files(self, backend: AsyncFilesystemBackend, extracted_attachments: list[dict]):
+    async def upload_files(self, backend: FilesystemBackend, extracted_attachments: list[dict]):
         # 准备上传的文件列表
         files_to_upload = []
         for attachment in extracted_attachments:

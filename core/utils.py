@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from deepagents.backends.filesystem_async import AsyncFilesystemBackend
+from deepagents.backends import FilesystemBackend
 
 console = Console()
 
@@ -104,7 +104,7 @@ def show_prompt(prompt_text: str, title: str = "Prompt", border_style: str = "bl
 
 
 # 定义一个工厂函数
-def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig | dict = None) -> AsyncFilesystemBackend:
+def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig | dict = None) -> FilesystemBackend:
     """
     根据当前对话的 thread_id 创建一个 FilesystemBackend 实例。
 
@@ -154,7 +154,7 @@ def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig | dict = None) 
 
     # 创建新的 Backend 实例并缓存
     # 注意：不预先转换为绝对路径，让 FilesystemBackend.__init__ 处理
-    backend = AsyncFilesystemBackend(
+    backend = FilesystemBackend(
         thread_dir=thread_dir,
         max_file_size_mb=50,
         thread_id=thread_id,

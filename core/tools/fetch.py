@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 from markdownify import markdownify
 
 
-@tool(parse_docstring=True, return_direct=True)
+@tool(parse_docstring=True)
 def fetch_markdown(url: str, timeout: int = 30) -> dict[str, Any]:
     """从 URL 获取内容并将 HTML 转换为 Markdown 格式。
 

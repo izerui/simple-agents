@@ -3,6 +3,8 @@ from fastapi.responses import Response, StreamingResponse
 import os
 from urllib.parse import quote
 
+from deepagents.backends import FilesystemBackend
+
 app = FastAPI(title="Webapp Agents API", version="0.1.0")
 
 router = APIRouter(prefix="/webapp")
@@ -24,7 +26,6 @@ async def download_file(
     Returns:
         StreamingResponse: 文件内容的流式响应
     """
-    from deepagents.backends.filesystem_async import AsyncFilesystemBackend
     import io
 
     sandbox_root_dir = os.getenv('SANDBOX_ROOT_DIR', './data/sandbox_sessions')
@@ -34,7 +35,7 @@ async def download_file(
     thread_dir = os.path.join(sandbox_root_dir, thread_id)
 
     # 创建新的 Backend 实例
-    backend = AsyncFilesystemBackend(
+    backend = FilesystemBackend(
         thread_dir=thread_dir,
         max_file_size_mb=50,
         thread_id=thread_id,
