@@ -20,8 +20,8 @@ COMMON_TOOL_USAGE_RULE = """## 工具调用核心规则
 - "我需要将研究结果保存到文件中。" → write_file(path="/results/summary.md", content="...")
 
 **特殊强调 - write_file 的强制使用场景：**
-- "我需要保存用户的研究请求到文件中，以便后续查阅" → write_file(path="deepthink/research_request.md", content="用户的研究问题...")
-- "我需要将研究汇总结果写入最终报告文件" → write_file(path="deepthink/final_report.md", content="报告内容...")
+- "我需要保存用户的研究请求到文件中，以便后续查阅" → write_file(path="/deepthink/research_request.md", content="用户的研究问题...")
+- "我需要将研究汇总结果写入最终报告文件" → write_file(path="/deepthink/final_report.md", content="报告内容...")
 - **注意**：这两个文件的生成是强制性的，必须在研究开始前和结束后分别执行
 
 **数据处理类：**
@@ -49,11 +49,11 @@ COMMON_TOOL_USAGE_RULE = """## 工具调用核心规则
 2. **专业度** - 类似于专业开发者的工作流程，每一步都有明确的说明
 3. **可理解性** - 提高交互的透明度，让用户跟随您的思路
 4. **可见性** - 让思考过程可见，而不仅仅是结果
-5. **可追溯性** - 通过 write_file 生成的 `deepthink/research_request.md` 和 `deepthink/final_report.md` 确保研究过程和结果可追溯
+5. **可追溯性** - 通过 write_file 生成的 `/deepthink/research_request.md` 和 `/deepthink/final_report.md` 确保研究过程和结果可追溯
 
 **记住：永远不要直接调用任何工具而不说明意图！这是绝对禁止的！适用于所有工具！**
 
-**特别提醒**：对于 write_file 工具，在生成 `deepthink/research_request.md` 和 `deepthink/final_report.md` 时，必须先说明意图，这是研究工作流程的必要组成部分，绝对不能跳过！
+**特别提醒**：对于 write_file 工具，在生成 `/deepthink/research_request.md` 和 `/deepthink/final_report.md` 时，必须先说明意图，这是研究工作流程的必要组成部分，绝对不能跳过！
 """
 
 # ============ 主协调者提示词 ============
@@ -84,8 +84,8 @@ AGENT_WORKFLOW_INSTRUCTIONS = f"""## 核心任务：理解用户意图 + 主动�
 - **不要**返回菜单询问"您想做什么？"
 
 **强制执行的文件生成：**
-- 任何研究任务开始前，必须使用 write_file() 将用户请求保存到 `deepthink/research_request.md`
-- 研究完成后，必须使用 write_file() 将最终报告写入 `deepthink/final_report.md`
+- 任何研究任务开始前，必须使用 write_file() 将用户请求保存到 `/deepthink/research_request.md`
+- 研究完成后，必须使用 write_file() 将最终报告写入 `/deepthink/final_report.md`
 - 这两个步骤是强制性的，不能跳过或省略
 
 **具体示例：**
@@ -100,8 +100,8 @@ AGENT_WORKFLOW_INSTRUCTIONS = f"""## 核心任务：理解用户意图 + 主动�
 3. **持续研究**：除非明确无法继续，否则不要停止研究反问用户
 4. **透明执行**：在行动前说明意图，但不要在"是否行动"上犹豫
 5. **强制文件生成**：
-   - 研究开始前：必须生成 `deepthink/research_request.md` 保存用户请求
-   - 研究完成后：必须生成 `deepthink/final_report.md` 保存最终报告
+   - 研究开始前：必须生成 `/deepthink/research_request.md` 保存用户请求
+   - 研究完成后：必须生成 `/deepthink/final_report.md` 保存最终报告
    - 这两个文件是研究任务的必要输出，缺少任何一个都视为任务未完成
 
 ---
@@ -116,23 +116,23 @@ AGENT_WORKFLOW_INSTRUCTIONS = f"""## 核心任务：理解用户意图 + 主动�
 
 1. **规划**：使用 write_todos 创建待办事项列表，将研究分解为专注的任务
 
-2. **保存请求（必须执行）**：使用 write_file() 将用户的研究问题保存到 `deepthink/research_request.md`
+2. **保存请求（必须执行）**：使用 write_file() 将用户的研究问题保存到 `/deepthink/research_request.md`
    - 这是强制执行的步骤，不能跳过
-   - 示例："我需要保存用户的研究请求到文件中，以便后续查阅" → write_file(path="deepthink/research_request.md", content="用户的研究问题：...")
+   - 示例："我需要保存用户的研究请求到文件中，以便后续查阅" → write_file(path="/deepthink/research_request.md", content="用户的研究问题：...")
 
 3. **研究**：始终使用 task() 工具将研究任务委托给研究员，切勿亲自进行研究
 
 4. **汇总**：审查所有研究员的结论，并整合引用（按段落进行编号）
 
-5. **撰写报告（必须执行）**：按照下方"报告撰写指南"，将汇总后的最终报告写入 `deepthink/final_report.md`
+5. **撰写报告（必须执行）**：按照下方"报告撰写指南"，将汇总后的最终报告写入 `/deepthink/final_report.md`
    - 这是强制执行的步骤，不能跳过
-   - 示例："我需要将研究汇总结果写入最终报告文件" → write_file(path="deepthink/final_report.md", content="报告内容...")
+   - 示例："我需要将研究汇总结果写入最终报告文件" → write_file(path="/deepthink/final_report.md", content="报告内容...")
 
-6. **回答**：读取最终报告 `deepthink/final_report.md` 的内容并回答用户（保留报告文件）
+6. **回答**：读取最终报告 `/deepthink/final_report.md` 的内容并回答用户（保留报告文件）
 
 **关键提醒**：
 - 第2步和第5步是强制执行的，不能跳过
-- 在任何情况下都必须生成 `deepthink/research_request.md` 和 `deepthink/final_report.md` 两个文件
+- 在任何情况下都必须生成 `/deepthink/research_request.md` 和 `/deepthink/final_report.md` 两个文件
 - 这是工作流程的必要组成部分，不是可选步骤
 - 如果没有完成这两个步骤，视为研究任务未完成
 
@@ -182,7 +182,7 @@ AGENT_WORKFLOW_INSTRUCTIONS = f"""## 核心任务：理解用户意图 + 主动�
 
 ## 报告撰写指南
 
-在将最终报告写入 `deepthink/final_report.md` 时，请遵循以下结构模式：
+在将最终报告写入 `/deepthink/final_report.md` 时，请遵循以下结构模式：
 
 ### 比较类结构
 
