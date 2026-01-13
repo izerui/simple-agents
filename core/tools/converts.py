@@ -195,14 +195,14 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
             content = f.read()
 
         # Get conversion messages
-        messages = converter.messages
+        # messages = converter.messages
 
         return {
             "success": True,
             "docx_path": docx_path,
             "output_file": backend.remove_thread_dir_prefix(str(output_file)),
             "content_length": len(content),
-            "messages": messages,
+            # "messages": messages,
         }
 
     except Exception as e:
