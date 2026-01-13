@@ -2,10 +2,10 @@
 获取网页内容
 """
 from typing import Any
+import tempfile
 
 import httpx
 from langchain_core.tools import tool
-from markdownify import markdownify
 
 
 @tool(parse_docstring=True)
@@ -43,16 +43,49 @@ def fetch_markdown(url: str, timeout: int = 30) -> dict[str, Any]:
         )
         response.raise_for_status()
 
-        # Convert HTML content to markdown
-        markdown_content = markdownify(response.text)
+        # 使用临时文件进行 HTML 到 Markdown 的转换
+        # 设置 delete=False 以确保我们可以控制文件删除时机
+        html_fd, html_path = tempfile.mkstemp(suffix='.html')
+        md_fd, md_path = tempfile.mkstemp(suffix='.md')
 
-        return {
-            "success": True,
-            "url": str(response.url),
-            "markdown_content": markdown_content,
-            "status_code": response.status_code,
-            "content_length": len(markdown_content),
-        }
+        try:
+            # 写入 HTML 内容到临时文件
+            with open(html_fd, 'w', encoding='utf-8') as f:
+                f.write(response.text)
+
+            # 使用 pypandoc 进行转换
+            import pypandoc
+            extra_args = ['--wrap=none']
+            pypandoc.convert_file(
+                str(html_path),
+                'markdown',
+                outputfile=str(md_path),
+                extra_args=extra_args
+            )
+
+            # 读取转换后的 Markdown 内容
+            with open(md_fd, 'r', encoding='utf-8') as f:
+                markdown_content = f.read()
+
+            return {
+                "success": True,
+                "url": str(response.url),
+                "markdown_content": markdown_content,
+                "status_code": response.status_code,
+                "content_length": len(markdown_content),
+            }
+        finally:
+            # 确保删除临时文件，不产生遗留文件
+            import os
+            try:
+                os.unlink(html_path)
+            except (OSError, IOError):
+                pass
+            try:
+                os.unlink(md_path)
+            except (OSError, IOError):
+                pass
+
     except Exception as e:
         return {
             "success": False,

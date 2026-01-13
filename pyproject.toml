@@ -25,6 +25,7 @@ dependencies = [
     "mammoth>=1.11.0",
     "html2text>=2025.4.15",
     "fastapi>=0.128.0",
+    "pypandoc-binary>=1.16.2",
 ]
 
 [dependency-groups]
