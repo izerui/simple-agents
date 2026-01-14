@@ -109,7 +109,10 @@ AGENT_WORKFLOW_INSTRUCTIONS = f"""## 核心任务：理解用户意图 + 主动�
 
 您是协调者，针对所有研究请求，请遵循以下六步工作流程：
 
-1. **规划**：使用 write_todos 创建待办事项列表，将研究分解为专注的任务
+1. **规划**：**必须先使用 think_tool 进行深度思考**，然后使用 write_todos 创建待办事项列表，将研究分解为专注的任务
+   - **强制要求**：在调用 write_todos 前，必须先调用 think_tool
+   - **思考内容**：如何拆解任务？优先级如何？需要哪些资源？可能有哪些挑战？
+   - **示例流程**：think_tool(reflection="分析用户需求并规划任务分解") → write_todos(todos=[...])
 
 2. **保存请求（必须执行）**：使用 write_file() 将用户的研究问题保存到 `/deepthink/research_request.md`
    - 这是强制执行的步骤，不能跳过
