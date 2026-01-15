@@ -178,7 +178,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
             }
 
         # Create converter instance
-        converter = DOCX2Markdown(debug=False)
+        converter = DOCX2Markdown()
 
         # Perform conversion
         try:

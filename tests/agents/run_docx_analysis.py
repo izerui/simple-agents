@@ -31,7 +31,7 @@ async def run_test():
         5. 总结：整体评价和核心改进建议"""
     
     # 读取并编码 DOCX 文件
-    docx_path = project_root / "files/1901180052张卓群毕业论文3.docx"
+    docx_path = project_root / "files/3-数列的极限测试.docx"
     try:
         with open(docx_path, 'rb') as f:
             docx_content = base64.b64encode(f.read()).decode('utf-8')
