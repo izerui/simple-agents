@@ -14,13 +14,13 @@ from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
 from langgraph_sdk import Auth
 
-from core.middleware.attachment_extract import AttachmentExtractMiddleware
-from core.tools.converts import convert_pdf_to_markdown, convert_docx_to_markdown
-from core.tools.fetch import fetch_markdown
-from core.tools.think import think_tool
-from core.utils import get_backend_per_thread
+from src.core.middleware.attachment_extract import AttachmentExtractMiddleware
+from src.core.tools.converts import convert_pdf_to_markdown, convert_docx_to_markdown
+from src.core.tools.fetch import fetch_markdown
+from src.core.tools.think import think_tool
+from src.core.utils import get_backend_per_thread
 from deepagents import create_deep_agent, SubAgent
-from prompts import (
+from src.prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
     SUBAGENT_INSTRUCTIONS,
     SUBAGENT_DELEGATION_INSTRUCTIONS,
@@ -71,8 +71,19 @@ def cus_tool_limiter(tool_name: str, run_limit: int) -> ToolCallLimitMiddleware:
 
 upload_files = AttachmentExtractMiddleware(backend_factory=get_backend_per_thread)
 
+# 创建文件处理子智能体
+convert_agent = SubAgent(
+    name="文件转换服务",
+    description="用于将用户的源文件转换成方便读取利用的目标文本格式文件，例如： `markdown`",
+    system_prompt="你是专业的文件转换助手",
+    tools=[convert_pdf_to_markdown, convert_docx_to_markdown],
+    middleware=[
+        tool_limiter
+    ],  # 完整的中间件配置
+)
+
 # 创建研究子智能体
-sub_agent = SubAgent(
+research_agent = SubAgent(
     name="研究员",
     description="用于研究委托任务的研究员，每次仅限一个主题。",
     system_prompt=SUBAGENT_INSTRUCTIONS.format(date=current_date),
@@ -87,10 +98,10 @@ sub_agent = SubAgent(
 agent = create_deep_agent(
     name="协调者",
     model=chat_model,  # 使用模型实例
-    tools=[think_tool, fetch_markdown, convert_pdf_to_markdown, convert_docx_to_markdown],
+    tools=[think_tool, fetch_markdown],
     backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
-    subagents=[sub_agent],
+    subagents=[convert_agent, research_agent],
     middleware=[
         upload_files,
         tool_limiter,

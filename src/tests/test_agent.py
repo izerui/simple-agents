@@ -12,7 +12,7 @@ import pytest_asyncio
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
-from graph import agent
+from src.graph import agent
 
 
 def detailed_output_handler(event):

@@ -1,8 +1,9 @@
+import os
 from pathlib import Path
 from typing import override
 
-from core.converters._pdfplumber_pymupdf import convert_pdf_to_markdown
-from core.converters.base import BaseConverter
+from src.core.converters._pdfplumber_pymupdf import convert_pdf_to_markdown
+from src.core.converters.base import BaseConverter
 from deepagents.backends import BackendProtocol
 
 
@@ -14,7 +15,10 @@ class PDF2Markdown(BaseConverter):
 
     def convert(self, pdf_file: str, output_file: str, work_dir: str) -> str:
         """执行转换"""
-        return convert_pdf_to_markdown(pdf_file, output_file)
+        return convert_pdf_to_markdown(
+            os.path.join(work_dir, pdf_file.lstrip("/").lstrip("./").lstrip("../")),
+            os.path.join(work_dir, output_file.lstrip("/").lstrip("./").lstrip("../"))
+        )
 
 
 # --- 使用示例 ---

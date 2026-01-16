@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import override
 
-from core.converters._pypandoc import convert_docx_to_markdown
-from core.converters.base import BaseConverter
+from src.core.converters._pypandoc import convert_docx_to_markdown
+from src.core.converters.base import BaseConverter
 
 
 class DOCX2Markdown(BaseConverter):

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""独立运行：简单的文件列表查询测试"""
+"""独立运行：工具调用功能测试"""
 import asyncio
 from pathlib import Path
 import sys
@@ -12,17 +12,17 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 load_dotenv(dotenv_path=project_root / '.env')
 
-from graph import agent
-from tests.agents.output_handler import output_handler, print_header, print_user_message, print_footer
+from src.graph import agent
+from src.tests.agents.output_handler import output_handler, print_header, print_user_message, print_footer
 
 
 async def run_test():
-    """运行简单的文件列表查询测试。"""
-    thread_id = "test_simple_list"
-    user_message = "https://github.langchain.ac.cn/langgraph/cloud/reference/sdk/python_sdk_ref/#langgraph_sdk.client.AssistantsClient.get_subgraphs 读取这个网址替我汇总下"
+    """运行工具调用功能测试。"""
+    thread_id = "test_tool_invocation"
+    user_message = "创建一个文件名为 test_tool.md，内容为 'Tool Test'"
     
     # 打印测试标题
-    print_header("简单的文件列表查询")
+    print_header("工具调用功能")
     
     # 显示用户问题
     print_user_message(user_message)
@@ -41,7 +41,7 @@ async def run_test():
         output_handler(event)
     
     # 打印测试完成标识
-    print_footer("简单的文件列表查询")
+    print_footer("工具调用功能")
 
 
 if __name__ == "__main__":

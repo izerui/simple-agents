@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Optional
 import html2text
 
-from core.converters._mammoth import convert_docx_to_html
+from src.core.converters._mammoth import convert_docx_to_html
 
 
 def _convert_html_to_markdown(

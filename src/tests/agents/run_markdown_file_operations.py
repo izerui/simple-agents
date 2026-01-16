@@ -12,8 +12,8 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 load_dotenv(dotenv_path=project_root / '.env')
 
-from graph import agent
-from tests.agents.output_handler import output_handler, print_header, print_user_message, print_footer
+from src.graph import agent
+from src.tests.agents.output_handler import output_handler, print_header, print_user_message, print_footer
 
 
 async def run_test():

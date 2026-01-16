@@ -123,19 +123,7 @@ def convert_docx_to_markdown(
             extra_args=args if args else None,
             cworkdir=cworkdir if cworkdir else None
         )
-
         return markdown_content
-
-    except RuntimeError as e:
-        if "pandoc is not installed" in str(e):
-            raise RuntimeError(
-                "pandoc 未安装。请先安装 pandoc：\n"
-                "  macOS: brew install pandoc\n"
-                "  Ubuntu: sudo apt-get install pandoc\n"
-                "  Windows: 从 https://pandoc.org/installing.html 下载安装"
-            ) from e
-        else:
-            raise RuntimeError(f"DOCX 转 Markdown 失败: {e}") from e
     except Exception as e:
         raise RuntimeError(f"转换过程中发生错误: {e}") from e
 

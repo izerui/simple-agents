@@ -7,12 +7,12 @@ from typing import Any
 from langchain_core.tools import tool
 from langgraph.config import get_config
 
-from core.converters.docx import DOCX2Markdown
-from core.converters.pdf import PDF2Markdown
-from core.utils import get_backend_per_thread
+from src.core.converters.docx import DOCX2Markdown
+from src.core.converters.pdf import PDF2Markdown
+from src.core.utils import get_backend_per_thread
 
 
-@tool(parse_docstring=True)
+@tool(parse_docstring=True, return_direct=True)
 def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
     """将 PDF 文件转换为 Markdown 格式以便研究。
 
