@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import override
 
-from core.converters._html2text import convert_docx_to_markdown
+from core.converters._pypandoc import convert_docx_to_markdown
 from core.converters.base import BaseConverter
 
 
@@ -22,7 +22,7 @@ class DOCX2Markdown(BaseConverter):
         """
         return suffix.lower() == ".docx"
 
-    def convert(self, docx_file: str, output_file: str = None) -> str:
+    def convert(self, docx_file: str, output_file: str, work_dir: str) -> str | None:
         """执行 DOCX 到 Markdown 的转换
 
         Args:
@@ -32,7 +32,15 @@ class DOCX2Markdown(BaseConverter):
         Returns:
             转换后的 Markdown 内容
         """
-        return convert_docx_to_markdown(docx_file, output_file)
+
+        # 纯净转换（不添加样式，只保留结构和公式）
+        return convert_docx_to_markdown(
+            docx_file=docx_file.lstrip("/").lstrip("./").lstrip("../"),
+            output_file=output_file.lstrip("/").lstrip("./").lstrip("../"),
+            cworkdir=work_dir,
+            extract_media=True,
+            math_format="tex_math_dollars"
+        )
 
 
 # --- 使用示例 ---
@@ -41,13 +49,13 @@ if __name__ == "__main__":
     import sys
 
     # 替换为你的 DOCX 文件路径
-    docx_file = "../../files/3-数列的极限测试.docx"
+    docx_file = "3-数列的极限测试.docx"
     output_file = str(Path(docx_file).with_suffix(".md"))
-
+    work_dir = "/Users/liuyuhua/PycharmProjects/simple-agents/files"
     try:
         # 方式1：创建转换器并转换（默认输出到同名 .md 文件）
         converter = DOCX2Markdown()
-        result = converter.convert(docx_file, output_file)
+        result = converter.convert(docx_file, output_file, work_dir)
         print(f"\n转换结果长度: {len(result)} 字符")
 
     except FileNotFoundError as e:

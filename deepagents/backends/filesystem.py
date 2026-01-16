@@ -1,12 +1,10 @@
 """`FilesystemBackend`: Read and write files directly from the filesystem."""
-import asyncio
 import json
 import os
 import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Union
 
 import wcmatch.glob as wcglob
 
@@ -62,36 +60,6 @@ class FilesystemBackend(BackendProtocol):
         self.virtual_mode = virtual_mode
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
 
-    def _unresolve_path(self, abs_path: Union[str, Path]) -> str:
-        """移除 cwd 前缀，转换为相对于 cwd 的虚拟路径。
-        无论实际路径在哪里，返回值始终是相对于 cwd 的路径，以 / 开头。
-
-        Args:
-            abs_path: 实际路径字符串或 Path 对象
-
-        Returns:
-            虚拟路径字符串（相对于 cwd，以 / 开头）
-        """
-        if not self.virtual_mode:
-            return str(abs_path) if isinstance(abs_path, Path) else abs_path
-        # 将 cwd 转换为字符串并确保规范化（解决符号链接等）
-        cwd_str = str(self.cwd.resolve())
-        # 确保 cwd 以 / 结尾，便于字符串匹配
-        if not cwd_str.endswith("/"):
-            cwd_str += "/"
-        # 规范化输入路径（支持 str 和 Path）
-        abs_path_normalized = str(Path(abs_path).resolve())
-        # 移除 cwd 前缀
-        if abs_path_normalized.startswith(cwd_str):
-            virtual_path = abs_path_normalized[len(cwd_str):]
-        else:
-            # 如果不在 cwd 下，使用原始路径
-            virtual_path = abs_path_normalized
-        # 规范化：确保以 / 开头（除了 . 和 ../）
-        if virtual_path and virtual_path != "." and not virtual_path.startswith("../"):
-            if not virtual_path.startswith("/"):
-                virtual_path = "/" + virtual_path
-        return virtual_path
 
     def _resolve_path(self, key: str) -> Path:
         """Resolve a file path with security checks.
