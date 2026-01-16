@@ -28,7 +28,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
         包含以下内容的字典：
         - success: 转换是否成功
         - pdf_path: PDF 文件的路径
-        - abs_output_file: 生成的 Markdown 文件路径
+        - output_file: 生成的 Markdown 文件路径
         - images_extracted: 提取的图片数量
         - error: 转换失败时的错误信息
 
@@ -46,7 +46,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
                 "pdf_path": pdf_path,
             }
         # Resolve absolute path
-        abs_pdf_file = Path(backend.prepend_thread_dir(pdf_path))
+        abs_pdf_file = backend._resolve_path(pdf_path)
 
         # Check if PDF exists
         if not abs_pdf_file.exists():
@@ -73,7 +73,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
                 "success": True,
                 "message": "File already ready",
                 "pdf_path": pdf_path,
-                "abs_output_file": backend.remove_thread_dir_prefix(str(abs_output_file)),
+                "output_file": backend._unresolve_path(str(abs_output_file)),
             }
 
         # Create converter instance
@@ -99,7 +99,7 @@ def convert_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
         return {
             "success": True,
             "pdf_path": pdf_path,
-            "abs_output_file": backend.remove_thread_dir_prefix(str(abs_output_file)),
+            "output_file": backend._unresolve_path(str(abs_output_file)),
             "content_length": len(content),
             "images_extracted": images_count,
         }
@@ -147,7 +147,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
                 "docx_path": docx_path,
             }
         # Resolve absolute path
-        abs_docx_file = Path(backend.prepend_thread_dir(docx_path))
+        abs_docx_file = backend._resolve_path(docx_path)
 
         # Check if DOCX exists
         if not abs_docx_file.exists():
@@ -174,7 +174,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
                 "success": True,
                 "message": "File already ready",
                 "docx_path": docx_path,
-                "output_file": backend.remove_thread_dir_prefix(str(output_file)),
+                "output_file": backend._unresolve_path(str(output_file)),
             }
 
         # Create converter instance
@@ -200,7 +200,7 @@ def convert_docx_to_markdown(docx_path: str) -> dict[str, Any]:
         return {
             "success": True,
             "docx_path": docx_path,
-            "output_file": backend.remove_thread_dir_prefix(str(output_file)),
+            "output_file": backend._unresolve_path(str(output_file)),
             "content_length": len(content),
             # "messages": messages,
         }

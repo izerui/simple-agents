@@ -1,18 +1,12 @@
-"""FilesystemBackend: Read and write files directly from the filesystem.
-
-Security and search upgrades:
-- Secure path resolution with root containment (sandboxed to thread_dir)
-- Prevent symlink-following on file I/O using O_NOFOLLOW when available
-- Ripgrep-powered grep with JSON parsing, plus Python fallback with regex
-  and optional glob include filtering, while preserving virtual path behavior
-"""
-
+"""`FilesystemBackend`: Read and write files directly from the filesystem."""
+import asyncio
 import json
 import os
 import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import Union
 
 import wcmatch.glob as wcglob
 
@@ -23,7 +17,7 @@ from deepagents.backends.protocol import (
     FileInfo,
     FileUploadResponse,
     GrepMatch,
-    WriteResult, ExecuteResponse,
+    WriteResult,
 )
 from deepagents.backends.utils import (
     check_empty_content,
@@ -32,135 +26,134 @@ from deepagents.backends.utils import (
 )
 
 
-class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBackendProtocol):  支持执行命令
+class FilesystemBackend(BackendProtocol):
     """Backend that reads and writes files directly from the filesystem.
 
-    All file operations are relative to thread_dir, providing sandbox isolation.
-    Incoming and returned paths are virtual paths (relative to thread_dir, starting with /).
-    Content is read/written as plain text, and metadata (timestamps) are derived from filesystem stats.
+    Files are accessed using their actual filesystem paths. Relative paths are
+    resolved relative to the current working directory. Content is read/written
+    as plain text, and metadata (timestamps) are derived from filesystem stats.
     """
 
     def __init__(
         self,
-        thread_dir: str | Path | None = None,
+        root_dir: str | Path | None = None,
+        virtual_mode: bool = False,
         max_file_size_mb: int = 10,
-        thread_id: str | None = None,
     ) -> None:
         """Initialize filesystem backend.
 
         Args:
-            thread_dir: Root directory for file operations. If provided,
-                       all file paths will be resolved relative to this directory.
-                       If not provided, uses the current working directory.
-            max_file_size_mb: Maximum file size in MB
-            thread_id: Thread ID (for session identification)
+            root_dir: Optional root directory for file operations.
+
+                If provided, all file paths will be resolved relative to this directory.
+                If not provided, uses the current working directory.
+            virtual_mode: Enables sandboxed operation where all paths are treated as
+                virtual paths rooted at `root_dir`.
+
+                Path traversal (using `..` or `~`) is disallowed and all resolved paths
+                must remain within the root directory. When `False` (default), absolute
+                paths are allowed as-is and relative paths resolve under cwd.
+            max_file_size_mb: Maximum file size in megabytes for operations like
+                grep's Python fallback search.
+
+                Files exceeding this limit are skipped during search. Defaults to 10 MB.
         """
-        self.thread_id = thread_id
-        # Simplified path handling: use strings instead of Path objects
-        # Normalize thread_dir, remove ./ prefix
-        thread_dir_str = str(thread_dir) if thread_dir else "."
-        if thread_dir_str.startswith("./"):
-            thread_dir_str = thread_dir_str[2:]
-        elif thread_dir_str == ".":
-            thread_dir_str = ""
-        self.thread_dir = thread_dir_str
+        self.cwd = Path(root_dir) if root_dir else Path('.')
+        self.virtual_mode = virtual_mode
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
 
-    def get_thread_id(self) -> str | None:
-        """Get the thread ID for this backend."""
-        return self.thread_id
-
-    def prepend_thread_dir(self, key: str) -> str:
-        """Concatenate thread_dir prefix and perform security checks.
-
-        Joins the input virtual path with thread_dir to form an actual path.
-        Supports various path formats:
-        - Absolute virtual paths starting with / (relative to thread_dir)
-        - Relative paths starting with ./
-        - Direct filenames (relative)
-
-        Does not support path traversal (like ../), raises ValueError.
+    def _unresolve_path(self, abs_path: Union[str, Path]) -> str:
+        """移除 cwd 前缀，转换为相对于 cwd 的虚拟路径。
+        无论实际路径在哪里，返回值始终是相对于 cwd 的路径，以 / 开头。
 
         Args:
-            key: File path
+            abs_path: 实际路径字符串或 Path 对象
 
         Returns:
-            Actual path string under thread_dir
-
-        Raises:
-            ValueError: If path traversal is attempted (using ../)
+            虚拟路径字符串（相对于 cwd，以 / 开头）
         """
-        # Normalize input path, only remove / as virtual path marker (does not affect hidden dirs)
-        if key.startswith("/"):
-            key = key[1:]
-
-        # Remove ./ as relative path marker (but keep hidden dir .)
-        if key.startswith("./"):
-            key = key[2:]
-
-        # Check for path traversal
-        if "../" in key or key.startswith(".."):
-            raise ValueError("Path traversal not allowed")
-
-        # Join path
-        if not self.thread_dir:
-            return key
-        elif self.thread_dir.endswith("/") or key.startswith("/"):
-            return self.thread_dir + key
+        if not self.virtual_mode:
+            return str(abs_path) if isinstance(abs_path, Path) else abs_path
+        # 将 cwd 转换为字符串并确保规范化（解决符号链接等）
+        cwd_str = str(self.cwd.resolve())
+        # 确保 cwd 以 / 结尾，便于字符串匹配
+        if not cwd_str.endswith("/"):
+            cwd_str += "/"
+        # 规范化输入路径（支持 str 和 Path）
+        abs_path_normalized = str(Path(abs_path).resolve())
+        # 移除 cwd 前缀
+        if abs_path_normalized.startswith(cwd_str):
+            virtual_path = abs_path_normalized[len(cwd_str):]
         else:
-            return self.thread_dir + "/" + key
-
-    def remove_thread_dir_prefix(self, abs_path: str) -> str:
-        """Remove thread_dir prefix.
-
-        Converts an actual path to a virtual path relative to thread_dir.
-        Regardless of where the actual path is, the return is always relative to thread_dir.
-
-        Args:
-            abs_path: Actual path string
-
-        Returns:
-            Virtual path string (relative to thread_dir, starting with /)
-        """
-        # Ensure thread_dir ends with / for easy joining
-        if not self.thread_dir:
-            return "/" + abs_path if not abs_path.startswith("/") else abs_path
-        thread_dir = self.thread_dir if self.thread_dir.endswith("/") else self.thread_dir + "/"
-
-        # Remove thread_dir prefix
-        if abs_path.startswith(thread_dir):
-            virtual_path = abs_path[len(thread_dir):]
-        else:
-            # If not under thread_dir, use original path as-is (or return /)
-            virtual_path = abs_path
-
-        # Normalize: ensure starting with / (except . and ../)
+            # 如果不在 cwd 下，使用原始路径
+            virtual_path = abs_path_normalized
+        # 规范化：确保以 / 开头（除了 . 和 ../）
         if virtual_path and virtual_path != "." and not virtual_path.startswith("../"):
             if not virtual_path.startswith("/"):
                 virtual_path = "/" + virtual_path
-
         return virtual_path
+
+    def _resolve_path(self, key: str) -> Path:
+        """Resolve a file path with security checks.
+
+        When `virtual_mode=True`, treat incoming paths as virtual absolute paths under
+        `self.cwd`, disallow traversal (`..`, `~`) and ensure resolved path stays within
+        root.
+
+        When `virtual_mode=False`, preserve legacy behavior: absolute paths are allowed
+        as-is; relative paths resolve under cwd.
+
+        Args:
+            key: File path (absolute, relative, or virtual when `virtual_mode=True`).
+
+        Returns:
+            Resolved absolute `Path` object.
+
+        Raises:
+            ValueError: If path traversal is attempted in `virtual_mode` or if the
+                resolved path escapes the root directory.
+        """
+        if self.virtual_mode:
+            vpath = key if key.startswith("/") else "/" + key
+            if ".." in vpath or vpath.startswith("~"):
+                raise ValueError("Path traversal not allowed")
+            full = (self.cwd / vpath.lstrip("/")).resolve()
+            try:
+                full.relative_to(self.cwd)
+            except ValueError:
+                raise ValueError(f"Path:{full} outside root directory: {self.cwd}") from None
+            return full
+
+        path = Path(key)
+        if path.is_absolute():
+            return path
+        return (self.cwd / path).resolve()
 
     def ls_info(self, path: str) -> list[FileInfo]:
         """List files and directories in the specified directory (non-recursive).
 
         Args:
-            path: Virtual path of the directory to list files from.
+            path: Absolute directory path to list files from.
 
         Returns:
-            List of FileInfo-like dicts for files and directories directly in the directory.
-            Directories have a trailing / in their path and is_dir=True.
+            List of `FileInfo`-like dicts for files and directories directly in the
+                directory. Directories have a trailing `/` in their path and
+                `is_dir=True`.
         """
-        abs_dir_path = Path(self.prepend_thread_dir(path))
-
-        if not abs_dir_path.exists() or not abs_dir_path.is_dir():
+        dir_path = self._resolve_path(path)
+        if not dir_path.exists() or not dir_path.is_dir():
             return []
 
         results: list[FileInfo] = []
 
+        # Convert cwd to string for comparison
+        cwd_str = str(self.cwd)
+        if not cwd_str.endswith("/"):
+            cwd_str += "/"
+
         # List only direct children (non-recursive)
         try:
-            for child_path in abs_dir_path.iterdir():
+            for child_path in dir_path.iterdir():
                 try:
                     is_file = child_path.is_file()
                     is_dir = child_path.is_dir()
@@ -169,35 +162,73 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
 
                 abs_path = str(child_path)
 
-                # Use remove_thread_dir_prefix method to convert to virtual path
-                virt_path = self.remove_thread_dir_prefix(abs_path)
+                if not self.virtual_mode:
+                    # Non-virtual mode: use absolute paths
+                    if is_file:
+                        try:
+                            st = child_path.stat()
+                            results.append(
+                                {
+                                    "path": abs_path,
+                                    "is_dir": False,
+                                    "size": int(st.st_size),
+                                    "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                                }
+                            )
+                        except OSError:
+                            results.append({"path": abs_path, "is_dir": False})
+                    elif is_dir:
+                        try:
+                            st = child_path.stat()
+                            results.append(
+                                {
+                                    "path": abs_path + "/",
+                                    "is_dir": True,
+                                    "size": 0,
+                                    "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                                }
+                            )
+                        except OSError:
+                            results.append({"path": abs_path + "/", "is_dir": True})
+                else:
+                    # Virtual mode: strip cwd prefix
+                    if abs_path.startswith(cwd_str):
+                        relative_path = abs_path[len(cwd_str) :]
+                    elif abs_path.startswith(str(self.cwd)):
+                        # Handle case where cwd doesn't end with /
+                        relative_path = abs_path[len(str(self.cwd)) :].lstrip("/")
+                    else:
+                        # Path is outside cwd, return as-is or skip
+                        relative_path = abs_path
 
-                if is_file:
-                    try:
-                        st = child_path.stat()
-                        results.append(
-                            {
-                                "path": virt_path,
-                                "is_dir": False,
-                                "size": int(st.st_size),
-                                "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
-                            }
-                        )
-                    except OSError:
-                        results.append({"path": virt_path, "is_dir": False})
-                elif is_dir:
-                    try:
-                        st = child_path.stat()
-                        results.append(
-                            {
-                                "path": virt_path + "/",
-                                "is_dir": True,
-                                "size": 0,
-                                "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
-                            }
-                        )
-                    except OSError:
-                        results.append({"path": virt_path + "/", "is_dir": True})
+                    virt_path = "/" + relative_path
+
+                    if is_file:
+                        try:
+                            st = child_path.stat()
+                            results.append(
+                                {
+                                    "path": virt_path,
+                                    "is_dir": False,
+                                    "size": int(st.st_size),
+                                    "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                                }
+                            )
+                        except OSError:
+                            results.append({"path": virt_path, "is_dir": False})
+                    elif is_dir:
+                        try:
+                            st = child_path.stat()
+                            results.append(
+                                {
+                                    "path": virt_path + "/",
+                                    "is_dir": True,
+                                    "size": 0,
+                                    "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                                }
+                            )
+                        except OSError:
+                            results.append({"path": virt_path + "/", "is_dir": True})
         except (OSError, PermissionError):
             pass
 
@@ -214,14 +245,14 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
         """Read file content with line numbers.
 
         Args:
-            file_path: Virtual file path.
+            file_path: Absolute or relative file path.
             offset: Line offset to start reading from (0-indexed).
             limit: Maximum number of lines to read.
 
         Returns:
             Formatted file content with line numbers, or error message.
         """
-        resolved_path = Path(self.prepend_thread_dir(file_path))
+        resolved_path = self._resolve_path(file_path)
 
         if not resolved_path.exists() or not resolved_path.is_file():
             return f"Error: File '{file_path}' not found"
@@ -254,22 +285,23 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
         content: str,
     ) -> WriteResult:
         """Create a new file with content.
-        Returns WriteResult. External storage sets files_update=None.
+
+        Args:
+            file_path: Path where the new file will be created.
+            content: Text content to write to the file.
+
+        Returns:
+            `WriteResult` with path on success, or error message if the file
+                already exists or write fails. External storage sets `files_update=None`.
         """
-        resolved_path = Path(self.prepend_thread_dir(file_path))
+        resolved_path = self._resolve_path(file_path)
 
         if resolved_path.exists():
-            # In async version, write overwrites. Original filesystem.py prevented overwrite.
-            # Assuming we follow AsyncFilesystemBackend behavior: overwrite is allowed.
-            # However, strictly following fs_async logic: just try to create/overwrite.
-            pass
+            return WriteResult(error=f"Cannot write to {file_path} because it already exists. Read and then make an edit, or write to a new path.")
 
         try:
             # Create parent directories if needed
-            try:
-                resolved_path.parent.mkdir(parents=True, exist_ok=True)
-            except OSError:
-                pass  # Parent might already exist
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Prefer O_NOFOLLOW to avoid writing through symlinks
             flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
@@ -279,9 +311,9 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(content)
 
-            return WriteResult(path=self.remove_thread_dir_prefix(file_path), files_update=None)
+            return WriteResult(path=file_path, files_update=None)
         except (OSError, UnicodeEncodeError) as e:
-            return WriteResult(error=f"Error writing file '{self.remove_thread_dir_prefix(file_path)}': {e}")
+            return WriteResult(error=f"Error writing file '{file_path}': {e}")
 
     def edit(
         self,
@@ -291,9 +323,20 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
         replace_all: bool = False,
     ) -> EditResult:
         """Edit a file by replacing string occurrences.
-        Returns EditResult. External storage sets files_update=None.
+
+        Args:
+            file_path: Path to the file to edit.
+            old_string: The text to search for and replace.
+            new_string: The replacement text.
+            replace_all: If `True`, replace all occurrences. If `False` (default),
+                replace only if exactly one occurrence exists.
+
+        Returns:
+            `EditResult` with path and occurrence count on success, or error
+                message if file not found or replacement fails. External storage sets
+                `files_update=None`.
         """
-        resolved_path = Path(self.prepend_thread_dir(file_path))
+        resolved_path = self._resolve_path(file_path)
 
         if not resolved_path.exists() or not resolved_path.is_file():
             return EditResult(error=f"Error: File '{file_path}' not found")
@@ -319,9 +362,9 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(new_content)
 
-            return EditResult(path=self.remove_thread_dir_prefix(file_path), files_update=None, occurrences=int(occurrences))
+            return EditResult(path=file_path, files_update=None, occurrences=int(occurrences))
         except (OSError, UnicodeDecodeError, UnicodeEncodeError) as e:
-            return EditResult(error=f"Error editing file '{self.remove_thread_dir_prefix(file_path)}': {e}")
+            return EditResult(error=f"Error editing file '{file_path}': {e}")
 
     def grep_raw(
         self,
@@ -329,6 +372,19 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
         path: str | None = None,
         glob: str | None = None,
     ) -> list[GrepMatch] | str:
+        """Search for a regex pattern in files.
+
+        Uses ripgrep if available, falling back to Python regex search.
+
+        Args:
+            pattern: Regular expression pattern to search for.
+            path: Directory or file path to search in. Defaults to current directory.
+            glob: Optional glob pattern to filter which files to search.
+
+        Returns:
+            List of GrepMatch dicts containing path, line number, and matched text.
+            Returns an error string if the regex pattern is invalid.
+        """
         # Validate regex
         try:
             re.compile(pattern)
@@ -337,7 +393,7 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
 
         # Resolve base path
         try:
-            base_full = Path(self.prepend_thread_dir(path or "."))
+            base_full = self._resolve_path(path or ".")
         except ValueError:
             return []
 
@@ -356,6 +412,17 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
         return matches
 
     def _ripgrep_search(self, pattern: str, base_full: Path, include_glob: str | None) -> dict[str, list[tuple[int, str]]] | None:
+        """Search using ripgrep with JSON output parsing.
+
+        Args:
+            pattern: Regex pattern to search for.
+            base_full: Resolved base path to search in.
+            include_glob: Optional glob pattern to filter files.
+
+        Returns:
+            Dict mapping file paths to list of `(line_number, line_text)` tuples.
+                Returns `None` if ripgrep is unavailable or times out.
+        """
         cmd = ["rg", "--json"]
         if include_glob:
             cmd.extend(["--glob", include_glob])
@@ -369,7 +436,7 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
                 timeout=30,
                 check=False,
             )
-        except (TimeoutError, FileNotFoundError):
+        except (subprocess.TimeoutExpired, FileNotFoundError):
             return None
 
         results: dict[str, list[tuple[int, str]]] = {}
@@ -385,11 +452,13 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
             if not ftext:
                 continue
             p = Path(ftext)
-            try:
-                # Convert actual path to virtual path
-                virt = self.remove_thread_dir_prefix(str(p))
-            except Exception:
-                continue
+            if self.virtual_mode:
+                try:
+                    virt = "/" + str(p.resolve().relative_to(self.cwd))
+                except Exception:
+                    continue
+            else:
+                virt = str(p)
             ln = pdata.get("line_number")
             lt = pdata.get("lines", {}).get("text", "").rstrip("\n")
             if ln is None:
@@ -399,6 +468,18 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
         return results
 
     def _python_search(self, pattern: str, base_full: Path, include_glob: str | None) -> dict[str, list[tuple[int, str]]]:
+        """Fallback search using Python regex when ripgrep is unavailable.
+
+        Recursively searches files, respecting `max_file_size_bytes` limit.
+
+        Args:
+            pattern: Regex pattern to search for.
+            base_full: Resolved base path to search in.
+            include_glob: Optional glob pattern to filter files by name.
+
+        Returns:
+            Dict mapping file paths to list of `(line_number, line_text)` tuples.
+        """
         try:
             regex = re.compile(pattern)
         except re.error:
@@ -408,7 +489,10 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
         root = base_full if base_full.is_dir() else base_full.parent
 
         for fp in root.rglob("*"):
-            if not fp.is_file():
+            try:
+                if not fp.is_file():
+                    continue
+            except (PermissionError, OSError):
                 continue
             if include_glob and not wcglob.globmatch(fp.name, include_glob, flags=wcglob.BRACE):
                 continue
@@ -423,21 +507,32 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
                 continue
             for line_num, line in enumerate(content.splitlines(), 1):
                 if regex.search(line):
-                    try:
-                        # Convert actual path to virtual path
-                        virt_path = self.remove_thread_dir_prefix(str(fp))
-                    except Exception:
-                        continue
+                    if self.virtual_mode:
+                        try:
+                            virt_path = "/" + str(fp.resolve().relative_to(self.cwd))
+                        except Exception:
+                            continue
+                    else:
+                        virt_path = str(fp)
                     results.setdefault(virt_path, []).append((line_num, line))
 
         return results
 
     def glob_info(self, pattern: str, path: str = "/") -> list[FileInfo]:
+        """Find files matching a glob pattern.
+
+        Args:
+            pattern: Glob pattern to match files against (e.g., `'*.py'`, `'**/*.txt'`).
+            path: Base directory to search from. Defaults to root (`/`).
+
+        Returns:
+            List of `FileInfo` dicts for matching files, sorted by path. Each dict
+                contains `path`, `is_dir`, `size`, and `modified_at` fields.
+        """
         if pattern.startswith("/"):
             pattern = pattern.lstrip("/")
 
-        search_path = Path(self.thread_dir) if path == "/" else Path(self.prepend_thread_dir(path))
-
+        search_path = self.cwd if path == "/" else self._resolve_path(path)
         if not search_path.exists() or not search_path.is_dir():
             return []
 
@@ -447,25 +542,47 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
             for matched_path in search_path.rglob(pattern):
                 try:
                     is_file = matched_path.is_file()
-                except OSError:
+                except (PermissionError, OSError):
                     continue
                 if not is_file:
                     continue
-
                 abs_path = str(matched_path)
-                virt = self.remove_thread_dir_prefix(abs_path)
-                try:
-                    st = matched_path.stat()
-                    results.append(
-                        {
-                            "path": virt,
-                            "is_dir": False,
-                            "size": int(st.st_size),
-                            "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
-                        }
-                    )
-                except OSError:
-                    results.append({"path": virt, "is_dir": False})
+                if not self.virtual_mode:
+                    try:
+                        st = matched_path.stat()
+                        results.append(
+                            {
+                                "path": abs_path,
+                                "is_dir": False,
+                                "size": int(st.st_size),
+                                "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                            }
+                        )
+                    except OSError:
+                        results.append({"path": abs_path, "is_dir": False})
+                else:
+                    cwd_str = str(self.cwd)
+                    if not cwd_str.endswith("/"):
+                        cwd_str += "/"
+                    if abs_path.startswith(cwd_str):
+                        relative_path = abs_path[len(cwd_str) :]
+                    elif abs_path.startswith(str(self.cwd)):
+                        relative_path = abs_path[len(str(self.cwd)) :].lstrip("/")
+                    else:
+                        relative_path = abs_path
+                    virt = "/" + relative_path
+                    try:
+                        st = matched_path.stat()
+                        results.append(
+                            {
+                                "path": virt,
+                                "is_dir": False,
+                                "size": int(st.st_size),
+                                "modified_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                            }
+                        )
+                    except OSError:
+                        results.append({"path": virt, "is_dir": False})
         except (OSError, ValueError):
             pass
 
@@ -485,13 +602,10 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
         responses: list[FileUploadResponse] = []
         for path, content in files:
             try:
-                resolved_path = Path(self.prepend_thread_dir(path))
+                resolved_path = self._resolve_path(path)
 
                 # Create parent directories if needed
-                try:
-                    resolved_path.parent.mkdir(parents=True, exist_ok=True)
-                except OSError:
-                    pass  # Parent might already exist
+                resolved_path.parent.mkdir(parents=True, exist_ok=True)
 
                 flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
                 if hasattr(os, "O_NOFOLLOW"):
@@ -506,7 +620,7 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
             except PermissionError:
                 responses.append(FileUploadResponse(path=path, error="permission_denied"))
             except (ValueError, OSError) as e:
-                # ValueError from prepend_thread_dir for path traversal, OSError for other file errors
+                # ValueError from _resolve_path for path traversal, OSError for other file errors
                 if isinstance(e, ValueError) or "invalid" in str(e).lower():
                     responses.append(FileUploadResponse(path=path, error="invalid_path"))
                 else:
@@ -527,7 +641,7 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
         responses: list[FileDownloadResponse] = []
         for path in paths:
             try:
-                resolved_path = Path(self.prepend_thread_dir(path))
+                resolved_path = self._resolve_path(path)
                 # Use flags to optionally prevent symlink following if
                 # supported by the OS
                 fd = os.open(resolved_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -544,59 +658,3 @@ class FilesystemBackend(BackendProtocol): # class FilesystemBackend(SandboxBacke
                 responses.append(FileDownloadResponse(path=path, content=None, error="invalid_path"))
             # Let other errors propagate
         return responses
-
-    def execute(
-            self,
-            command: str,
-    ) -> ExecuteResponse:
-        """Execute a shell command in the current process (Docker container).
-
-        Args:
-            command: Full shell command string to execute.
-
-        Returns:
-            ExecuteResponse with combined output, exit code, and truncation flag.
-        """
-        import subprocess
-
-        # Execute the command
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minutes timeout
-            )
-
-            # Combine stdout and stderr
-            output = result.stdout
-            if result.stderr:
-                output += result.stderr
-
-            # Truncate if output is too large
-            max_output_length = 100000  # 100KB
-            truncated = False
-            if len(output) > max_output_length:
-                output = output[:max_output_length]
-                truncated = True
-                output += "\n\n... [output truncated, too long] ..."
-
-            return ExecuteResponse(
-                output=output,
-                exit_code=result.returncode,
-                truncated=truncated
-            )
-
-        except subprocess.TimeoutExpired:
-            return ExecuteResponse(
-                output="Error: Command execution timed out (5 minutes limit)",
-                exit_code=-1,
-                truncated=False
-            )
-        except Exception as e:
-            return ExecuteResponse(
-                output=f"Error executing command: {str(e)}",
-                exit_code=-1,
-                truncated=False
-            )
