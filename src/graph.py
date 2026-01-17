@@ -9,19 +9,22 @@ import logging
 import os
 from datetime import datetime
 
+from dotenv import load_dotenv
+
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
 from langgraph_sdk import Auth
 
+from deepagents import create_deep_agent, SubAgent
 from src.core.middleware.attachment_extract import AttachmentExtractMiddleware
-from src.core.tools.converts import convert_pdf_to_markdown, convert_docx_to_markdown
+from src.core.tools.converts import convert_to_markdown
 from src.core.tools.fetch import fetch_markdown
 from src.core.tools.think import think_tool
 from src.core.utils import get_backend_per_thread
-from deepagents import create_deep_agent, SubAgent
 from src.prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
+    CONVERT_AGENT_INSTRUCTIONS,
     SUBAGENT_INSTRUCTIONS,
     SUBAGENT_DELEGATION_INSTRUCTIONS,
 )
@@ -74,9 +77,9 @@ upload_files = AttachmentExtractMiddleware(backend_factory=get_backend_per_threa
 # 创建文件处理子智能体
 convert_agent = SubAgent(
     name="文件转换服务",
-    description="用于将用户的源文件转换成方便读取利用的目标文本格式文件，例如： `markdown`",
-    system_prompt="你是专业的文件转换助手",
-    tools=[convert_pdf_to_markdown, convert_docx_to_markdown],
+    description="用于将用户的源文件 PDF, DOCX, XLSX, PPTX, AsciiDoc 文件转换为 Markdown 格式以便研究",
+    system_prompt=CONVERT_AGENT_INSTRUCTIONS,
+    tools=[convert_to_markdown],
     middleware=[
         tool_limiter
     ],  # 完整的中间件配置
@@ -119,13 +122,14 @@ agent.with_config(
     )
 )
 
-
 auth = Auth()
+
 
 def is_valid_key(api_key: bytes) -> bool:
     # Implement your own key validation logic here
     # For example, you can check if the key exists in a database or a file
     return api_key == os.getenv('LANGGRAPH_API_KEY')
+
 
 @auth.authenticate
 async def authenticate(headers: dict) -> Auth.types.MinimalUserDict:
@@ -141,9 +145,9 @@ async def authenticate(headers: dict) -> Auth.types.MinimalUserDict:
     # Return user info - only identity and is_authenticated are required
     # Add any additional fields you need for authorization
     return {
-        "identity": "operator",        # Required: unique user identifier
-        "is_authenticated": True,      # Optional: assumed True by default
-        "permissions": ["read", "write"], # Optional: for permission-based auth
+        "identity": "operator",  # Required: unique user identifier
+        "is_authenticated": True,  # Optional: assumed True by default
+        "permissions": ["read", "write"],  # Optional: for permission-based auth
         # You can add more custom fields if you want to implement other auth patterns
         "role": "admin",
         "org_id": "feike"

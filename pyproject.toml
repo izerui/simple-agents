@@ -27,6 +27,7 @@ dependencies = [
     "fastapi>=0.128.0",
     "pypandoc-binary>=1.16.2",
     "lxml>=6.0.2",
+    "docling>=2.68.0",
 ]
 
 [dependency-groups]
