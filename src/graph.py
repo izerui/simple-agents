@@ -9,25 +9,22 @@ import logging
 import os
 from datetime import datetime
 
-from dotenv import load_dotenv
-
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
 from langgraph_sdk import Auth
-
-from deepagents import create_deep_agent, SubAgent
-from src.core.middleware.attachment_extract import AttachmentExtractMiddleware
-from src.core.tools.converts import convert_to_markdown
-from src.core.tools.fetch import fetch_markdown
-from src.core.tools.think import think_tool
-from src.core.utils import get_backend_per_thread
-from src.prompts import (
+from src.agents.prompts import (
     AGENT_WORKFLOW_INSTRUCTIONS,
-    CONVERT_AGENT_INSTRUCTIONS,
-    SUBAGENT_INSTRUCTIONS,
     SUBAGENT_DELEGATION_INSTRUCTIONS,
 )
+
+from deepagents import create_deep_agent
+from src.agents.convert import convert_agent
+from src.agents.research import research_agent
+from src.middleware.attachment_extract import AttachmentExtractMiddleware
+from src.tools.fetch import fetch_markdown
+from src.tools.think import think_tool
+from src.utils.util import get_backend_per_thread
 
 # Limits
 max_concurrent_research_units = 3
@@ -56,12 +53,6 @@ chat_model = init_chat_model(
     api_key=os.getenv('MODEL_API_KEY'),
     temperature=0.0)
 
-# thread_id 内工具限制中间件
-tool_limiter = ToolCallLimitMiddleware(
-    run_limit=50,
-    exit_behavior="continue"  # 达到 30 次后，强制终止并返回当前结果
-)
-
 
 # 创建自定义工具限制中间件
 def cus_tool_limiter(tool_name: str, run_limit: int) -> ToolCallLimitMiddleware:
@@ -74,26 +65,10 @@ def cus_tool_limiter(tool_name: str, run_limit: int) -> ToolCallLimitMiddleware:
 
 upload_files = AttachmentExtractMiddleware(backend_factory=get_backend_per_thread)
 
-# 创建文件处理子智能体
-convert_agent = SubAgent(
-    name="文件转换服务",
-    description="用于将用户的源文件 PDF, DOCX, XLSX, PPTX, AsciiDoc 文件转换为 Markdown 格式以便研究",
-    system_prompt=CONVERT_AGENT_INSTRUCTIONS,
-    tools=[convert_to_markdown],
-    middleware=[
-        tool_limiter
-    ],  # 完整的中间件配置
-)
-
-# 创建研究子智能体
-research_agent = SubAgent(
-    name="研究员",
-    description="用于研究委托任务的研究员，每次仅限一个主题。",
-    system_prompt=SUBAGENT_INSTRUCTIONS.format(date=current_date),
-    tools=[think_tool, fetch_markdown],
-    middleware=[
-        tool_limiter
-    ],  # 完整的中间件配置
+# thread_id 内工具限制中间件
+tool_limiter = ToolCallLimitMiddleware(
+    run_limit=50,
+    exit_behavior="continue"  # 达到 50 次后，强制终止并返回当前结果
 )
 
 # Create the agent

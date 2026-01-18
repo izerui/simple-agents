@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 from markdownify import markdownify
 from pathlib import Path
 
-from src.core.converters.pdf import PDF2Markdown
+from src.utils.pdf import PDF2Markdown
 
 
 # from tavily import TavilyClient

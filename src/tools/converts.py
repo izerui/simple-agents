@@ -6,9 +6,9 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from src.core.converters._docling import DOCLING_FAST_CONVERTER, DOCLING_IMAGE_CONVERTER, \
+from src.utils._docling import DOCLING_FAST_CONVERTER, DOCLING_IMAGE_CONVERTER, \
     DOCLING_FORMULA_CONVERTER, DOCLING_FULL_CONVERTER
-from src.core.utils import get_backend_per_thread
+from src.utils.util import get_backend_per_thread
 
 
 @tool(parse_docstring=True)
