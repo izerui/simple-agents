@@ -24,6 +24,7 @@ Docling 是一个先进的文档处理库，支持：
 import os
 import sys
 import subprocess
+import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import logging
@@ -40,10 +41,14 @@ def _ensure_docling_installed():
     except ImportError:
         logger.info("docling 未安装，开始动态安装...")
         try:
-            # 使用 uv 或 pip 安装
-            if os.path.exists('/usr/bin/uv') or os.path.exists('/usr/local/bin/uv'):
-                subprocess.check_call([sys.executable, '-m', 'uv', 'pip', 'install', 'docling>=2.68.0'])
+            # 检查 uv 命令是否存在
+            uv_command = shutil.which('uv')
+            
+            if uv_command:
+                # 直接使用 uv 命令安装（不使用 python -m uv）
+                subprocess.check_call([uv_command, 'pip', 'install', 'docling>=2.68.0'])
             else:
+                # 回退到 pip
                 subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0'])
             
             # 清除导入缓存，使新安装的包生效
