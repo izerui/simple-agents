@@ -41,16 +41,8 @@ def _ensure_docling_installed():
     except ImportError:
         logger.info("docling 未安装，开始动态安装...")
         try:
-            # 检查 uv 命令是否存在
-            uv_command = shutil.which('uv')
-            
-            if uv_command:
-                # 使用 uv pip install 直接安装到当前环境（虚拟环境或系统环境）
-                # 避免使用 uv add，因为 add 会管理虚拟环境可能导致重建
-                subprocess.check_call([uv_command, 'pip', 'install', 'docling>=2.68.0', '--index-url', 'https://mirrors.cloud.tencent.com/pypi/simple'])
-            else:
-                # 回退到 pip
-                subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0'])
+            # 直接使用 pip 安装 docling，使用清华镜像源加速
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0', '-i', 'https://pypi.tuna.tsinghua.edu.cn/simple/'])
             
             # 清除导入缓存，使新安装的包生效
             import importlib
@@ -61,8 +53,7 @@ def _ensure_docling_installed():
         except subprocess.CalledProcessError as e:
             logger.error(f"docling 安装失败: {e}")
             raise ImportError(
-                "无法自动安装 docling。请手动安装: pip install docling\n"
-                "或者运行: uv add docling"
+                "无法自动安装 docling。请手动安装: pip install docling"
             )
 
 # 确保依赖已安装
