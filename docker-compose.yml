@@ -44,6 +44,7 @@ services:
             DATABASE_URI: postgres://postgres:postgres@simple-agents-postgres:5432/postgres?sslmode=disable
             LANGSMITH_API_KEY: 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
             HF_HOME: /deps/simple-agents/data/huggingface
+            HF_ENDPOINT: https://hf-mirror.com
         healthcheck:
             test: python /api/healthcheck.py
             interval: 30s
