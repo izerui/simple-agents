@@ -16,7 +16,6 @@ on:
       - '**/*.py'
       - 'pyproject.toml'
       - 'Dockerfile'
-      - 'docker-compose.yml'
       - '.dockerignore'
   pull_request:
     branches: [ main, master ]
@@ -27,10 +26,7 @@ on:
       - '**/*.py'
       - 'pyproject.toml'
       - 'Dockerfile'
-      - 'docker-compose.yml'
-      - 'docker-compose.yaml'
       - '.dockerignore'
-      - 'docker/**'
   workflow_dispatch:
 
 env:
