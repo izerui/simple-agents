@@ -45,8 +45,8 @@ def _ensure_docling_installed():
             uv_command = shutil.which('uv')
             
             if uv_command:
-                # 直接使用 uv 命令安装（不使用 python -m uv）
-                subprocess.check_call([uv_command, 'pip', 'install', 'docling>=2.68.0'])
+                # 直接使用 uv 命令添加依赖（不使用 python -m uv）
+                subprocess.check_call([uv_command, 'add', 'docling>=2.68.0'])
             else:
                 # 回退到 pip
                 subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0'])
@@ -61,7 +61,7 @@ def _ensure_docling_installed():
             logger.error(f"docling 安装失败: {e}")
             raise ImportError(
                 "无法自动安装 docling。请手动安装: pip install docling\n"
-                "或者运行: uv pip install docling"
+                "或者运行: uv add docling"
             )
 
 # 确保依赖已安装
