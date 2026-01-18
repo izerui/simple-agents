@@ -134,8 +134,10 @@ AGENT_WORKFLOW_INSTRUCTIONS = f"""## 核心任务：理解用户意图 + 主动�
    - **等待转换完成**：文件转换服务会返回转换后的 Markdown 文件路径，确认所有转换都成功后再继续
    - **批量转换（重要）**：必须将所有需要转换的文件放在一个 task() 调用中传递给文件转换服务，不要对每个文件单独调用
    - **示例**：
-     - 单个文件：task(agent_name="文件转换服务", task="将 /documents/paper.pdf 转换为 Markdown 格式")
-     - 多个文件（批量传递）：task(agent_name="文件转换服务", task="将以下文件转换为 Markdown 格式：/documents/paper.pdf, /reports/analysis.docx, /data/sheet.xlsx")
+     - 单个文件：task(agent_name="文件转换服务", task="用户问题：[用户的原始问题]；需要转换的文件：/documents/paper.pdf")
+     - 多个文件（批量传递）：task(agent_name="文件转换服务", task="用户问题：[用户的原始问题]；需要转换的文件：/documents/paper.pdf, /reports/analysis.docx, /data/sheet.xlsx")
+   - **重要**：必须将用户的原始问题完整地传递给文件转换服务，让文件转换服务根据用户问题判断是否需要启用图片提取和公式识别功能
+   - **禁止**：不要自己杜撰文件内容（如"这个文档包含图片"、"文档有公式"等），只传递文件路径和用户的原始问题
 
 4. **研究**：始终使用 task() 工具将研究任务委托给研究员，切勿亲自进行研究
 
@@ -197,8 +199,10 @@ AGENT_WORKFLOW_INSTRUCTIONS = f"""## 核心任务：理解用户意图 + 主动�
 **如何使用文件转换服务：**
 - 使用 task() 工具委托转换任务
 - agent_name: "文件转换服务"
-- task: 描述需要转换的文件路径和目标格式
-- 示例："我需要将 PDF 文件转换为 Markdown 格式，" → task(agent_name="文件转换服务", task="将 /documents/paper.pdf 转换为 Markdown 格式")
+- task: 必须包含用户的原始问题和需要转换的文件路径
+- 示例：用户问题"分析这个文档中的图表" → task(agent_name="文件转换服务", task="用户问题：分析这个文档中的图表；需要转换的文件：/documents/paper.pdf")
+- **重要**：必须将用户的原始问题完整地传递给文件转换服务，不要省略或修改
+- **禁止**：不要自己杜撰文件内容特征（如"包含图片"、"有公式"等），只传递用户的原始问题和文件路径
 
 **严格禁止**：
 - 不要尝试编写任何转换脚本或使用编程方式处理文件
@@ -339,19 +343,24 @@ CONVERT_AGENT_INSTRUCTIONS = """## 文件转换服务核心职责
 
 1. **接收任务**：接收协调者传递的文件转换请求，可能包含一个或多个文件
    - **批量任务**：主协调者会将所有需要转换的文件一次性传递给您
-   - **任务格式**：例如"将以下文件转换为 Markdown 格式：/file1.pdf, /file2.docx, /file3.xlsx"
+   - **任务格式**：包含用户原始问题和文件路径，例如"用户问题：分析这个文档中的图表；需要转换的文件：/file1.pdf, /file2.docx, /file3.xlsx"
+   - **重要**：任务中会包含用户的原始问题，这是判断是否启用特殊功能的关键依据
    
 2. **验证文件**：确认所有源文件路径都存在且可访问
    - 逐个检查每个文件的路径
    - 如果某个文件不存在或无法访问，记录错误但继续处理其他文件
    
 3. **执行转换**：对每个文件使用 convert_to_markdown 工具进行转换
+   - **判断参数**：根据用户的原始问题判断是否启用特殊功能
+     - **启用图片提取（generate_picture_images=True）**：当用户问题涉及图片、图表、截图、图形、插图、示意图、流程图、截图中的文字、界面展示等视觉内容时
+     - **启用公式识别（do_formula_enrichment=True）**：当用户问题涉及数学公式、方程、不等式、符号、微积分、数学表达式、化学方程式、物理公式等内容时
+     - **默认情况**：如果用户问题不涉及上述内容，保持参数为默认值 False
    - **并行转换**：必须在一次响应中同时为所有文件调用 convert_to_markdown 工具
    - 不要串行等待，确保所有文件同时开始转换
    - 示例：
-     - convert_to_markdown(source_path="/file1.pdf")
-     - convert_to_markdown(source_path="/file2.docx")
-     - convert_to_markdown(source_path="/file3.xlsx")
+     - 用户问题"分析文档中的图表" → convert_to_markdown(source_path="/file1.pdf", generate_picture_images=True)
+     - 用户问题"研究数学公式" → convert_to_markdown(source_path="/file2.pdf", do_formula_enrichment=True)
+     - 用户问题"总结主要内容" → convert_to_markdown(source_path="/file3.pdf")
    
 4. **报告结果**：返回所有文件的转换状态和结果文件路径
    - 列出每个文件的转换结果（成功或失败）
@@ -391,7 +400,10 @@ CONVERT_AGENT_INSTRUCTIONS = """## 文件转换服务核心职责
 
 **convert_to_markdown** - 核心转换工具
 - **功能**：将源文件转换为 Markdown 格式
-- **参数**：source_path（源文件路径）
+- **参数**：
+  - source_path（源文件路径）
+  - generate_picture_images（可选）：是否识别并提取图片，默认 False。根据用户问题是否涉及视觉内容决定
+  - do_formula_enrichment（可选）：是否识别公式，默认 False。根据用户问题是否涉及数学公式决定
 - **返回**：转换结果字典，包含：
   - success: 是否成功
   - output_file: 输出文件路径
@@ -400,12 +412,14 @@ CONVERT_AGENT_INSTRUCTIONS = """## 文件转换服务核心职责
 **使用示例：**
 
 **单个文件转换：**
-- `"我需要将 PDF 文件转换为 Markdown 格式以便研究。" → convert_to_markdown(source_path="/doc.pdf")`
+- 用户问题"分析这个文档中的图表" → `convert_to_markdown(source_path="/doc.pdf", generate_picture_images=True)`
+- 用户问题"研究这个文档的数学公式" → `convert_to_markdown(source_path="/doc.pdf", do_formula_enrichment=True)`
+- 用户问题"总结文档的主要内容" → `convert_to_markdown(source_path="/doc.pdf")`
 
 **多个文件批量转换（必须并行）：**
-- `"我需要将以下 3 个文件批量转换为 Markdown 格式。" →`
-  - `convert_to_markdown(source_path="/documents/paper.pdf")`
-  - `convert_to_markdown(source_path="/reports/analysis.docx")`
+- 用户问题"分析这些文档中的图表和公式" → 
+  - `convert_to_markdown(source_path="/documents/paper.pdf", generate_picture_images=True, do_formula_enrichment=True)`
+  - `convert_to_markdown(source_path="/reports/analysis.docx", generate_picture_images=True, do_formula_enrichment=True)`
   - `convert_to_markdown(source_path="/data/sheet.xlsx")`
 
 **重要提示：**

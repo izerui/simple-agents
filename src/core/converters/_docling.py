@@ -434,8 +434,27 @@ class DoclingConverter:
             os.chdir(original_cwd)
         
         return results
+# 快速转换 无图片、无公式
+DOCLING_FAST_CONVERTER = DoclingConverter(
+    generate_picture_images = False, # 生成图片
+    do_formula_enrichment = False, # 是否启用公式识别
+)
 
-DOCLING_CONVERTER = DoclingConverter(
+# 支持图片提取
+DOCLING_IMAGE_CONVERTER = DoclingConverter(
+    generate_picture_images = True, # 生成图片
+    do_formula_enrichment = False, # 是否启用公式识别
+    images_scale = 2.0
+)
+
+# 支持公式识别
+DOCLING_FORMULA_CONVERTER = DoclingConverter(
+    generate_picture_images = False, # 生成图片
+    do_formula_enrichment = True, # 是否启用公式识别
+)
+
+# 同时支持图片提取和公式识别
+DOCLING_FULL_CONVERTER = DoclingConverter(
     generate_picture_images = True, # 生成图片
     do_formula_enrichment = True, # 是否启用公式识别
     images_scale = 2.0
@@ -456,7 +475,7 @@ if __name__ == "__main__":
         print("\n" + "=" * 60)
         print("示例 3: 启用图片（注意：公式识别已禁用以避免依赖冲突）")
         print("=" * 60)
-        result3 = DOCLING_CONVERTER.convert(
+        result3 = DOCLING_FAST_CONVERTER.convert(
             working_dir=working_dir,
             source_file=pdf_file,
             output_file=output_file,

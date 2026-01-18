@@ -6,18 +6,29 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from src.core.converters._docling import DOCLING_CONVERTER
+from src.core.converters._docling import DOCLING_FAST_CONVERTER, DOCLING_IMAGE_CONVERTER, \
+    DOCLING_FORMULA_CONVERTER, DOCLING_FULL_CONVERTER
 from src.core.utils import get_backend_per_thread
 
 
 @tool(parse_docstring=True)
-def convert_to_markdown(source_path: str) -> dict[str, Any]:
+def convert_to_markdown(
+        source_path: str,
+        generate_picture_images: bool = False,
+        do_formula_enrichment: bool = False,
+) -> dict[str, Any]:
     """将 PDF, DOCX, XLSX, PPTX, AsciiDoc 文件转换为 Markdown 格式以便研究。
 
-    该工具将 PDF 文档转换为 Markdown 格式
+    该工具将文档转换为 Markdown 格式。根据用户的问题内容来决定是否启用特殊功能：
+    
+    启用图片提取的时机：当用户问题涉及图片、图表、截图、图形、插图、示意图、流程图、截图中的文字、界面展示等视觉内容时，应将 generate_picture_images 设为 True
+    
+    启用公式识别的时机：当用户问题涉及数学公式、方程、不等式、符号、微积分、数学表达式、化学方程式、物理公式等内容时，应将 do_formula_enrichment 设为 True
 
     Args:
         source_path: 要转换的文件路径
+        generate_picture_images: 是否识别并提取图片（根据用户问题是否涉及视觉内容决定）
+        do_formula_enrichment: 是否识别公式（根据用户问题是否涉及数学公式决定）
 
     Returns:
         包含以下内容的字典：
@@ -44,11 +55,30 @@ def convert_to_markdown(source_path: str) -> dict[str, Any]:
 
         # Perform conversion
         try:
-            DOCLING_CONVERTER.convert(
-                working_dir=str(backend._resolve_path('.')),
-                source_file=_trip(source_path),
-                output_file=_trip(output_file)
-            )
+            if generate_picture_images and do_formula_enrichment:
+                DOCLING_FULL_CONVERTER.convert(
+                    working_dir=str(backend._resolve_path('.')),
+                    source_file=_trip(source_path),
+                    output_file=_trip(output_file)
+                )
+            elif generate_picture_images:
+                DOCLING_IMAGE_CONVERTER.convert(
+                    working_dir=str(backend._resolve_path('.')),
+                    source_file=_trip(source_path),
+                    output_file=_trip(output_file),
+                )
+            elif do_formula_enrichment:
+                DOCLING_FORMULA_CONVERTER.convert(
+                    working_dir=str(backend._resolve_path('.')),
+                    source_file=_trip(source_path),
+                    output_file=_trip(output_file),
+                )
+            else:
+                DOCLING_FAST_CONVERTER.convert(
+                    working_dir=str(backend._resolve_path('.')),
+                    source_file=_trip(source_path),
+                    output_file=_trip(output_file)
+                )
         except Exception as e:
             return {
                 "success": False,
