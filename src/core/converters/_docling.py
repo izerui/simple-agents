@@ -42,7 +42,7 @@ def _ensure_docling_installed():
         logger.info("docling 未安装，开始动态安装...")
         try:
             # 直接使用 pip 安装 docling，使用清华镜像源加速
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0', '-i', 'https://pypi.tuna.tsinghua.edu.cn/simple/'])
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0', '-i', 'https://mirrors.aliyun.com/pypi/simple/'])
             
             # 清除导入缓存，使新安装的包生效
             import importlib
