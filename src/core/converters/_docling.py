@@ -45,8 +45,9 @@ def _ensure_docling_installed():
             uv_command = shutil.which('uv')
             
             if uv_command:
-                # 直接使用 uv 命令添加依赖，使用清华镜像源加速
-                subprocess.check_call([uv_command, 'add', 'docling>=2.68.0', '--index-url', 'https://mirrors.cloud.tencent.com/pypi/simple'])
+                # 使用 uv pip install 直接安装到当前环境（虚拟环境或系统环境）
+                # 避免使用 uv add，因为 add 会管理虚拟环境可能导致重建
+                subprocess.check_call([uv_command, 'pip', 'install', 'docling>=2.68.0', '--index-url', 'https://mirrors.cloud.tencent.com/pypi/simple'])
             else:
                 # 回退到 pip
                 subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0'])
