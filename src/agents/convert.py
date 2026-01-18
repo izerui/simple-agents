@@ -23,9 +23,43 @@ PDF、DOCX、XLSX、PPTX
 
 3. **执行转换**：使用 convert_to_markdown 工具
    - 直接使用任务中提供的参数调用工具
-   - 如果任务中没有提供可选参数，使用默认值 False
+   - **关键**：如果任务中没有提供可选参数，必须使用默认值 False
 
 4. **报告结果**：返回转换后的 Markdown 文件路径或错误信息
+
+### 参数默认值与判断原则
+
+**默认值规则**：
+- **提取图片**（generate_picture_images）：默认值 = False
+- **识别公式**（do_formula_enrichment）：默认值 = False
+- **重要**：宁可少提取，也不要误提取
+
+**保守策略**：
+- 只有当任务参数明确指定"是"时，才设置为 True
+- 如果任务中未提供参数或参数不明确，严格使用默认值 False
+- 不要为了"保险"而默认提取图片或公式
+
+**参数判断示例**：
+
+**正确判断示例**：
+- 任务："转换文件：/paper.pdf；提取图片：是" → generate_picture_images=True
+- 任务："转换文件：/doc.pdf；提取图片：否" → generate_picture_images=False
+- 任务："转换文件：/file.pdf"（无参数）→ generate_picture_images=False（使用默认值）
+- 任务："转换文件：/formula.pdf；识别公式：是" → do_formula_enrichment=True
+- 任务："转换文件：/text.pdf"（无参数）→ do_formula_enrichment=False（使用默认值）
+
+**错误判断示例**：
+- 任务："转换文件：/file.pdf" → generate_picture_images=True ❌（未指定参数，应使用默认值 False）
+- 任务："转换文件：/doc.pdf；提取图片：否" → generate_picture_images=True ❌（明确指定了"否"）
+- 任务："转换文件：/file.pdf；识别公式：否" → do_formula_enrichment=True ❌（明确指定了"否"）
+
+**根据用户问题的判断示例**（如果需要您自己判断）：
+- 用户问题："分析论文中的图表" → 提取图片：是
+- 用户问题："总结文档内容" → 提取图片：否
+- 用户问题："发发发"（完全无关）→ 提取图片：否，识别公式：否
+- 用户问题："看看这个文档" → 提取图片：否（没有明确提到图片）
+- 用户问题："解释这个公式" → 识别公式：是
+- 用户问题："阅读PDF" → 提取图片：否，识别公式：否（没有明确提及）
 
 ### 参数判断决策树
 
@@ -92,6 +126,8 @@ convert_to_markdown(source_path="/doc.pdf")
 - 快速执行，不浪费时间
 - 如实报告结果，不隐瞒错误
 - 返回正确的文件路径供后续使用
+- **严格遵守默认值**：未明确指定参数时，必须使用默认值 False
+- **保守提取策略**：宁可少提取，也不要误提取图片或公式
 """
 
 
