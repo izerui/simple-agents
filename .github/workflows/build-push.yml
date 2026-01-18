@@ -70,10 +70,11 @@ jobs:
       with:
         version: "latest"
 
-    # 4. 安装依赖：使用 uv 包管理器安装项目依赖
-    - name: Install dependencies
+    # 4. 安装依赖：只安装核心依赖（不安装可选依赖如 docling）
+    - name: Install core dependencies only
       run: |
-        uv sync
+        # 只安装核心依赖，不安装可选依赖
+        uv pip install -e .
 
     # 5. 安装 LangGraph CLI：用于生成 Dockerfile 的构建工具
     - name: Install LangGraph CLI

@@ -21,6 +21,10 @@ dependencies = [
     "wcmatch",
     "langgraph-api>=0.6.16",
     "fastapi>=0.128.0",
+]
+
+[project.optional-dependencies]
+docling = [
     "docling>=2.68.0",
 ]
 

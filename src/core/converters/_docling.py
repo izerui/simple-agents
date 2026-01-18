@@ -22,14 +22,52 @@ Docling 是一个先进的文档处理库，支持：
 """
 
 import os
+import sys
+import subprocess
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
+
+# 动态安装 docling（运行时安装）
+def _ensure_docling_installed():
+    """确保 docling 已安装，如果未安装则动态安装"""
+    try:
+        import docling
+        logger.info("docling 已安装")
+        return True
+    except ImportError:
+        logger.info("docling 未安装，开始动态安装...")
+        try:
+            # 使用 uv 或 pip 安装
+            if os.path.exists('/usr/bin/uv') or os.path.exists('/usr/local/bin/uv'):
+                subprocess.check_call([sys.executable, '-m', 'uv', 'pip', 'install', 'docling>=2.68.0'])
+            else:
+                subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0'])
+            
+            # 清除导入缓存，使新安装的包生效
+            import importlib
+            importlib.invalidate_caches()
+            
+            logger.info("docling 安装成功")
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"docling 安装失败: {e}")
+            raise ImportError(
+                "无法自动安装 docling。请手动安装: pip install docling\n"
+                "或者运行: uv pip install docling"
+            )
+
+# 确保依赖已安装
+_ensure_docling_installed()
+
+# 导入 docling 相关模块
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling_core.types.doc import ImageRefMode
 from docling.datamodel.document import ConversionStatus
-import logging
 
 logger = logging.getLogger(__name__)
 
