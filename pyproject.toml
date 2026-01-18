@@ -19,14 +19,8 @@ dependencies = [
     "langchain>=1.1.0,<2.0.0",
     "langchain-core>=1.1.0,<2.0.0",
     "wcmatch",
-    "pdfplumber>=0.11.8",
-    "pymupdf>=1.26.7",
     "langgraph-api>=0.6.16",
-    "mammoth>=1.11.0",
-    "html2text>=2025.4.15",
     "fastapi>=0.128.0",
-    "pypandoc-binary>=1.16.2",
-    "lxml>=6.0.2",
     "docling>=2.68.0",
 ]
 
