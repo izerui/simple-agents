@@ -4,12 +4,13 @@
 from typing import Any
 
 import httpx
+from httpx import Timeout
 from langchain_core.tools import tool
 from markdownify import markdownify
 
 
 @tool(parse_docstring=True)
-def fetch_markdown(url: str, timeout: int = 15) -> dict[str, Any]:
+def fetch_markdown(url: str) -> dict[str, Any]:
     """从 URL 获取内容并将 HTML 转换为 Markdown 格式。
 
     该工具获取网页内容并将其转换为清晰的 Markdown 文本，
@@ -18,7 +19,6 @@ def fetch_markdown(url: str, timeout: int = 15) -> dict[str, Any]:
 
     Args:
         url: 要获取的 URL（必须是有效的 HTTP/HTTPS URL）
-        timeout: 请求超时时间（秒）（默认：30）
 
     Returns:
         包含以下内容的字典：
@@ -38,7 +38,7 @@ def fetch_markdown(url: str, timeout: int = 15) -> dict[str, Any]:
         # 先发送 HEAD 请求检测 Content-Type
         head_response = httpx.head(
             url,
-            timeout=timeout,
+            timeout=Timeout(timeout=5.0),
             headers={"User-Agent": "Mozilla/5.0 (compatible; DeepAgents/1.0)"},
             follow_redirects=True,
         )
@@ -98,7 +98,7 @@ def fetch_markdown(url: str, timeout: int = 15) -> dict[str, Any]:
         
         response = httpx.get(
             url,
-            timeout=timeout,
+            timeout=Timeout(timeout=15.0),
             headers={"User-Agent": "Mozilla/5.0 (compatible; DeepAgents/1.0)"},
             follow_redirects=True,
         )
