@@ -74,7 +74,7 @@ jobs:
     - name: Install core dependencies only
       run: |
         # 只安装核心依赖，不安装可选依赖
-        uv pip install -e .
+        uv sync
 
     # 5. 安装 LangGraph CLI：用于生成 Dockerfile 的构建工具
     - name: Install LangGraph CLI
