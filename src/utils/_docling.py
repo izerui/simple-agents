@@ -495,8 +495,8 @@ if __name__ == "__main__":
     
     # 替换为你的 PDF 文件路径
     working_dir = "/Users/liuyuhua/PycharmProjects/simple-agents/files"
-    pdf_file = "2023070101ZB203.docx"
-    output_file = "2023070101ZB203-docling2.md"
+    pdf_file = "20210806011025_BS.pdf"
+    output_file = "20210806011025_BS.md"
     
     try:
         # 示例 3: 启用高级功能（较慢）
