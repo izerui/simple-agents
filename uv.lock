@@ -3011,8 +3011,8 @@ version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
-    { name = "docling" },
     { name = "fastapi" },
+    { name = "huggingface-hub" },
     { name = "langchain" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
@@ -3029,6 +3029,11 @@ dependencies = [
     { name = "wcmatch" },
 ]
 
+[package.optional-dependencies]
+docling = [
+    { name = "docling" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "debugpy" },
@@ -3039,8 +3044,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiofiles", specifier = ">=25.1.0" },
-    { name = "docling", specifier = ">=2.68.0" },
+    { name = "docling", marker = "extra == 'docling'", specifier = ">=2.68.0" },
     { name = "fastapi", specifier = ">=0.128.0" },
+    { name = "huggingface-hub", specifier = ">=0.36.0" },
     { name = "langchain", specifier = ">=1.1.0,<2.0.0" },
     { name = "langchain-anthropic", specifier = ">=1.2.0,<2.0.0" },
     { name = "langchain-core", specifier = ">=1.1.0,<2.0.0" },
@@ -3056,6 +3062,7 @@ requires-dist = [
     { name = "sse-starlette", specifier = ">=2.1.0,<2.2.0" },
     { name = "wcmatch" },
 ]
+provides-extras = ["docling"]
 
 [package.metadata.requires-dev]
 dev = [
