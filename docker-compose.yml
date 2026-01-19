@@ -43,7 +43,7 @@ services:
             REDIS_URI: redis://simple-agents-redis:6379
             DATABASE_URI: postgres://postgres:postgres@simple-agents-postgres:5432/postgres?sslmode=disable
             LANGSMITH_API_KEY: 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
-            HUGGINGFACE_HUB_CACHE: /deps/simple-agents/data/huggingface
+            HUGGINGFACE_HUB_CACHE: /deps/simple-agents/data/huggingface/hub
             HF_ENDPOINT: https://hf-mirror.com
         healthcheck:
             test: python /api/healthcheck.py
