@@ -38,7 +38,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*", "deepagents*"]
+include = ["src*", "deepagents*"]
 
 [build-system]
 requires = ["setuptools>=68.0"]

@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 import logging
 
-from huggingface_hub import constants
+from huggingface_hub import snapshot_download
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +35,12 @@ def ensure_docling_installed():
 
 # 动态下载docling模型
 def download_docling_models():
-    # 设置环境变量
-    cache_dir = constants.HF_HUB_CACHE
+    # 设置环境变量和缓存目录
     endpoint = "https://hf-mirror.com"
+    
+    # 设置缓存目录，优先使用环境变量，否则使用默认路径
+    import os
+    cache_dir = os.getenv('HUGGINGFACE_HUB_CACHE', os.path.expanduser('~/.cache/huggingface/hub'))
 
     cache_path = Path(cache_dir)
     
@@ -46,7 +49,7 @@ def download_docling_models():
         print("模型已下载，跳过...")
         return
     
-    from huggingface_hub import snapshot_download
+
     
     # 要下载的模型仓库
     REPOS = [
