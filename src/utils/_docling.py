@@ -29,35 +29,15 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 import logging
 
+from src.utils._docling_download import ensure_docling_installed, download_docling_models
+
 logger = logging.getLogger(__name__)
 
-# 动态安装 docling（运行时安装）
-def _ensure_docling_installed():
-    """确保 docling 已安装，如果未安装则动态安装"""
-    try:
-        import docling
-        logger.info("docling 已安装")
-        return True
-    except ImportError:
-        logger.info("docling 未安装，开始动态安装...")
-        try:
-            # 直接使用 pip 安装 docling，使用清华镜像源加速
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0', '-i', 'https://mirrors.aliyun.com/pypi/simple/'])
-            
-            # 清除导入缓存，使新安装的包生效
-            import importlib
-            importlib.invalidate_caches()
-            
-            logger.info("docling 安装成功")
-            return True
-        except subprocess.CalledProcessError as e:
-            logger.error(f"docling 安装失败: {e}")
-            raise ImportError(
-                "无法自动安装 docling。请手动安装: pip install docling"
-            )
-
 # 确保依赖已安装
-_ensure_docling_installed()
+ensure_docling_installed()
+
+# 下载模型
+download_docling_models()
 
 # 导入 docling 相关模块
 from docling.document_converter import DocumentConverter, PdfFormatOption
