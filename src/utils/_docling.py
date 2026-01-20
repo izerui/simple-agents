@@ -282,12 +282,12 @@ DOCLING_IMAGE_CONVERTER = DoclingConverter(
                     do_picture_description=True,
                     enable_remote_services=True,
                     picture_description_options= PictureDescriptionApiOptions(
-                        url="https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+                        url=os.getenv('VL_MODEL_PROVIDER'),
                         headers={
-                            "Authorization": "Bearer 59165a22c66342c7899bc17a4db39119.emOa7UmRheFdgLDu"
+                            "Authorization": f"Bearer {os.getenv('VL_MODEL_API_KEY')}"
                         },
                         params=dict(
-                            model="glm-4.6v",
+                            model=os.getenv('VL_MODEL_MODEL_ID'),
                             max_tokens=1024,
                             temperature=0.2,
                         ),
