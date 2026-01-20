@@ -7,7 +7,7 @@ from typing import Any
 from langchain_core.tools import tool
 
 from src.utils._docling import DOCLING_FAST_CONVERTER, DOCLING_IMAGE_CONVERTER, \
-    DOCLING_FORMULA_CONVERTER, DOCLING_FULL_CONVERTER
+    DOCLING_FORMULA_CONVERTER, DOCLING_FULL_CONVERTER, DOCLING_LLM_CONVERTER
 from src.utils.util import get_backend_per_thread
 
 
@@ -56,7 +56,7 @@ def convert_to_markdown(
         # Perform conversion
         try:
             if generate_picture_images and do_formula_enrichment:
-                DOCLING_FULL_CONVERTER.convert(
+                DOCLING_LLM_CONVERTER.convert(
                     working_dir=str(backend._resolve_path('.')),
                     source_file=_trip(source_path),
                     output_file=_trip(output_file)
@@ -68,7 +68,7 @@ def convert_to_markdown(
                     output_file=_trip(output_file),
                 )
             elif do_formula_enrichment:
-                DOCLING_FORMULA_CONVERTER.convert(
+                DOCLING_LLM_CONVERTER.convert(
                     working_dir=str(backend._resolve_path('.')),
                     source_file=_trip(source_path),
                     output_file=_trip(output_file),
