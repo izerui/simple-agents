@@ -21,13 +21,13 @@ Docling 是一个先进的文档处理库，支持：
     https://github.com/docling-project/docling
 """
 
+import logging
 import os
-import sys
-import subprocess
-import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-import logging
+
+from docling.datamodel.pipeline_options_vlm_model import ApiVlmOptions, ResponseFormat
+from docling.pipeline.vlm_pipeline import VlmPipeline
 
 from src.utils._docling_download import ensure_docling_installed, download_docling_models
 
@@ -42,7 +42,7 @@ download_docling_models()
 # 导入 docling 相关模块
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions, PipelineOptions, VlmPipelineOptions
 from docling_core.types.doc import ImageRefMode
 from docling.datamodel.document import ConversionStatus
 
@@ -344,7 +344,7 @@ DOCLING_FAST_CONVERTER = DoclingConverter(
             )
         }
     ),
-    generate_picture_images = False
+    generate_picture_images=False
 )
 
 # 支持图片提取
@@ -362,7 +362,7 @@ DOCLING_IMAGE_CONVERTER = DoclingConverter(
             )
         }
     ),
-    generate_picture_images = True
+    generate_picture_images=True
 )
 
 # 支持公式识别
@@ -379,7 +379,7 @@ DOCLING_FORMULA_CONVERTER = DoclingConverter(
             )
         }
     ),
-    generate_picture_images = False
+    generate_picture_images=False
 )
 
 # 同时支持图片提取和公式识别
@@ -397,7 +397,39 @@ DOCLING_FULL_CONVERTER = DoclingConverter(
             )
         }
     ),
-    generate_picture_images = True
+    generate_picture_images=True
+)
+
+# 同时支持图片提取和公式识别
+DOCLING_LLM_CONVERTER = DoclingConverter(
+    DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_cls=VlmPipeline,
+                pipeline_options=VlmPipelineOptions(
+                    enable_remote_services=True,
+                    vlm_options= ApiVlmOptions(
+                        url="https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+                        headers={
+                          "Authorization": "Bearer 59165a22c66342c7899bc17a4db39119.emOa7UmRheFdgLDu"
+                        },
+                        concurrency=4,
+                        params=dict(
+                            model="glm-4.6v",
+                            max_tokens=8192,
+                        ),
+                        prompt="Convert this page to markdown.",
+                        response_format=ResponseFormat.MARKDOWN,
+                    )
+                ),
+            ),
+            # InputFormat.IMAGE: PdfFormatOption(
+            #     pipeline_cls=VlmPipeline,
+            #     pipeline_options=pipeline_options,
+            # ),
+        },
+    ),
+    generate_picture_images=True
 )
 
 # --- 使用示例 ---
@@ -407,15 +439,15 @@ if __name__ == "__main__":
 
     # 替换为你的 PDF 文件路径
     working_dir = "/Users/liuyuhua/PycharmProjects/simple-agents/files"
-    pdf_file = "20210806011025_BS.pdf"
-    output_file = "20210806011025_BS.md"
+    pdf_file = "2-函数的极限测试题-2 - 学生.pdf"
+    output_file = "2-函数的极限测试题-2 - 学生.md"
 
     try:
         # 示例 3: 启用高级功能（较慢）
         print("\n" + "=" * 60)
-        print("示例 3: 启用图片（注意：公式识别已禁用以避免依赖冲突）")
+        print("示例 3: 启用图片")
         print("=" * 60)
-        result3 = DOCLING_IMAGE_CONVERTER.convert(
+        result3 = DOCLING_LLM_CONVERTER.convert(
             working_dir=working_dir,
             source_file=pdf_file,
             output_file=output_file,
