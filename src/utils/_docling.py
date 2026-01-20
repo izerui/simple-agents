@@ -198,24 +198,45 @@ class DoclingConverter:
                     md_text
                 )
 
-                image_descs = []
+                # 收集图片描述信息
+                # 收集所有图片描述（按出现顺序）
+                description_list = []
                 for element, _level in result.document.iterate_items():
                     if isinstance(element, PictureItem):
                         print(f"图片 {element.self_ref}")
 
                         _pic: PictureItem = element
-                        description = _pic.meta.description.text
-                        print(f"描述: {description}")
+                        # 获取描述文本
+                        description_text = ""
+                        if hasattr(_pic.meta, 'description') and _pic.meta.description:
+                            description_text = _pic.meta.description.text
+                        print(f"描述: {description_text}")
 
-                        # 图片信息
-                        if hasattr(element, 'image') and element.image:
-                            image_path = f"images/{element.self_ref}.png"
-                            image_descs.append(f"\n![{description}]({image_path})")
-                        else:
-                            image_descs.append(f"\n> {description}")
-
+                        # 将描述添加到列表中（保持顺序）
+                        description_list.append(description_text)
                         print("-" * 80)
-                md_text = md_text + '\n--- 以下是图片识别结果:\n' + "\n".join(image_descs) + "\n"
+
+                # 将描述按顺序插入到对应的图片位置后面
+                # 匹配以 ![Image](images/ 开头的行
+                lines = md_text.split('\n')
+                desc_index = 0
+                new_lines = []
+                for line in lines:
+                    new_lines.append(line)
+                    # 如果这行是以 ![Image](images/ 开头，就插入描述
+                    if line.strip().startswith('![Image](images/'):
+                        if desc_index < len(description_list):
+                            description = description_list[desc_index]
+                            if description:
+                                # 插入图片说明
+                                new_lines.append(f"\n**图片说明：**")
+                                new_lines.append(f"> {description}")
+                            desc_index += 1
+                            print(f"已在第 {len(new_lines)} 行插入第 {desc_index} 个图片的描述")
+                
+                # 重新组合文本
+                md_text = '\n'.join(new_lines)
+
                 # 写回文件
                 output_path.write_text(md_text, encoding='utf-8')
 
