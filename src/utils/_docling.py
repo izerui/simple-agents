@@ -23,6 +23,7 @@ Docling 是一个先进的文档处理库，支持：
 
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -151,7 +152,10 @@ class DoclingConverter:
 
             # 执行转换（使用绝对路径）
             print(f"docling - 正在转换文档...")
+            convert_start_time = time.time()
             result = self._converter.convert(source_file_for_docling)
+            convert_time = time.time() - convert_start_time
+            print(f"docling - 文档转换完成，耗时: {convert_time:.2f}秒")
 
             # 保存为 Markdown 文件
             print(f"docling - 保存 Markdown 文件到: {output_path.parent}")
@@ -173,7 +177,10 @@ class DoclingConverter:
                 )
 
             # 读取生成的 Markdown 内容
+            read_start_time = time.time()
             md_text = output_path.read_text(encoding='utf-8')
+            read_time = time.time() - read_start_time
+            print(f"docling - 读取 Markdown 文件完成，耗时: {read_time:.2f}秒")
 
             # 将图片链接从绝对路径替换为相对于工作目录的相对路径
             # 例如：/absolute/path/to/project/images/doc1/image.png -> images/doc1/image.png
@@ -198,7 +205,8 @@ class DoclingConverter:
                 # 写回文件
                 output_path.write_text(md_text, encoding='utf-8')
 
-            print(f"docling - 转换完成，共 {len(md_text)} 字符")
+            total_time = time.time() - convert_start_time
+            print(f"docling - 转换完成，共 {len(md_text)} 字符，总耗时: {total_time:.2f}秒")
 
             # 及时释放资源
             del result
@@ -259,6 +267,7 @@ class DoclingConverter:
                     abs_file_paths.append(str((working_dir_path / file_path).resolve()))
 
             logger.info(f"开始批量处理 {len(file_paths)} 个文件...")
+            batch_start_time = time.time()
 
             # 使用 convert_all 方法批量处理（模型已加载，直接使用）
             import sys
@@ -268,8 +277,12 @@ class DoclingConverter:
                 max_num_pages=max_num_pages or sys.maxsize,
             )
 
-            for result in results_iter:
+            for idx, result in enumerate(results_iter, 1):
                 file_name = result.input.file.name
+                
+                # 显示进度
+                logger.info(f"进度: [{idx}/{len(file_paths)}] 正在处理: {file_name}")
+                file_start_time = time.time()
 
                 if result.status == ConversionStatus.SUCCESS:
                     results["success"] += 1
@@ -308,6 +321,8 @@ class DoclingConverter:
                         doc.save_as_markdown(out_path, image_mode=ImageRefMode.PLACEHOLDER)
 
                     logger.info(f"  已保存: {out_path}")
+                    file_time = time.time() - file_start_time
+                    logger.info(f"  文件处理耗时: {file_time:.2f}秒")
 
                     # 及时释放资源
                     del doc
@@ -322,10 +337,17 @@ class DoclingConverter:
                     if result.errors:
                         for err in result.errors:
                             logger.error(f"  错误: {err.error_message}")
+                    file_time = time.time() - file_start_time
+                    logger.info(f"  文件处理耗时: {file_time:.2f}秒")
 
         except Exception as e:
             logger.error(f"批量转换失败: {str(e)}")
             raise
+        
+        batch_total_time = time.time() - batch_start_time
+        logger.info(f"批量处理完成！成功: {results['success']}, 失败: {results['failed']}, 总耗时: {batch_total_time:.2f}秒")
+        if results['success'] > 0:
+            logger.info(f"平均每个文件耗时: {batch_total_time / results['success']:.2f}秒")
 
         return results
 
@@ -429,7 +451,7 @@ DOCLING_LLM_CONVERTER = DoclingConverter(
             # ),
         },
     ),
-    generate_picture_images=True
+    generate_picture_images=False
 )
 
 # --- 使用示例 ---
