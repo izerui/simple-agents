@@ -24,15 +24,22 @@ Docling 是一个先进的文档处理库，支持：
 import logging
 import os
 import time
+import sys
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from docling.datamodel.pipeline_options_vlm_model import ApiVlmOptions, ResponseFormat
 from docling.pipeline.vlm_pipeline import VlmPipeline
+from dotenv import load_dotenv
 
 from src.utils._docling_download import ensure_docling_installed, download_docling_models
 
 logger = logging.getLogger(__name__)
+
+# 加载环境变量并添加项目根目录到 Python 路径
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+load_dotenv(dotenv_path=project_root / '.env')
 
 # 确保依赖已安装
 ensure_docling_installed()
@@ -282,10 +289,11 @@ DOCLING_IMAGE_CONVERTER = DoclingConverter(
                     do_picture_description=True,
                     enable_remote_services=True,
                     picture_description_options= PictureDescriptionApiOptions(
-                        url=os.getenv('VL_MODEL_PROVIDER'),
+                        url=os.getenv('VL_MODEL_BASE_URL'),
                         headers={
                             "Authorization": f"Bearer {os.getenv('VL_MODEL_API_KEY')}"
                         },
+                        concurrency=4,
                         params=dict(
                             model=os.getenv('VL_MODEL_MODEL_ID'),
                             max_tokens=1024,
@@ -347,14 +355,15 @@ DOCLING_LLM_CONVERTER = DoclingConverter(
                 pipeline_options=VlmPipelineOptions(
                     enable_remote_services=True,
                     vlm_options= ApiVlmOptions(
-                        url="https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+                        url=os.getenv('VL_MODEL_BASE_URL'),
                         headers={
-                          "Authorization": "Bearer 59165a22c66342c7899bc17a4db39119.emOa7UmRheFdgLDu"
+                            "Authorization": f"Bearer {os.getenv('VL_MODEL_API_KEY')}"
                         },
                         concurrency=4,
                         params=dict(
-                            model="glm-4.6v",
-                            max_tokens=4096,
+                            model=os.getenv('VL_MODEL_MODEL_ID'),
+                            max_tokens=1024,
+                            temperature=0.2,
                         ),
                         prompt="Convert this page to markdown.",
                         response_format=ResponseFormat.MARKDOWN,
@@ -385,7 +394,7 @@ if __name__ == "__main__":
         print("\n" + "=" * 60)
         print("示例 3: 启用图片")
         print("=" * 60)
-        result3 = DOCLING_IMAGE_CONVERTER.convert(
+        result3 = DOCLING_LLM_CONVERTER.convert(
             working_dir=working_dir,
             source_file=pdf_file,
             output_file=output_file,
