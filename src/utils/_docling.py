@@ -45,7 +45,7 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, PipelineOptions, VlmPipelineOptions, \
     PictureDescriptionApiOptions
-from docling_core.types.doc import ImageRefMode, PictureItem
+from docling_core.types.doc import ImageRefMode, PictureItem, DescriptionAnnotation
 from docling.datamodel.document import ConversionStatus
 
 logger = logging.getLogger(__name__)
@@ -198,19 +198,24 @@ class DoclingConverter:
                     md_text
                 )
 
-
                 image_descs = []
-                # 遍历所有图片
                 for element, _level in result.document.iterate_items():
                     if isinstance(element, PictureItem):
                         print(f"图片 {element.self_ref}")
 
-                        # 获取图片描述
-                        caption = element.caption_text(doc=result.document)
-                        image_descs.append(f"\n![{caption}]({element.self_ref})")
-                        print(f"描述: {caption}")
+                        _pic: PictureItem = element
+                        description = _pic.meta.description.text
+                        print(f"描述: {description}")
+
+                        # 图片信息
+                        if hasattr(element, 'image') and element.image:
+                            image_path = f"images/{element.self_ref}.png"
+                            image_descs.append(f"\n![{description}]({image_path})")
+                        else:
+                            image_descs.append(f"\n> {description}")
+
                         print("-" * 80)
-                md_text = md_text + '\n--- 以下是图片识别结果:' + "\n".join(image_descs) + "\n"
+                md_text = md_text + '\n--- 以下是图片识别结果:\n' + "\n".join(image_descs) + "\n"
                 # 写回文件
                 output_path.write_text(md_text, encoding='utf-8')
 
@@ -260,11 +265,11 @@ DOCLING_IMAGE_CONVERTER = DoclingConverter(
                             "Authorization": "Bearer 59165a22c66342c7899bc17a4db39119.emOa7UmRheFdgLDu"
                         },
                         params=dict(
-                            model="glm-4.6v",
+                            model="glm-4.6v-flashx",
                             max_tokens=500,
                             temperature=0.0,
                         ),
-                        prompt="请识别图片内容",
+                        prompt="请识别这张图片的内容(文本、latex公式、代码等)，如果图片非文本型请详细描述这张图片的内容，包括图表类型、数据趋势、关键信息等。",
                         timeout=90,
                     ),
                     images_scale=2.0,
