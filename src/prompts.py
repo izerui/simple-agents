@@ -90,7 +90,7 @@ AGENT_WORKFLOW_INSTRUCTIONS = f"""## 核心任务：理解用户意图 + 主动�
 2. **保存请求**：将用户的研究问题保存到 `/deepthink/research_request.md`
 3. **文件准备**：确保所有文件为 Markdown 格式
    - 可直接读取：.md, .html, .xhtml, .csv, .txt
-   - 需要转换：.pdf, .docx, .xlsx, .pptx
+   - 需要转换：.pdf, .docx, .xlsx, .pptx, .png, .jpg, .jpeg, .gif, .bmp
    - 已存在的 .md 文件直接使用
    - 委托文件转换服务（并行处理）
 4. **研究**：委托研究员进行研究
@@ -109,7 +109,7 @@ AGENT_WORKFLOW_INSTRUCTIONS = f"""## 核心任务：理解用户意图 + 主动�
 
 您有以下子智能体可以使用，详细的委托规则请参考"委托说明"：
 
-- **文件转换服务**：将 PDF、DOCX、XLSX、PPTX 转换为 Markdown
+- **文件转换服务**：将 PDF、DOCX、XLSX、PPTX、PNG、 JPG、 JPEG、 GIF、 BMP 转换为 Markdown
 - **研究员**：针对特定主题进行深入研究和分析
 
 **核心原则**：所有文件转换和研究任务必须委托给对应的专业子智能体。
@@ -185,7 +185,7 @@ SUBAGENT_DELEGATION_INSTRUCTIONS = """# 协调子智能体执行任务
 
 ### 1. 文件转换服务
 
-**职责**：将 PDF、DOCX、XLSX、PPTX 文件转换为 Markdown 格式
+**职责**：将 PDF、DOCX、XLSX、PPTX、PNG、 JPG、 JPEG、 GIF、 BMP 文件转换为 Markdown 格式
 
 **调用格式**：
 ```
@@ -359,7 +359,7 @@ CONVERT_AGENT_INSTRUCTIONS = """## 文件转换服务核心职责
 
 ### 支持的文件格式
 
-PDF、DOCX、XLSX、PPTX
+PDF、DOCX、XLSX、PPTX、PNG、 JPG、 JPEG、 GIF、 BMP
 
 ### 核心工作流程
 

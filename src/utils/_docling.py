@@ -23,10 +23,10 @@ Docling 是一个先进的文档处理库，支持：
 
 import logging
 import os
-import time
 import sys
+import time
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
 from docling.datamodel.pipeline_options_vlm_model import ApiVlmOptions, ResponseFormat
 from docling.pipeline.vlm_pipeline import VlmPipeline
@@ -48,12 +48,12 @@ ensure_docling_installed()
 download_docling_models()
 
 # 导入 docling 相关模块
-from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.document_converter import DocumentConverter, PdfFormatOption, ImageFormatOption, WordFormatOption, \
+    PowerpointFormatOption
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions, PipelineOptions, VlmPipelineOptions, \
+from docling.datamodel.pipeline_options import PdfPipelineOptions, VlmPipelineOptions, \
     PictureDescriptionApiOptions
-from docling_core.types.doc import ImageRefMode, PictureItem, DescriptionAnnotation
-from docling.datamodel.document import ConversionStatus
+from docling_core.types.doc import ImageRefMode, PictureItem
 
 logger = logging.getLogger(__name__)
 
@@ -90,13 +90,13 @@ class DoclingConverter:
     ) -> str:
         """
         转换单个文件（线程安全，支持并发调用）
-        
+
         Args:
             working_dir: 工作目录（必填），所有相对路径都基于此目录
             source_file: 源文件路径（相对于 working_dir 的相对路径，或 URL）
             output_file: 输出 Markdown 文件路径（相对于 working_dir 的相对路径）
             debug: 是否开启调试模式
-            
+
         Returns:
             转换后的 Markdown 内容
         """
@@ -241,7 +241,7 @@ class DoclingConverter:
                                 new_lines.append(f"> {desc_line}")
                             desc_index += 1
                             print(f"已在第 {len(new_lines)} 行插入第 {desc_index} 个图片的描述")
-                
+
                 # 重新组合文本
                 md_text = '\n'.join(new_lines)
 
@@ -260,6 +260,7 @@ class DoclingConverter:
 
         return md_text
 
+
 # 快速转换 无图片、无公式
 DOCLING_FAST_CONVERTER = DoclingConverter(
     DocumentConverter(
@@ -277,6 +278,21 @@ DOCLING_FAST_CONVERTER = DoclingConverter(
     generate_picture_images=False
 )
 
+cus_pipeline_options = PictureDescriptionApiOptions(
+    url=os.getenv('VL_MODEL_BASE_URL'),
+    headers={
+        "Authorization": f"Bearer {os.getenv('VL_MODEL_API_KEY')}"
+    },
+    concurrency=4,
+    params=dict(
+        model=os.getenv('VL_MODEL_MODEL_ID'),
+        max_tokens=1024,
+        temperature=0.2,
+    ),
+    prompt="""请识别图片内容。""",
+    timeout=90,
+)
+
 # 支持图片提取
 DOCLING_IMAGE_CONVERTER = DoclingConverter(
     DocumentConverter(
@@ -288,62 +304,44 @@ DOCLING_IMAGE_CONVERTER = DoclingConverter(
                     generate_picture_images=True,
                     do_picture_description=True,
                     enable_remote_services=True,
-                    picture_description_options= PictureDescriptionApiOptions(
-                        url=os.getenv('VL_MODEL_BASE_URL'),
-                        headers={
-                            "Authorization": f"Bearer {os.getenv('VL_MODEL_API_KEY')}"
-                        },
-                        concurrency=4,
-                        params=dict(
-                            model=os.getenv('VL_MODEL_MODEL_ID'),
-                            max_tokens=1024,
-                            temperature=0.2,
-                        ),
-                        prompt="""请识别图片内容。""",
-                        timeout=90,
-                    ),
+                    picture_description_options=cus_pipeline_options,
                     images_scale=2.0,
                     generate_parsed_pages=False,
                 )
-            )
-        }
-    ),
-    generate_picture_images=True
-)
-
-# 支持公式识别
-DOCLING_FORMULA_CONVERTER = DoclingConverter(
-    DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfFormatOption(
+            ),
+            InputFormat.DOCX: WordFormatOption(
                 pipeline_options=PdfPipelineOptions(
                     do_table_structure=True,
-                    do_formula_enrichment=True,
-                    generate_picture_images=False,
-                    generate_parsed_pages=False,
-                )
-            )
-        }
-    ),
-    generate_picture_images=False
-)
-
-# 同时支持图片提取和公式识别
-DOCLING_FULL_CONVERTER = DoclingConverter(
-    DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfFormatOption(
-                pipeline_options=PdfPipelineOptions(
-                    do_table_structure=True,
-                    do_formula_enrichment=True,
+                    do_formula_enrichment=False,
                     generate_picture_images=True,
+                    do_picture_description=True,
+                    enable_remote_services=True,
+                    picture_description_options=cus_pipeline_options,
                     images_scale=2.0,
                     generate_parsed_pages=False,
                 )
-            )
+            ),
         }
     ),
     generate_picture_images=True
+)
+
+llm_pipeline_options = VlmPipelineOptions(
+    enable_remote_services=True,
+    vlm_options=ApiVlmOptions(
+        url=os.getenv('VL_MODEL_BASE_URL'),
+        headers={
+            "Authorization": f"Bearer {os.getenv('VL_MODEL_API_KEY')}"
+        },
+        concurrency=4,
+        params=dict(
+            model=os.getenv('VL_MODEL_MODEL_ID'),
+            max_tokens=8192,
+            temperature=0.0,
+        ),
+        prompt="Convert this page to markdown.",
+        response_format=ResponseFormat.MARKDOWN,
+    )
 )
 
 # 同时支持图片提取和公式识别
@@ -352,28 +350,20 @@ DOCLING_LLM_CONVERTER = DoclingConverter(
         format_options={
             InputFormat.PDF: PdfFormatOption(
                 pipeline_cls=VlmPipeline,
-                pipeline_options=VlmPipelineOptions(
-                    enable_remote_services=True,
-                    vlm_options= ApiVlmOptions(
-                        url=os.getenv('VL_MODEL_BASE_URL'),
-                        headers={
-                            "Authorization": f"Bearer {os.getenv('VL_MODEL_API_KEY')}"
-                        },
-                        concurrency=4,
-                        params=dict(
-                            model=os.getenv('VL_MODEL_MODEL_ID'),
-                            max_tokens=1024,
-                            temperature=0.2,
-                        ),
-                        prompt="Convert this page to markdown.",
-                        response_format=ResponseFormat.MARKDOWN,
-                    )
-                ),
+                pipeline_options=llm_pipeline_options,
             ),
-            # InputFormat.IMAGE: PdfFormatOption(
-            #     pipeline_cls=VlmPipeline,
-            #     pipeline_options=pipeline_options,
-            # ),
+            InputFormat.IMAGE: ImageFormatOption(
+                pipeline_cls=VlmPipeline,
+                pipeline_options=llm_pipeline_options,
+            ),
+            InputFormat.DOCX: WordFormatOption(
+                pipeline_cls=VlmPipeline,
+                pipeline_options=llm_pipeline_options,
+            ),
+            InputFormat.PPTX: PowerpointFormatOption(
+                pipeline_cls=VlmPipeline,
+                pipeline_options=llm_pipeline_options,
+            ),
         },
     ),
     generate_picture_images=False
@@ -386,8 +376,8 @@ if __name__ == "__main__":
 
     # 替换为你的 PDF 文件路径
     working_dir = "/Users/liuyuhua/PycharmProjects/simple-agents/files"
-    pdf_file = "abc.pdf"
-    output_file = "abc.md"
+    pdf_file = "2024高数习题册线面积分级数.docx"
+    output_file = "2024高数习题册线面积分级数.md"
 
     try:
         # 示例 3: 启用高级功能（较慢）

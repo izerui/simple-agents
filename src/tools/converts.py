@@ -6,8 +6,7 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from src.utils._docling import DOCLING_FAST_CONVERTER, DOCLING_IMAGE_CONVERTER, \
-    DOCLING_FORMULA_CONVERTER, DOCLING_FULL_CONVERTER, DOCLING_LLM_CONVERTER
+from src.utils._docling import DOCLING_FAST_CONVERTER, DOCLING_IMAGE_CONVERTER, DOCLING_LLM_CONVERTER
 from src.utils.util import get_backend_per_thread
 
 
@@ -17,7 +16,7 @@ def convert_to_markdown(
         generate_picture_images: bool = False,
         do_formula_enrichment: bool = False,
 ) -> dict[str, Any]:
-    """将 PDF, DOCX, XLSX, PPTX, AsciiDoc 文件转换为 Markdown 格式以便研究。
+    """将 PDF、DOCX、XLSX、PPTX、PNG、 JPG、 JPEG、 GIF、 BMP、 AsciiDoc 文件转换为 Markdown 格式以便研究。
 
     该工具将文档转换为 Markdown 格式。根据用户的问题内容来决定是否启用特殊功能：
     
