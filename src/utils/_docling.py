@@ -230,7 +230,9 @@ class DoclingConverter:
                             if description:
                                 # 插入图片说明
                                 new_lines.append(f"\n**图片说明：**")
-                                new_lines.append(f"> {description}")
+                                # 将描述按行分割，每行都添加 >
+                                for desc_line in description.split('\n'):
+                                    new_lines.append(f"> {desc_line}")
                             desc_index += 1
                             print(f"已在第 {len(new_lines)} 行插入第 {desc_index} 个图片的描述")
                 
