@@ -207,7 +207,7 @@ class DoclingConverter:
 
                         _pic: PictureItem = element
                         # 获取描述文本
-                        description_text = ""
+                        description_text = "无描述"
                         if hasattr(_pic.meta, 'description') and _pic.meta.description:
                             description_text = _pic.meta.description.text
                         print(f"描述: {description_text}")
@@ -227,12 +227,11 @@ class DoclingConverter:
                     if line.strip().startswith('![Image](images/'):
                         if desc_index < len(description_list):
                             description = description_list[desc_index]
-                            if description:
-                                # 插入图片说明
-                                new_lines.append(f"\n**图片说明：**")
-                                # 将描述按行分割，每行都添加 >
-                                for desc_line in description.split('\n'):
-                                    new_lines.append(f"> {desc_line}")
+                            # 插入图片说明
+                            new_lines.append(f"\n**图片说明：**")
+                            # 将描述按行分割，每行都添加 >
+                            for desc_line in description.split('\n'):
+                                new_lines.append(f"> {desc_line}")
                             desc_index += 1
                             print(f"已在第 {len(new_lines)} 行插入第 {desc_index} 个图片的描述")
                 
@@ -288,11 +287,11 @@ DOCLING_IMAGE_CONVERTER = DoclingConverter(
                             "Authorization": "Bearer 59165a22c66342c7899bc17a4db39119.emOa7UmRheFdgLDu"
                         },
                         params=dict(
-                            model="glm-4.6v-flashx",
-                            max_tokens=500,
-                            temperature=0.0,
+                            model="glm-4.6v",
+                            max_tokens=1024,
+                            temperature=0.2,
                         ),
-                        prompt="请识别这张图片的内容(文本、latex公式、代码等)，如果图片非文本型请详细描述这张图片的内容，包括图表类型、数据趋势、关键信息等。",
+                        prompt="""请识别图片内容。""",
                         timeout=90,
                     ),
                     images_scale=2.0,
@@ -355,7 +354,7 @@ DOCLING_LLM_CONVERTER = DoclingConverter(
                         concurrency=4,
                         params=dict(
                             model="glm-4.6v",
-                            max_tokens=8192,
+                            max_tokens=4096,
                         ),
                         prompt="Convert this page to markdown.",
                         response_format=ResponseFormat.MARKDOWN,
