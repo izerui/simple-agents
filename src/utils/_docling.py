@@ -43,8 +43,9 @@ download_docling_models()
 # 导入 docling 相关模块
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions, PipelineOptions, VlmPipelineOptions
-from docling_core.types.doc import ImageRefMode
+from docling.datamodel.pipeline_options import PdfPipelineOptions, PipelineOptions, VlmPipelineOptions, \
+    PictureDescriptionApiOptions
+from docling_core.types.doc import ImageRefMode, PictureItem
 from docling.datamodel.document import ConversionStatus
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,7 @@ class DoclingConverter:
             working_dir: str,
             source_file: str,
             output_file: Optional[str] = None,
-            debug: bool = False,
+            debug: bool = True,
     ) -> str:
         """
         转换单个文件（线程安全，支持并发调用）
@@ -140,12 +141,6 @@ class DoclingConverter:
             if debug:
                 print(f"docling - 工作目录: {working_dir_path}")
                 print(f"docling - 开始转换: {source_file_for_docling}")
-                print(f"docling - OCR: {'启用' if self.ocr_enabled else '禁用'}")
-                if self.ocr_enabled:
-                    print(f"docling - OCR 语言: {self.ocr_langs}")
-                print(f"docling - 表格结构: {'启用' if self.do_table_structure else '禁用'}")
-                print(f"docling - 代码富集: {'启用' if self.do_code_enrichment else '禁用'}")
-                print(f"docling - 公式富集: {'启用' if self.do_formula_enrichment else '禁用'}")
                 print(f"docling - 生成图片: {'启用' if self.generate_picture_images else '禁用'}")
                 print(f"docling - 输出文件: {output_path}")
                 print(f"docling - 图片目录: {images_dir}")
@@ -202,6 +197,20 @@ class DoclingConverter:
                     r'![\1](\2)',
                     md_text
                 )
+
+
+                image_descs = []
+                # 遍历所有图片
+                for element, _level in result.document.iterate_items():
+                    if isinstance(element, PictureItem):
+                        print(f"图片 {element.self_ref}")
+
+                        # 获取图片描述
+                        caption = element.caption_text(doc=result.document)
+                        image_descs.append(f"\n![{caption}]({element.self_ref})")
+                        print(f"描述: {caption}")
+                        print("-" * 80)
+                md_text = md_text + '\n--- 以下是图片识别结果:' + "\n".join(image_descs) + "\n"
                 # 写回文件
                 output_path.write_text(md_text, encoding='utf-8')
 
@@ -216,141 +225,6 @@ class DoclingConverter:
             raise
 
         return md_text
-
-    def convert_multiple(
-            self,
-            working_dir: str,
-            file_paths: List[str],
-            output_dir: Optional[str] = None,
-            continue_on_error: bool = True,
-            max_num_pages: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """
-        批量转换多个文件（复用模型，效率高，线程安全）
-        
-        Args:
-            working_dir: 工作目录（必填），所有相对路径都基于此目录
-            file_paths: 文件路径列表（相对于 working_dir 的相对路径）
-            output_dir: 输出目录（相对于 working_dir 的相对路径）
-            continue_on_error: 遇到错误是否继续
-            max_num_pages: 每个文档最大页数限制
-            
-        Returns:
-            处理结果统计
-        """
-        # 将工作目录转换为绝对路径
-        working_dir_path = Path(working_dir).resolve()
-
-        try:
-            results = {
-                "total": len(file_paths),
-                "success": 0,
-                "failed": 0,
-                "errors": []
-            }
-
-            # 处理输出目录
-            if output_dir:
-                output_path = (working_dir_path / output_dir).resolve()
-                output_path.mkdir(parents=True, exist_ok=True)
-            else:
-                output_path = working_dir_path
-
-            # 将所有文件路径转换为绝对路径
-            abs_file_paths = []
-            for file_path in file_paths:
-                if file_path.startswith(('http://', 'https://')):
-                    # URL 不需要转换
-                    abs_file_paths.append(file_path)
-                else:
-                    # 将相对路径转换为绝对路径
-                    abs_file_paths.append(str((working_dir_path / file_path).resolve()))
-
-            logger.info(f"开始批量处理 {len(file_paths)} 个文件...")
-            batch_start_time = time.time()
-
-            # 使用 convert_all 方法批量处理（模型已加载，直接使用）
-            import sys
-            results_iter = self._converter.convert_all(
-                source=abs_file_paths,
-                raises_on_error=not continue_on_error,
-                max_num_pages=max_num_pages or sys.maxsize,
-            )
-
-            for idx, result in enumerate(results_iter, 1):
-                file_name = result.input.file.name
-                
-                # 显示进度
-                logger.info(f"进度: [{idx}/{len(file_paths)}] 正在处理: {file_name}")
-                file_start_time = time.time()
-
-                if result.status == ConversionStatus.SUCCESS:
-                    results["success"] += 1
-                    logger.info(f"✓ 已转换: {file_name}")
-
-                    # 导出为 Markdown
-                    doc = result.document
-
-                    # 确定输出路径
-                    file_stem = Path(file_name).stem
-                    out_path = output_path / f"{file_stem}.md"
-
-                    # 确定图片保存目录：images/{output_file的basename}/
-                    images_dir = working_dir_path / "images" / file_stem
-
-                    # 保存文件
-                    if self.generate_picture_images:
-                        # REFERENCED 模式：图片保存为独立文件
-                        doc.save_as_markdown(out_path, image_mode=ImageRefMode.REFERENCED, artifacts_dir=images_dir)
-
-                        # 将图片链接从绝对路径替换为相对于工作目录的相对路径
-                        # 例如：/absolute/path/to/project/images/doc1/image.png -> images/doc1/image.png
-                        import re
-                        working_dir_str = str(working_dir_path)
-                        # 读取并替换图片链接
-                        md_text = out_path.read_text(encoding='utf-8')
-                        # 替换 Markdown 图片链接中的绝对路径
-                        # 格式：![alt](/absolute/path/to/project/images/...)
-                        md_text = re.sub(
-                            rf'!\[([^\]]*)\]\({re.escape(working_dir_str)}/([^\)]+)\)',
-                            r'![\1](\2)',
-                            md_text
-                        )
-                        out_path.write_text(md_text, encoding='utf-8')
-                    else:
-                        doc.save_as_markdown(out_path, image_mode=ImageRefMode.PLACEHOLDER)
-
-                    logger.info(f"  已保存: {out_path}")
-                    file_time = time.time() - file_start_time
-                    logger.info(f"  文件处理耗时: {file_time:.2f}秒")
-
-                    # 及时释放资源
-                    del doc
-                    del result
-
-                else:
-                    results["failed"] += 1
-                    error_msg = f"{file_name}: {result.status}"
-                    results["errors"].append(error_msg)
-                    logger.error(f"✗ 转换失败: {error_msg}")
-
-                    if result.errors:
-                        for err in result.errors:
-                            logger.error(f"  错误: {err.error_message}")
-                    file_time = time.time() - file_start_time
-                    logger.info(f"  文件处理耗时: {file_time:.2f}秒")
-
-        except Exception as e:
-            logger.error(f"批量转换失败: {str(e)}")
-            raise
-        
-        batch_total_time = time.time() - batch_start_time
-        logger.info(f"批量处理完成！成功: {results['success']}, 失败: {results['failed']}, 总耗时: {batch_total_time:.2f}秒")
-        if results['success'] > 0:
-            logger.info(f"平均每个文件耗时: {batch_total_time / results['success']:.2f}秒")
-
-        return results
-
 
 # 快速转换 无图片、无公式
 DOCLING_FAST_CONVERTER = DoclingConverter(
@@ -378,6 +252,21 @@ DOCLING_IMAGE_CONVERTER = DoclingConverter(
                     do_table_structure=True,
                     do_formula_enrichment=False,
                     generate_picture_images=True,
+                    do_picture_description=True,
+                    enable_remote_services=True,
+                    picture_description_options= PictureDescriptionApiOptions(
+                        url="https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+                        headers={
+                            "Authorization": "Bearer 59165a22c66342c7899bc17a4db39119.emOa7UmRheFdgLDu"
+                        },
+                        params=dict(
+                            model="glm-4.6v",
+                            max_tokens=500,
+                            temperature=0.0,
+                        ),
+                        prompt="请识别图片内容",
+                        timeout=90,
+                    ),
                     images_scale=2.0,
                     generate_parsed_pages=False,
                 )
@@ -461,15 +350,15 @@ if __name__ == "__main__":
 
     # 替换为你的 PDF 文件路径
     working_dir = "/Users/liuyuhua/PycharmProjects/simple-agents/files"
-    pdf_file = "2-函数的极限测试题-2 - 学生.pdf"
-    output_file = "2-函数的极限测试题-2 - 学生.md"
+    pdf_file = "abc.pdf"
+    output_file = "abc.md"
 
     try:
         # 示例 3: 启用高级功能（较慢）
         print("\n" + "=" * 60)
         print("示例 3: 启用图片")
         print("=" * 60)
-        result3 = DOCLING_LLM_CONVERTER.convert(
+        result3 = DOCLING_IMAGE_CONVERTER.convert(
             working_dir=working_dir,
             source_file=pdf_file,
             output_file=output_file,
