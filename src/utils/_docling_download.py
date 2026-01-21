@@ -91,3 +91,6 @@ def download_docling_models():
     print("=" * 60)
     print(f"位置: {cache_dir}")
     print()
+
+if __name__ == '__main__':
+    download_docling_models()
