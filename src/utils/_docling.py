@@ -288,7 +288,7 @@ cus_pipeline_options = PictureDescriptionApiOptions(
     公式
     $$
     """,
-    timeout=180,
+    timeout=300,
 )
 
 # 支持图片提取
@@ -345,7 +345,7 @@ llm_pipeline_options = VlmPipelineOptions(
         $$
         """,
         response_format=ResponseFormat.MARKDOWN,
-        timeout=180,
+        timeout=300,
     )
 )
 
