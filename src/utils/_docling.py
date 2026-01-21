@@ -28,14 +28,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from docling.datamodel.pipeline_options_vlm_model import ApiVlmOptions, ResponseFormat
-from docling.pipeline.vlm_pipeline import VlmPipeline
-from dotenv import load_dotenv
-
-from src.utils._docling_download import ensure_docling_installed, download_docling_models
-
-logger = logging.getLogger(__name__)
-
 # 加载环境变量并添加项目根目录到 Python 路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -47,13 +39,21 @@ ensure_docling_installed()
 # 下载模型
 download_docling_models()
 
+from dotenv import load_dotenv
+
+from src.utils._docling_download import ensure_docling_installed, download_docling_models
+
+logger = logging.getLogger(__name__)
+
 # 导入 docling 相关模块
 from docling.document_converter import DocumentConverter, PdfFormatOption, ImageFormatOption, WordFormatOption, \
     PowerpointFormatOption
+from docling.datamodel.pipeline_options_vlm_model import ApiVlmOptions, ResponseFormat
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, VlmPipelineOptions, \
     PictureDescriptionApiOptions
 from docling_core.types.doc import ImageRefMode, PictureItem
+from docling.pipeline.vlm_pipeline import VlmPipeline
 
 logger = logging.getLogger(__name__)
 
