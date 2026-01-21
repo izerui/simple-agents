@@ -12,7 +12,10 @@ from datetime import datetime
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
+from langchain_core.stores import InMemoryStore
 from langgraph_sdk import Auth
+
+from src.middleware.duplicate_call_prevention import create_duplicate_call_prevention
 
 from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
@@ -76,7 +79,8 @@ convert_agent = SubAgent(
     system_prompt=CONVERT_AGENT_INSTRUCTIONS,
     tools=[convert_to_markdown],
     middleware=[
-        tool_limiter
+        tool_limiter,
+        # create_duplicate_call_prevention(get_backend_per_thread),
     ],  # 完整的中间件配置
 )
 
@@ -88,9 +92,12 @@ research_agent = SubAgent(
     system_prompt=SUBAGENT_INSTRUCTIONS.format(date=current_date),
     tools=[think_tool, fetch_markdown],
     middleware=[
-        tool_limiter
+        tool_limiter,
+        # create_duplicate_call_prevention(get_backend_per_thread),
     ],  # 完整的中间件配置
 )
+
+my_store = InMemoryStore()
 
 # Create the agent
 # 每个对话会获得独立的沙箱路径（./data/sandbox_sessions/{thread_id}/）
@@ -98,12 +105,14 @@ agent = create_deep_agent(
     name="协调者",
     model=chat_model,  # 使用模型实例
     tools=[think_tool, fetch_markdown],
+    store=my_store,
     backend=get_backend_per_thread,
     system_prompt=INSTRUCTIONS,
     subagents=[convert_agent, research_agent],
     middleware=[
         upload_files,
         tool_limiter,
+        # create_duplicate_call_prevention(get_backend_per_thread),
         cus_tool_limiter('glob', 5),
     ],  # 完整的中间件配置
     debug=int(os.getenv('ENABLED_AGENT_DEBUG', 0)) == 1,
