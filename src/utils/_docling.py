@@ -27,6 +27,9 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
+
+from src.utils._docling_download import ensure_docling_installed, download_docling_models
 
 # 加载环境变量并添加项目根目录到 Python 路径
 project_root = Path(__file__).parent.parent.parent
@@ -38,10 +41,6 @@ ensure_docling_installed()
 
 # 下载模型
 download_docling_models()
-
-from dotenv import load_dotenv
-
-from src.utils._docling_download import ensure_docling_installed, download_docling_models
 
 logger = logging.getLogger(__name__)
 
