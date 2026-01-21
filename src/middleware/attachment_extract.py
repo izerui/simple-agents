@@ -12,10 +12,41 @@ from langgraph.runtime import Runtime
 from langgraph.typing import ContextT
 
 from deepagents.backends import FilesystemBackend
+from src.utils._word_to_pdf import word_to_pdf
 from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol, FileUploadResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+
+def _word_to_pdf_base64(filename: str, data: str) -> str:
+    # 解码base64数据并保存为临时文件
+    word_data = base64.b64decode(data)
+    import tempfile
+    import os
+
+    # 创建临时目录和文件
+    temp_dir = tempfile.mkdtemp()
+    temp_word_path = os.path.join(temp_dir, filename)
+
+    with open(temp_word_path, 'wb') as f:
+        f.write(word_data)
+
+    # 转换为PDF
+    try:
+        pdf_data = word_to_pdf(temp_word_path)
+        # 更新数据为PDF的base64编码
+        data = base64.b64encode(pdf_data).decode('utf-8')
+        logger.info(f"Word文件已转换为PDF: {filename}")
+        return data
+    except Exception as e:
+        logger.error(f"Word文件转换为PDF失败: {e}")
+        return None
+    finally:
+        # 清理临时文件
+        os.remove(temp_word_path)
+        os.rmdir(temp_dir)
 
 
 class AttachmentExtractMiddleware(AgentMiddleware):
@@ -73,11 +104,33 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                         # {"type": "file", "metadata": {'filename': 'myfile.pdf'}, "data": "base64_string", "mimeType": "application/pdf"}
                         if block_type == "file":
                             filename = block['metadata'].get('filename', 'unknown')
+                            # 判断是否是Word文件
+                            mime_type = block.get('mimeType', '')
+                            data = block.get('data', '')
+                            file_extension = Path(filename).suffix.lower()
+
+                            # Word文件的MIME类型或扩展名检查
+                            is_word_file = (
+                                mime_type in [
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',  # .docx
+                                    'application/msword'  # .doc
+                                ]
+                                or file_extension in ['.docx', '.doc']
+                            )
+
+                            if is_word_file:
+                                _data = await asyncio.to_thread(_word_to_pdf_base64, filename, data)
+                                if _data:
+                                    data = _data
+                                    # 更新文件名和MIME类型
+                                    filename = Path(filename).stem + '.pdf'
+                                    mime_type = 'application/pdf'
+
                             extracted_attachments.append({
                                 'type': 'file',
                                 'filename': filename,
-                                'data': block.get('data', ''),
-                                'mime_type': block.get('mimeType')
+                                'data': data,
+                                'mime_type': mime_type
                             })
                         # {"type": "image", "metadata": {"name": "1.jpg"}, "mime_type": "image/jpeg", "data": "base64_string"}
                         elif block_type == "image":
