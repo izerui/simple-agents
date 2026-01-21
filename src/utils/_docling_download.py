@@ -4,8 +4,6 @@ import subprocess
 from pathlib import Path
 import logging
 
-from huggingface_hub import constants
-
 logger = logging.getLogger(__name__)
 
 
