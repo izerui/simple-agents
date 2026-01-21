@@ -19,6 +19,7 @@ def ensure_docling_installed():
     except ImportError:
         logger.info("docling 未安装，开始动态安装...")
         try:
+            # uv pip install docling
             # 直接使用 pip 安装 docling，使用清华镜像源加速
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'docling>=2.68.0', '-i',
                                    'https://mirrors.aliyun.com/pypi/simple/'])
