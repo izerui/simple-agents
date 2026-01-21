@@ -281,7 +281,13 @@ cus_pipeline_options = PictureDescriptionApiOptions(
         max_tokens=1024,
         temperature=0.2,
     ),
-    prompt="""请详细识别并描述图片中的所有内容，包括文字、图表、表格、图像含义等。不要遗漏任何信息。""",
+    prompt="""请详细识别并描述图片中的所有内容，包括文字、图表、表格、图像含义等。不要遗漏任何信息。
+    注意公式输出格式为:
+    行内公式: $公式$
+    块级公式: $$
+    公式
+    $$
+    """,
     timeout=90,
 )
 
@@ -331,7 +337,13 @@ llm_pipeline_options = VlmPipelineOptions(
             max_tokens=8192,
             temperature=0.0,
         ),
-        prompt="Convert this page to markdown.",
+        prompt="""转换成`markdown`
+        注意公式输出格式为:
+        行内公式: $公式$
+        块级公式: $$
+        公式
+        $$
+        """,
         response_format=ResponseFormat.MARKDOWN,
     )
 )
