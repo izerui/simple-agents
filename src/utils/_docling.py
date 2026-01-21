@@ -289,7 +289,7 @@ cus_pipeline_options = PictureDescriptionApiOptions(
         max_tokens=1024,
         temperature=0.2,
     ),
-    prompt="""请识别图片内容。""",
+    prompt="""请详细识别并描述图片中的所有内容，包括文字、图表、表格、图像含义等。不要遗漏任何信息。""",
     timeout=90,
 )
 
@@ -376,15 +376,15 @@ if __name__ == "__main__":
 
     # 替换为你的 PDF 文件路径
     working_dir = "/Users/liuyuhua/PycharmProjects/simple-agents/files"
-    pdf_file = "2024高数习题册线面积分级数.docx"
-    output_file = "2024高数习题册线面积分级数.md"
+    pdf_file = "朝天府.pdf"
+    output_file = "朝天府.md"
 
     try:
         # 示例 3: 启用高级功能（较慢）
         print("\n" + "=" * 60)
         print("示例 3: 启用图片")
         print("=" * 60)
-        result3 = DOCLING_LLM_CONVERTER.convert(
+        result3 = DOCLING_IMAGE_CONVERTER.convert(
             working_dir=working_dir,
             source_file=pdf_file,
             output_file=output_file,
