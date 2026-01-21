@@ -275,7 +275,7 @@ cus_pipeline_options = PictureDescriptionApiOptions(
     headers={
         "Authorization": f"Bearer {os.getenv('VL_MODEL_API_KEY')}"
     },
-    concurrency=4,
+    concurrency=1,
     params=dict(
         model=os.getenv('VL_MODEL_MODEL_ID'),
         max_tokens=1024,
@@ -288,7 +288,7 @@ cus_pipeline_options = PictureDescriptionApiOptions(
     公式
     $$
     """,
-    timeout=90,
+    timeout=180,
 )
 
 # 支持图片提取
@@ -331,7 +331,7 @@ llm_pipeline_options = VlmPipelineOptions(
         headers={
             "Authorization": f"Bearer {os.getenv('VL_MODEL_API_KEY')}"
         },
-        concurrency=4,
+        concurrency=1,
         params=dict(
             model=os.getenv('VL_MODEL_MODEL_ID'),
             max_tokens=8192,
@@ -345,6 +345,7 @@ llm_pipeline_options = VlmPipelineOptions(
         $$
         """,
         response_format=ResponseFormat.MARKDOWN,
+        timeout=180,
     )
 )
 
