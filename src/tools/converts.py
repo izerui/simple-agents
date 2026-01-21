@@ -7,6 +7,7 @@ from typing import Any
 from langchain_core.tools import tool
 
 from src.utils._docling import DOCLING_FAST_CONVERTER, DOCLING_IMAGE_CONVERTER, DOCLING_LLM_CONVERTER
+from src.utils._word_to_pdf import word_to_pdf
 from src.utils.util import get_backend_per_thread
 
 
@@ -49,6 +50,20 @@ def convert_to_markdown(
                 "source_path": source_path,
             }
 
+        working_dir = str(backend._resolve_path('.'))
+
+        # word文件转换成pdf再转换成md
+        source_pathlib = Path(source_path)
+        if source_pathlib.suffix.lower() in ['.doc', '.docx']:
+            # Convert Word to PDF first
+            pdf_path = str(source_pathlib.with_suffix('.pdf'))
+            try:
+                word_to_pdf(working_dir, _trip(source_path), _trip(pdf_path))
+                # Update source_path to use the converted PDF
+                source_path = pdf_path
+            except Exception as e:
+                pass
+
         # Determine output file path
         output_file = str(Path(source_path).with_suffix(".md"))
 
@@ -56,25 +71,25 @@ def convert_to_markdown(
         try:
             if generate_picture_images and do_formula_enrichment:
                 DOCLING_LLM_CONVERTER.convert(
-                    working_dir=str(backend._resolve_path('.')),
+                    working_dir=working_dir,
                     source_file=_trip(source_path),
                     output_file=_trip(output_file)
                 )
             elif generate_picture_images:
                 DOCLING_IMAGE_CONVERTER.convert(
-                    working_dir=str(backend._resolve_path('.')),
+                    working_dir=working_dir,
                     source_file=_trip(source_path),
                     output_file=_trip(output_file),
                 )
             elif do_formula_enrichment:
                 DOCLING_LLM_CONVERTER.convert(
-                    working_dir=str(backend._resolve_path('.')),
+                    working_dir=working_dir,
                     source_file=_trip(source_path),
                     output_file=_trip(output_file),
                 )
             else:
                 DOCLING_FAST_CONVERTER.convert(
-                    working_dir=str(backend._resolve_path('.')),
+                    working_dir=working_dir,
                     source_file=_trip(source_path),
                     output_file=_trip(output_file)
                 )

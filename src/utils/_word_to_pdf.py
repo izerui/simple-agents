@@ -3,25 +3,27 @@ from pathlib import Path
 from typing import Optional
 
 
-def word_to_pdf(word_file_path: str, output_pdf_path: Optional[str] = None) -> bytes:
+def word_to_pdf(working_dir: str, source_path: str, pdf_path: Optional[str] = None) -> Optional[bytes]:
     """
     将Word文件转换成PDF文件，调用远程服务
     
     Args:
-        word_file_path: Word文件路径
-        output_pdf_path: 可选，输出PDF文件路径。如果为None，则返回PDF字节数据
+        working_dir: 工作目录路径
+        source_path: Word文件相对路径（相对于working_dir）
+        pdf_path: 可选，输出PDF文件的相对路径（相对于working_dir）。如果为None，则返回PDF字节数据
     
     Returns:
-        如果output_pdf_path为None，返回PDF字节数据；否则返回None
+        如果pdf_path为None，返回PDF字节数据；否则返回None
     
     Raises:
         FileNotFoundError: 如果Word文件不存在
         requests.RequestException: 如果API调用失败
     """
     # 检查Word文件是否存在
-    word_path = Path(word_file_path)
+    work_dir = Path(working_dir)
+    word_path = work_dir / source_path
     if not word_path.exists():
-        raise FileNotFoundError(f"Word文件不存在: {word_file_path}")
+        raise FileNotFoundError(f"Word文件不存在: {word_path}")
     
     # API地址
     api_url = "https://dcca.hhstu.edu.cn/transfer/api/convert-download"
@@ -48,8 +50,8 @@ def word_to_pdf(word_file_path: str, output_pdf_path: Optional[str] = None) -> b
         pdf_data = response.content
         
         # 如果指定了输出路径，保存PDF文件
-        if output_pdf_path:
-            output_path = Path(output_pdf_path)
+        if pdf_path:
+            output_path = work_dir / pdf_path
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, 'wb') as f:
                 f.write(pdf_data)
@@ -68,13 +70,17 @@ if __name__ == "__main__":
     try:
         # 转换并保存到文件
         word_to_pdf(
-            word_file_path="/Users/liuyuhua/PycharmProjects/simple-agents/files/2024高数习题册线面积分级数.docx",
-            output_pdf_path="/Users/liuyuhua/PycharmProjects/simple-agents/files/2024高数习题册线面积分级数.pdf"
+            working_dir="/Users/liuyuhua/PycharmProjects/simple-agents",
+            source_path="files/2024高数习题册线面积分级数.docx",
+            pdf_path="files/2024高数习题册线面积分级数.pdf"
         )
         print("转换成功！PDF文件已保存。")
         
         # 或者获取PDF字节数据
-        # pdf_data = word_to_pdf("example.docx")
+        # pdf_data = word_to_pdf(
+        #     working_dir="/Users/liuyuhua/PycharmProjects/simple-agents",
+        #     source_path="files/2024高数习题册线面积分级数.docx"
+        # )
         # print(f"转换成功！PDF数据大小: {len(pdf_data)} 字节")
         
     except Exception as e:
