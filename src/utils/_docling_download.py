@@ -58,7 +58,7 @@ def download_docling_models():
             )
         )
     )
-    cache_dir = constants.HF_HUB_CACHE
+    cache_dir = HF_HUB_CACHE
     endpoint = "https://hf-mirror.com"
 
     cache_path = Path(cache_dir)
