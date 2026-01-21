@@ -57,6 +57,7 @@ def download_docling_models():
         "docling-project/CodeFormulaV2",
         "docling-project/docling-layout-heron",
         "docling-project/docling-models",
+        "docling-project/SmolDocling-256M-preview",
     ]
 
     print("=" * 60)
