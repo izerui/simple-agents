@@ -40,6 +40,24 @@ def ensure_docling_installed():
 # 动态下载docling模型
 def download_docling_models():
     # 设置环境变量
+    default_home = os.path.join(os.path.expanduser("~"), ".cache")
+    HF_HOME = os.path.expandvars(
+        os.path.expanduser(
+            os.getenv(
+                "HF_HOME",
+                os.path.join(os.getenv("XDG_CACHE_HOME", default_home), "huggingface"),
+            )
+        )
+    )
+    default_cache_path = os.path.join(HF_HOME, "hub")
+    HF_HUB_CACHE = os.path.expandvars(
+        os.path.expanduser(
+            os.getenv(
+                "HF_HUB_CACHE",
+                default_cache_path,
+            )
+        )
+    )
     cache_dir = constants.HF_HUB_CACHE
     endpoint = "https://hf-mirror.com"
 
