@@ -370,5 +370,5 @@ DOCLING_LLM_CONVERTER = DoclingConverter(
             ),
         },
     ),
-    generate_picture_images=False
+    generate_picture_images=True
 )
