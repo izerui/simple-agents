@@ -280,7 +280,7 @@ cus_pipeline_options = PictureDescriptionApiOptions(
     concurrency=1,
     params=dict(
         model=os.getenv('VL_MODEL_MODEL_ID'),
-        max_tokens=1024,
+        max_tokens=4096,
         temperature=0.2,
     ),
     prompt=VLLM_INSTRUCTIONS,
@@ -330,7 +330,7 @@ llm_pipeline_options = VlmPipelineOptions(
         concurrency=1,
         params=dict(
             model=os.getenv('VL_MODEL_MODEL_ID'),
-            max_tokens=8192,
+            max_tokens=4096,
             temperature=0.0,
         ),
         prompt=VLLM_INSTRUCTIONS,
