@@ -59,7 +59,7 @@ tool_limiter = ToolCallLimitMiddleware(
 # 创建文件处理子智能体
 convert_agent = SubAgent(
     name="文件转换子代理",
-    description="用于将用户的源文件 PDF, DOCX, XLSX, PPTX, AsciiDoc 文件转换为 Markdown 格式以便研究",
+    description="用于将用户的源文件 PDF, DOCX, XLSX, PPTX, AsciiDoc 文件转换为 Markdown 格式以便研究，每次仅限一个文件。",
     system_prompt=CONVERT_AGENT_INSTRUCTIONS,
     tools=[convert_to_markdown],
     middleware=[
@@ -73,7 +73,7 @@ research_agent = SubAgent(
     name="研究子代理",
     description="用于研究委托任务的研究员，每次仅限一个主题。",
     system_prompt=SUBAGENT_INSTRUCTIONS.format(date=current_date),
-    tools=[think_tool, fetch_markdown],
+    tools=[fetch_markdown],
     middleware=[
         tool_limiter,
         # create_duplicate_call_prevention(get_backend_per_thread),
