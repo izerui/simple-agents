@@ -15,12 +15,9 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.stores import InMemoryStore
 from langgraph_sdk import Auth
 
-from src.middleware.duplicate_call_prevention import create_duplicate_call_prevention
-
 from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
-from src.prompts import CONVERT_AGENT_INSTRUCTIONS, SUBAGENT_INSTRUCTIONS, AGENT_WORKFLOW_INSTRUCTIONS, \
-    SUBAGENT_DELEGATION_INSTRUCTIONS
+from src.prompts import CONVERT_AGENT_INSTRUCTIONS, SUBAGENT_INSTRUCTIONS, AGENT_WORKFLOW_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_markdown
 from src.tools.think import think_tool
@@ -32,18 +29,6 @@ max_researcher_iterations = 3
 
 # Get current date
 current_date = datetime.now().strftime("%Y-%m-%d")
-
-# 组合编排指令（仅限子代理的 RESEARCHER_INSTRUCTIONS）
-INSTRUCTIONS = (
-        AGENT_WORKFLOW_INSTRUCTIONS.format(date=current_date)
-        + "\n\n"
-        + "=" * 80
-        + "\n\n"
-        + SUBAGENT_DELEGATION_INSTRUCTIONS.format(
-    max_concurrent_research_units=max_concurrent_research_units,
-    max_researcher_iterations=max_researcher_iterations,
-)
-)
 
 # Model Claude 4.5
 chat_model = init_chat_model(
@@ -71,7 +56,6 @@ tool_limiter = ToolCallLimitMiddleware(
     exit_behavior="continue"  # 达到 50 次后，强制终止并返回当前结果
 )
 
-
 # 创建文件处理子智能体
 convert_agent = SubAgent(
     name="文件转换子代理",
@@ -83,7 +67,6 @@ convert_agent = SubAgent(
         # create_duplicate_call_prevention(get_backend_per_thread),
     ],  # 完整的中间件配置
 )
-
 
 # 创建研究子智能体
 research_agent = SubAgent(
@@ -107,7 +90,11 @@ agent = create_deep_agent(
     tools=[think_tool, fetch_markdown],
     store=my_store,
     backend=get_backend_per_thread,
-    system_prompt=INSTRUCTIONS,
+    system_prompt=AGENT_WORKFLOW_INSTRUCTIONS.format(
+        date=current_date,
+        max_concurrent_research_units=max_concurrent_research_units,
+        max_researcher_iterations=max_researcher_iterations,
+    ),
     subagents=[convert_agent, research_agent],
     middleware=[
         upload_files,
