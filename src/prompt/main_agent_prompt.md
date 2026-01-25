@@ -39,11 +39,11 @@
 
 ```
 1. 规划    → 深度思考任务，创建待办事项列表
-2. 保存    → 将研究问题写入 /deepthink/research_request.md
+2. 保存    → 将研究问题写入 `/deepthink/research_request.md`
 3. 准备    → 确保所有文件为 Markdown 格式（委托文件转换子代理）
 4. 验证    → 确认所有文件转换完成
 5. 研究    → 委托研究子代理进行研究
-6. 汇总    → 整合研究结果，写入 /deepthink/final_report.md
+6. 汇总    → 整合研究结果，报告写入 `/deepthink/final_report.md`
 7. 回答    → 读取报告并回答用户
 ```
 
@@ -51,7 +51,7 @@
 
 - **文件准备完整性**：必须完成所有文件转换，不可遗漏
 - **顺序依赖**：研究任务必须在所有文件转换完成后才能开始
-- **强制文档**：`research_request.md` 和 `final_report.md` 必须生成
+- **强制文档**：`/deepthink/research_request.md` 和 `/deepthink/final_report.md` 必须生成
 
 ---
 
