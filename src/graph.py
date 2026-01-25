@@ -7,7 +7,6 @@ Supports per-conversation sandbox isolation using BackendFactory.
 """
 import logging
 import os
-from datetime import datetime
 
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
@@ -17,18 +16,12 @@ from langgraph_sdk import Auth
 
 from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
-from src.prompts import CONVERT_AGENT_INSTRUCTIONS, SUBAGENT_INSTRUCTIONS, AGENT_WORKFLOW_INSTRUCTIONS
+from src.prompts import CONVERT_AGENT_INSTRUCTIONS, RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_markdown
 from src.tools.think import think_tool
 from src.utils.util import get_backend_per_thread
 
-# Limits
-max_concurrent_research_units = 3
-max_researcher_iterations = 3
-
-# Get current date
-current_date = datetime.now().strftime("%Y-%m-%d")
 
 # Model Claude 4.5
 chat_model = init_chat_model(
@@ -72,7 +65,7 @@ convert_agent = SubAgent(
 research_agent = SubAgent(
     name="研究子代理",
     description="用于研究委托任务的研究员，每次仅限一个主题。",
-    system_prompt=SUBAGENT_INSTRUCTIONS.format(date=current_date),
+    system_prompt=RESEARCH_AGENT_INSTRUCTIONS,
     tools=[fetch_markdown],
     middleware=[
         tool_limiter,
@@ -90,11 +83,7 @@ agent = create_deep_agent(
     tools=[think_tool, fetch_markdown],
     store=my_store,
     backend=get_backend_per_thread,
-    system_prompt=AGENT_WORKFLOW_INSTRUCTIONS.format(
-        date=current_date,
-        max_concurrent_research_units=max_concurrent_research_units,
-        max_researcher_iterations=max_researcher_iterations,
-    ),
+    system_prompt=MAIN_AGENT_INSTRUCTIONS,
     subagents=[convert_agent, research_agent],
     middleware=[
         upload_files,
