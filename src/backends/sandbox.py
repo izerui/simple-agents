@@ -1,35 +1,52 @@
+"""
+Deno + uvx Python 沙箱后端
+
+使用 Deno + uvx 管理依赖，在隔离环境中执行 uvx 命令。
+"""
 from pathlib import Path
 import os
 import subprocess
 import tempfile
-import re
 from typing import Optional, Union
 
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse
+from src.utils._deno_setup import ensure_deno
+
+
 
 
 class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
     """
     `SandboxFilesystemBackend`: 为 Linux/macOS 提供严格路径限制的文件系统后端。
-    仅允许通过 execute 方法运行 uvx 命令。
+    使用 Deno + uvx 管理依赖，在隔离环境中执行 uvx 命令。
+
+    特性：
+    - 直接执行 uvx 命令：uvx 自己管理依赖
+    - 工作目录隔离：通过 -m 参数设置工作目录
+    - 环境变量隔离：清空敏感环境变量
+    - 快速执行：依赖缓存后，后续执行非常快
+
+    注意：root_dir 应该在初始化时设置为对应 thread 的专属目录。
     """
 
     def __init__(
-            self,
-            root_dir: Optional[Union[str, Path]] = None,
-            virtual_mode: bool = False,
-            max_file_size_mb: int = 10,
-            max_output_length: int = 100000,  # 100KB
-            timeout_seconds: int = 300,
-            **kwargs
+        self,
+        root_dir: Optional[Union[str, Path]] = None,
+        virtual_mode: bool = False,
+        max_file_size_mb: int = 10,
+        max_output_length: int = 100000,  # 100KB
+        timeout_seconds: int = 300,
+        cache_dir: Optional[str] = None,
+        **kwargs
     ) -> None:
-        # 设置根目录
+        # 设置根目录（应该是 thread 专属目录）
         self.root_dir = Path(root_dir) if root_dir else Path(tempfile.mkdtemp())
         self.root_dir = self.root_dir.resolve()
 
         self.max_output_length = max_output_length
         self.timeout_seconds = timeout_seconds
+        self.cache_dir = cache_dir
 
         # 调用父类初始化
         super().__init__(
@@ -38,72 +55,100 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             max_file_size_mb=max_file_size_mb,
         )
 
-    def _validate_uvx_command(self, command: str) -> bool:
-        """验证命令是否是合法的 uvx 命令
-        
-        规则：只要以 uvx 开头的命令都允许
-        """
-        command = command.strip()
-
-        # 检查是否以 uvx 开头（允许前面有空格）
-        pattern = r'^\s*uvx'
-        return bool(re.match(pattern, command))
-
     def execute(
-            self,
-            command: str,
+        self,
+        command: str,
     ) -> ExecuteResponse:
-        """在沙箱环境中执行uvx命令，仅允许运行 uvx 命令
+        """在沙箱环境中执行 uvx 命令
 
+        直接执行标准的 uvx 命令，uvx 自己会管理依赖。
+        
         Args:
-            command: 要执行的完整uvx命令字符串
+            command: 要执行的 uvx 命令（例如 "uvx --with requests python script.py"）
 
         Returns:
             ExecuteResponse包含输出、退出码和截断标志
         """
         try:
-            # 验证命令是否是合法的 uvx 命令
-            if not self._validate_uvx_command(command):
+            # 确保 Deno 已安装，获取 deno 路径
+            deno_path = ensure_deno()
+
+            # 构造 Deno 命令
+            # --allow-read: 允许读取文件（需要访问 runner 脚本）
+            # --allow-write: 允许写入文件
+            # --allow-run: 允许运行 uvx
+            # --allow-env: 允许访问 PATH、HOME 等必要环境变量
+            script_path = Path.cwd() / "scripts" / "uvx_runner" / "mod.ts"
+            
+            # 使用 deno 可执行文件
+            deno_command = [
+                str(deno_path), "run",
+                "--allow-read",
+                "--allow-write",
+                "--allow-run",
+                # "--allow-env",
+                str(script_path),
+                "-m", str(self.root_dir),  # 设置工作目录
+                "-c", command,  # 直接传递 uvx 命令
+            ]
+
+            # 添加缓存目录
+            if self.cache_dir:
+                deno_command.extend(["--cache-dir", str(self.cache_dir)])
+
+            # 执行沙箱进程
+            # 保留必要的环境变量（PATH、HOME、USER）以支持 uvx
+            env_vars = {
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": os.environ.get("HOME", ""),
+                "USER": os.environ.get("USER", ""),
+            }
+            process = subprocess.Popen(
+                deno_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=str(self.root_dir),
+                env=env_vars,  # 只保留必要的环境变量
+                text=True
+            )
+
+            try:
+                # 添加超时控制
+                stdout, stderr = process.communicate(
+                    timeout=self.timeout_seconds
+                )
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate()
                 return ExecuteResponse(
-                    output=f"错误: 只允许执行 uvx 命令。命令: {command}",
+                    output=f"错误: 脚本执行超时（超过 {self.timeout_seconds} 秒），已强制终止。",
                     exit_code=-1,
                     truncated=False
                 )
 
-            # 构建安全的执行命令
-            safe_command = f'cd "{self.root_dir}" && {command}'
+            # 步骤 6: 解析 JSON 输出（Deno + uvx runner 输出 JSON 格式）
+            import json
+            try:
+                result = json.loads(stdout)
+                stdout_content = result.get("stdout", "")
+                stderr_content = result.get("stderr", "")
+                success = result.get("success", False)
 
-            # 设置受限的环境变量
-            env = {
-                'PATH': f'/usr/bin:/bin:/usr/local/bin:{os.path.expanduser("~/.local/bin")}:/opt/homebrew/bin',
-                'HOME': str(self.root_dir),
-                'PWD': str(self.root_dir),
-                'TMPDIR': str(self.root_dir),  # 限制临时目录
-                'UV_SYSTEM_PYTHON': '1',  # 使用系统 Python 环境而不是自动下载
-            }
+                # 合并 stdout 和 stderr
+                output = stdout_content
+                if stderr_content:
+                    output += f"\n[错误输出]\n{stderr_content}"
 
-            # 继承一些安全的环境变量
-            for key in ['LANG', 'LC_ALL', 'TERM']:
-                if key in os.environ:
-                    env[key] = os.environ[key]
+                # 根据成功状态设置退出码
+                exit_code = result.get("exitCode", 0 if success else 1)
+            except json.JSONDecodeError:
+                # 如果输出不是 JSON，可能是错误信息
+                output = stdout
+                if stderr:
+                    output += f"\n[错误输出]\n{stderr}"
+                exit_code = process.returncode
 
-            # 执行命令
-            result = subprocess.run(
-                safe_command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout_seconds,
-                env=env,
-                cwd=str(self.root_dir)
-            )
-
-            # 合并stdout和stderr
-            output = result.stdout
-            if result.stderr:
-                output += result.stderr
-
-            # 如果输出太大则截断
+            # 步骤 7: 如果输出太大则截断
             truncated = False
             if len(output) > self.max_output_length:
                 output = output[:self.max_output_length]
@@ -112,19 +157,13 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
 
             return ExecuteResponse(
                 output=output,
-                exit_code=result.returncode,
+                exit_code=exit_code,
                 truncated=truncated
             )
 
-        except subprocess.TimeoutExpired:
-            return ExecuteResponse(
-                output=f"错误: 命令执行超时 (超过 {self.timeout_seconds} 秒)",
-                exit_code=-1,
-                truncated=False
-            )
         except Exception as e:
             return ExecuteResponse(
-                output=f"执行命令时出错: {str(e)}",
+                output=f"系统异常: {str(e)}",
                 exit_code=-1,
                 truncated=False
             )

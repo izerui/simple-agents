@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""独立运行：多轮对话测试"""
+"""独立运行：Markdown 文件操作测试"""
 import asyncio
 from pathlib import Path
 import sys
@@ -8,28 +8,28 @@ from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
 # 加载环境变量并添加项目根目录到 Python 路径
-project_root = Path(__file__).parent.parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 load_dotenv(dotenv_path=project_root / '.env')
 
 from src.graph import agent
-from src.tests.agents.output_handler import output_handler, print_header, print_user_message, print_footer
+from tests.agents.output_handler import output_handler, print_header, print_user_message, print_footer
 
 
 async def run_test():
-    """运行多轮对话测试。"""
-    thread_id = "test_conversation_turns"
+    """运行 Markdown 文件操作测试。"""
+    thread_id = "test_markdown_operations"
 
     print("\n" + "=" * 80)
-    print("💬 多轮对话测试")
+    print("📝 Markdown 文件操作测试")
     print("=" * 80)
 
-    # 第一轮对话
-    print_header("第一轮对话（创建文件）")
-    user_message_1 = "创建一个名为 test_conversation.md 的文件，内容为 '第一轮对话'"
-    print_user_message(user_message_1)
+    # 步骤 1: 创建 Markdown 文件
+    print_header("步骤 1: 创建 Markdown 文件")
+    create_message = "创建一个文件 test.md，内容为 '# 标题\\n\\n这是一个测试段落'"
+    print_user_message(create_message)
 
-    inputs_1 = {"messages": [HumanMessage(content=user_message_1)]}
+    inputs_1 = {"messages": [HumanMessage(content=create_message)]}
     config = RunnableConfig(
         configurable={
             "thread_id": thread_id,
@@ -42,23 +42,23 @@ async def run_test():
     async for event in agent.astream_events(inputs_1, version="v2", config=config):
         output_handler(event)
 
-    print_footer("第一轮对话")
+    print_footer("创建 Markdown 文件")
 
-    # 第二轮对话（使用相同的 thread_id 保持上下文）
-    print_header("第二轮对话（读取文件）")
-    user_message_2 = "读取 test_conversation.md 文件的内容"
-    print_user_message(user_message_2)
+    # 步骤 2: 读取 Markdown 文件
+    print_header("步骤 2: 读取 Markdown 文件")
+    read_message = "读取 test.md 文件的内容"
+    print_user_message(read_message)
 
-    inputs_2 = {"messages": [HumanMessage(content=user_message_2)]}
+    inputs_2 = {"messages": [HumanMessage(content=read_message)]}
 
-    # 执行 agent（流式输出）
+    # 使用相同的 thread_id 实现连续对话
     async for event in agent.astream_events(inputs_2, version="v2", config=config):
         output_handler(event)
 
-    print_footer("第二轮对话")
+    print_footer("读取 Markdown 文件")
 
     print("=" * 80)
-    print("🎉 多轮对话测试完成！")
+    print("🎉 Markdown 文件操作测试完成！")
     print("=" * 80 + "\n")
 
 
