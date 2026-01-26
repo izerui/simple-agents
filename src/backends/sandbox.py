@@ -86,7 +86,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                 "--allow-read",
                 "--allow-write",
                 "--allow-run",
-                # "--allow-env",
+                "--allow-env",
                 str(script_path),
                 "-m", str(self.root_dir),  # 设置工作目录
                 "-c", command,  # 直接传递 uvx 命令
