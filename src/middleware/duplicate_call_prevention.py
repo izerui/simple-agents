@@ -120,6 +120,11 @@ class DuplicateCallPreventionMiddleware(AgentMiddleware):
             path = args.get("path", "/")
             return f"{thread_id}:ls:{path}"
 
+        elif tool_name == "fetch_markdown":
+            # fetch_markdown 工具使用 url 参数
+            url = args.get("url", "")
+            return f"{thread_id}:fetch_markdown:{url}"
+
         elif tool_name == "read_file":
             # read_file 工具使用 file_path 参数
             file_path = args.get("file_path", args.get("path", "/"))
@@ -262,6 +267,19 @@ class DuplicateCallPreventionMiddleware(AgentMiddleware):
                 f"不要重复使用相同的搜索。请尝试其他搜索词或继续下一步。"
             )
 
+        elif tool_name == "fetch_markdown":
+            url = args.get("url", "")
+            if is_strict:
+                return (
+                    f"错误：你刚刚已经获取了 URL '{url}' 的内容。"
+                    f"不要重复获取相同网页。请使用已获取的内容继续工作。"
+                )
+            else:
+                return (
+                    f"警告：你刚刚已经获取了 URL '{url}' 的内容。"
+                    f"避免重复获取相同网页。如果需要再次查看，请使用之前获取的内容。"
+                )
+
         else:
             return (
                 f"错误：你刚刚已经调用了工具 '{tool_name}'。"
@@ -284,6 +302,6 @@ def create_duplicate_call_prevention(
     """
     return DuplicateCallPreventionMiddleware(
         backend_factory=backend_factory,
-        strict_tools=["ls", "read_file", "glob", "grep"],
+        strict_tools=["ls", "read_file", "glob", "grep", "fetch_markdown"],
         max_repeats=1,
     )

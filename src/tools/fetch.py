@@ -110,6 +110,7 @@ def fetch_markdown(url: str) -> dict[str, Any]:
         return {
             "success": True,
             "url": str(response.url),
+            "message": f"已经访问{url}，并成功将内容转换为Markdown格式并写入到 `markdown_content` 字段内容。",
             "markdown_content": markdown_content,
             "status_code": response.status_code,
             "content_length": len(markdown_content),
@@ -117,6 +118,7 @@ def fetch_markdown(url: str) -> dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
+            "message": f"已经访问{url}，但获取内容时出错。错误信息参考 `error` 字段内容。",
             "error": f"Fetch URL error: {e!s}",
             "url": url
         }
