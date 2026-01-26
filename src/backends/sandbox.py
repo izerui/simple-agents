@@ -79,6 +79,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                 'HOME': str(self.root_dir),
                 'PWD': str(self.root_dir),
                 'TMPDIR': str(self.root_dir),  # 限制临时目录
+                'UV_SYSTEM_PYTHON': '1',  # 使用系统 Python 环境而不是自动下载
             }
 
             # 继承一些安全的环境变量
