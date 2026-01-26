@@ -33,7 +33,8 @@ async def run_test():
         shutil.rmtree(Path(project_root / "data" / "sandbox_sessions" / thread_id))
 
     # 用户问题
-    user_message = """参考 题目导入模版.xlsx 的标头信息 从 其他文档中提取相关信息并生成结果 excel文件。(注意题目的答案可能单独一个文件)"""
+    user_message = """参考 题目导入模版.xlsx 的标头信息 从 其他文档中提取相关信息，生成每个题目对应的答案(注意题目的答案可能单独一个文件)、选项等信息，以markdown的形式写入最终报告文件，
+    然后基于该最终报告文件提取内容，按照题目导入模版的 标头 生成结果excel文件。"""
     
     xlsx_path = project_root / "files/题目导入模版.xlsx"
     docx1_path = project_root / "files/第二关第一周日常训练.docx"
