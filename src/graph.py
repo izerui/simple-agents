@@ -85,6 +85,9 @@ agent = create_deep_agent(
     backend=get_backend_per_thread,
     system_prompt=MAIN_AGENT_INSTRUCTIONS,
     subagents=[convert_agent, research_agent],
+    skills=[
+        'skills/xlsx'
+    ],
     middleware=[
         upload_files,
         tool_limiter,

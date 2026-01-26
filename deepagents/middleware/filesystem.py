@@ -227,41 +227,47 @@ Examples:
 - Search Python files only: `grep(pattern="import", glob="*.py")`
 - Show matching lines: `grep(pattern="error", output_mode="content")`"""
 
-EXECUTE_TOOL_DESCRIPTION = """Executes a shell command in an isolated sandbox environment.
+EXECUTE_TOOL_DESCRIPTION = """Executes a Python script using uvx command.
 
 Usage:
-Executes a given command in the sandbox environment with proper handling and security measures.
+Executes Python scripts using the uvx command with proper package dependencies.
 Before executing the command, please follow these steps:
 1. Directory Verification:
-   - If the command will create new directories or files, first use the ls tool to verify the parent directory exists and is the correct location
-   - For example, before running "mkdir foo/bar", first use ls to check that "foo" exists and is the intended parent directory
+   - If the script will create new directories or files, first use the ls tool to verify the parent directory exists and is the correct location
+   - For example, before running a script that writes to "output.xlsx", first use ls to check the output directory exists
 2. Command Execution:
-   - Always quote file paths that contain spaces with double quotes (e.g., cd "path with spaces/file.txt")
-   - Examples of proper quoting:
-     - cd "/Users/name/My Documents" (correct)
-     - cd /Users/name/My Documents (incorrect - will fail)
-     - python "/path/with spaces/script.py" (correct)
-     - python /path/with spaces/script.py (incorrect - will fail)
-   - After ensuring proper quoting, execute the command
+   - Always quote file paths that contain spaces with double quotes (e.g., "path with spaces/script.py")
+   - After ensuring proper quoting, execute the command with uvx
    - Capture the output of the command
 Usage notes:
   - Commands run in an isolated sandbox environment
   - Returns combined stdout/stderr output with exit code
   - If the output is very large, it may be truncated
-  - VERY IMPORTANT: You MUST avoid using search commands like find and grep. Instead use the grep, glob tools to search. You MUST avoid read tools like cat, head, tail, and use read_file to read files.
+  - CRITICAL: This tool ONLY supports uvx commands for Python script execution
+  - REQUIRED format: `uvx --cache-dir .uvx/cache --with <packages> python <script>.py [args]`
+  - Examples:
+    - `uvx --cache-dir .uvx/cache --with pandas --with openpyxl python recalc.py output.xlsx 30`
+    - `uvx --cache-dir .uvx/cache --with pandas python /path/to/script.py --arg value`
+  - You MUST include the `python` keyword after the packages
+  - You MUST use `--with <package>` to specify dependencies
+  - Do NOT use `python script.py` - this is NOT supported
+  - Do NOT use `uvx script.py` - this is NOT supported
+  - Do NOT use any other commands (npm, pytest, find, grep, etc.) - they are NOT supported
   - When issuing multiple commands, use the ';' or '&&' operator to separate them. DO NOT use newlines (newlines are ok in quoted strings)
-    - Use '&&' when commands depend on each other (e.g., "mkdir dir && cd dir")
+    - Use '&&' when commands depend on each other
     - Use ';' only when you need to run commands sequentially but don't care if earlier commands fail
   - Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of cd
 
 Examples:
   Good examples:
-    - execute(command="pytest /foo/bar/tests")
-    - execute(command="python /path/to/script.py")
-    - execute(command="npm install && npm test")
+    - execute(command="uvx --cache-dir .uvx/cache --with pandas --with openpyxl python recalc.py output.xlsx 30")
+    - execute(command="uvx --cache-dir .uvx/cache --with python /path/to/script.py --input data.csv")
 
   Bad examples (avoid these):
-    - execute(command="cd /foo/bar && pytest tests")  # Use absolute path instead
+    - execute(command="python /path/to/script.py")  # Use uvx instead
+    - execute(command="uvx script.py")  # Missing --with packages and python keyword
+    - execute(command="pytest /foo/bar/tests")  # Not supported
+    - execute(command="npm install")  # Not supported
     - execute(command="cat file.txt")  # Use read_file tool instead
     - execute(command="find . -name '*.py'")  # Use glob tool instead
     - execute(command="grep -r 'pattern' .")  # Use grep tool instead

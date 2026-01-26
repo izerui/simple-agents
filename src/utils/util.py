@@ -14,6 +14,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from deepagents.backends import FilesystemBackend
+from src.backends.sandbox import SandboxFilesystemBackend
 
 console = Console()
 
@@ -154,7 +155,7 @@ def get_backend_per_thread(runtime: ToolRuntime | RunnableConfig | dict = None) 
 
     # 创建新的 Backend 实例并缓存
     # 注意：不预先转换为绝对路径，让 FilesystemBackend.__init__ 处理
-    backend = FilesystemBackend(
+    backend = SandboxFilesystemBackend(
         root_dir=thread_dir,
         virtual_mode=True,
         max_file_size_mb=50,
