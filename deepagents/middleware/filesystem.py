@@ -227,53 +227,25 @@ Examples:
 - Search Python files only: `grep(pattern="import", glob="*.py")`
 - Show matching lines: `grep(pattern="error", output_mode="content")`"""
 
-EXECUTE_TOOL_DESCRIPTION = """Executes a Python script using uvx command.
+EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令。
 
-Usage:
-Executes Python scripts using the uvx command with proper package dependencies.
-Before executing the command, please follow these steps:
-1. Directory Verification:
-   - If the script will create new directories or files, first use the ls tool to verify the parent directory exists and is the correct location
-   - For example, before running a script that writes to "output.xlsx", first use ls to check the output directory exists
-2. Command Execution:
-   - Always quote file paths that contain spaces with double quotes (e.g., "path with spaces/script.py")
-   - After ensuring proper quoting, execute the command with uvx
-   - Capture the output of the command
-Usage notes:
-  - Commands run in an isolated sandbox environment
-  - Returns combined stdout/stderr output with exit code
-  - If the output is very large, it may be truncated
-  - CRITICAL: This tool ONLY supports uvx commands for Python script execution
-  - REQUIRED format: `uvx --cache-dir .uvx/cache --with <packages> python <script>.py [args]`
-  - Examples:
-    - `uvx --cache-dir .uvx/cache --with pandas --with openpyxl python recalc.py output.xlsx 30`
-    - `uvx --cache-dir .uvx/cache --with pandas python /path/to/script.py --arg value`
-  - You MUST include the `python` keyword after the packages
-  - You MUST use `--with <package>` to specify dependencies
-  - Do NOT use `python script.py` - this is NOT supported
-  - Do NOT use `uvx script.py` - this is NOT supported
-  - Do NOT use any other commands (npm, pytest, find, grep, etc.) - they are NOT supported
-  - When issuing multiple commands, use the ';' or '&&' operator to separate them. DO NOT use newlines (newlines are ok in quoted strings)
-    - Use '&&' when commands depend on each other
-    - Use ';' only when you need to run commands sequentially but don't care if earlier commands fail
-  - Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of cd
+支持的执行格式（仅限以下两种）：
 
-Examples:
-  Good examples:
-    - execute(command="uvx --cache-dir .uvx/cache --with pandas --with openpyxl python recalc.py output.xlsx 30")
-    - execute(command="uvx --cache-dir .uvx/cache --with python /path/to/script.py --input data.csv")
+1. 直接执行代码字符串：python -c "code"
+   示例：python -c "print('Hello World')"
 
-  Bad examples (avoid these):
-    - execute(command="python /path/to/script.py")  # Use uvx instead
-    - execute(command="uvx script.py")  # Missing --with packages and python keyword
-    - execute(command="pytest /foo/bar/tests")  # Not supported
-    - execute(command="npm install")  # Not supported
-    - execute(command="cat file.txt")  # Use read_file tool instead
-    - execute(command="find . -name '*.py'")  # Use glob tool instead
-    - execute(command="grep -r 'pattern' .")  # Use grep tool instead
+2. 执行脚本文件：python script.py
+   示例：python /path/to/script.py
 
-Note: This tool is only available if the backend supports execution (SandboxBackendProtocol).
-If execution is not supported, the tool will return an error message."""
+除上述两种格式外，其他任何命令均不支持。
+
+使用说明：
+- 执行脚本文件时，建议使用绝对路径
+- 如果路径包含空格，请使用双引号包裹
+- 命令在隔离的沙箱环境中运行
+- 返回 stdout/stderr 合并输出及退出码
+- 如果输出过大，可能会被截断"""
+
 
 FILESYSTEM_SYSTEM_PROMPT = """## Filesystem Tools `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`
 

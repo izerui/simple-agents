@@ -376,19 +376,6 @@ wheels = [
 ]
 
 [[package]]
-name = "deno"
-version = "2.6.6"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/58/1d/f3bd6e882def08480537287c1843457c2eeef5b146054d3eec269f575cd3/deno-2.6.6.tar.gz", hash = "sha256:6332498b56a92c4457697fe944ebe91caee5a9e92b93e5b518f98e66a453842c", size = 8129, upload-time = "2026-01-22T22:28:56.924Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a2/92/6f08d1145a681c4e94b3c508317d8438d3e2e01d949b5ad0d83315dfd252/deno-2.6.6-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:e571328fc5ebb81fab79bcaf3c386998595361850dd433a18566fad9945b3ac3", size = 43985876, upload-time = "2026-01-22T22:28:40.524Z" },
-    { url = "https://files.pythonhosted.org/packages/1c/24/73ddbeb33995b6683bf577b46b0859ccc454397baeb21f8776ec0a1ca6cd/deno-2.6.6-py3-none-macosx_11_0_arm64.whl", hash = "sha256:c8f85d47f0cde4418c5c81ee2eb43b5ae2f11ff0305be2fdbde76e38c4fefeaa", size = 41181390, upload-time = "2026-01-22T22:28:43.806Z" },
-    { url = "https://files.pythonhosted.org/packages/c7/f9/1b9f03c8e438b42e8cbfd76c5e8586578ac784ae0a89c29a40427aad4a9a/deno-2.6.6-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:db134fd9a774214cbd0defd5ba5c1937d879262008b4cdc698bd8887a512d1eb", size = 45030126, upload-time = "2026-01-22T22:28:47.172Z" },
-    { url = "https://files.pythonhosted.org/packages/c8/db/f196fce765657a00a1fcb03eadcee582f5c37e4299dac999eed3822b33de/deno-2.6.6-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:71c30bb62602a7d5cd14b01f1b2e9f26868279578fe07da88fa25838ae2dc2e0", size = 46934500, upload-time = "2026-01-22T22:28:50.614Z" },
-    { url = "https://files.pythonhosted.org/packages/81/9b/6d8151b5002b0cbbf1cf0d0136bbbb06a45fa99969cbbcbe0b2fe5709af2/deno-2.6.6-py3-none-win_amd64.whl", hash = "sha256:5ba8c3014e2f2e720eb8931ed5b663c0d09a276ccd81df5f483d642012783dab", size = 45809561, upload-time = "2026-01-22T22:28:54.123Z" },
-]
-
-[[package]]
 name = "dill"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2687,6 +2674,15 @@ wheels = [
 ]
 
 [[package]]
+name = "restrictedpython"
+version = "8.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/1c/aec08bcb4ab14a1521579fbe21ceff2a634bb1f737f11cf7f9c8bb96e680/restrictedpython-8.1.tar.gz", hash = "sha256:4a69304aceacf6bee74bdf153c728221d4e3109b39acbfe00b3494927080d898", size = 838331, upload-time = "2025-10-19T14:11:32.531Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/c0/3848f4006f7e164ee20833ca984067e4b3fc99fe7f1dfa88b4927e681299/restrictedpython-8.1-py3-none-any.whl", hash = "sha256:4769449c6cdb10f2071649ba386902befff0eff2a8fd6217989fa7b16aeae926", size = 27651, upload-time = "2025-10-19T14:11:30.201Z" },
+]
+
+[[package]]
 name = "rich"
 version = "14.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2986,7 +2982,6 @@ version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
-    { name = "deno" },
     { name = "fastapi" },
     { name = "huggingface-hub" },
     { name = "langchain" },
@@ -3000,6 +2995,7 @@ dependencies = [
     { name = "load-dotenv" },
     { name = "markdownify" },
     { name = "requests" },
+    { name = "restrictedpython" },
     { name = "rich" },
     { name = "sse-starlette" },
     { name = "wcmatch" },
@@ -3018,7 +3014,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiofiles", specifier = ">=25.1.0" },
-    { name = "deno", specifier = ">=2.6.6" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.68.0" },
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "huggingface-hub", specifier = ">=0.36.0" },
@@ -3033,6 +3028,7 @@ requires-dist = [
     { name = "load-dotenv", specifier = ">=0.1.0" },
     { name = "markdownify", specifier = ">=1.2.2" },
     { name = "requests", specifier = ">=2.32.5" },
+    { name = "restrictedpython", specifier = ">=8.1" },
     { name = "rich", specifier = ">=14.2.0" },
     { name = "sse-starlette", specifier = ">=2.1.0,<2.2.0" },
     { name = "wcmatch" },
