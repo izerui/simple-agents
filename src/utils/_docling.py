@@ -28,11 +28,12 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from src.prompts import VLLM_INSTRUCTIONS
 from src.utils._docling_download import ensure_docling_installed, download_docling_models
 
 # 确保依赖已安装
 ensure_docling_installed()
+
+from src.prompts import VLLM_INSTRUCTIONS
 
 # 下载模型
 download_docling_models()
