@@ -166,14 +166,11 @@ class FileAccessControl:
         is_inside = self.is_inside_root_dir(file_path)
         
         if not is_inside:
-            # root_dir 外：只允许只读访问
-            if can_write:
-                raise PermissionError(
-                    f"root_dir 外的文件只能只读访问: {file_path}"
-                )
-            # 只读模式：检查文件是否存在
-            if can_read and not file_path.exists():
-                raise FileNotFoundError(f"文件不存在: {file_path}")
+            # 🔒 安全修复：完全禁止 root_dir 外的访问
+            raise PermissionError(
+                f"禁止访问 root_dir 外的文件: {file_path}\n"
+                f"出于安全考虑，沙箱只允许访问 root_dir 内的文件"
+            )
         else:
             # root_dir 内：允许所有操作
             # 如果是写入模式，确保父目录存在
