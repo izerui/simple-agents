@@ -335,55 +335,50 @@ class RestrictedPythonBackend(FilesystemBackend, SandboxBackendProtocol):
                 return f.read()
     
     def _create_safe_globals(self) -> dict:
-        """创建安全的全局变量字典
+        """创建安全的全局变量字典（黑名单模式）
+        
+        黑名单模式：允许所有内置函数，只明确禁止危险的函数
         
         Returns:
             安全的全局变量字典
         """
-        # 创建基础的全局变量字典
+        # 导入 builtins 模块以获取所有内置函数
+        import builtins
+        
+        # ⚠️ 安全警告：黑名单模式允许更多函数，请确保在受控环境中使用
+        # 创建基础的全局变量字典（复制所有内置函数）
         safe_globals = {
-            '__builtins__': {
-                'None': None,
-                'True': True,
-                'False': False,
-                'int': int,
-                'float': float,
-                'str': str,
-                'list': list,
-                'dict': dict,
-                'tuple': tuple,
-                'set': set,
-                'bool': bool,
-                'len': len,
-                'range': range,
-                'type': type,
-                'isinstance': isinstance,
-                'hasattr': hasattr,
-                'getattr': getattr,
-                'setattr': setattr,
-                'delattr': delattr,
-                'min': min,
-                'max': max,
-                'sum': sum,
-                'abs': abs,
-                'round': round,
-                'sorted': sorted,
-                'reversed': reversed,
-                'enumerate': enumerate,
-                'zip': zip,
-                'map': map,
-                'filter': filter,
-                'all': all,
-                'any': any,
-                'print': print,
-                '__import__': __import__,
-            }
+            '__builtins__': builtins.__dict__.copy()
         }
         
-        # 添加受限的 open 函数
+        # 🚫 黑名单：定义危险函数列表
+        DANGEROUS_FUNCTIONS = [
+            # 代码执行类（最危险）
+            'eval',
+            'exec',
+            'compile',
+            
+            # 文件操作类（会被安全版本替换）
+            'open',
+            'file',  # Python 2 兼容
+            
+            # 内存操作类
+            'memoryview',
+            'buffer',
+        ]
+        
+        # 🚫 移除危险函数
+        for func_name in DANGEROUS_FUNCTIONS:
+            if func_name in safe_globals['__builtins__']:
+                del safe_globals['__builtins__'][func_name]
+        
+        # 🔒 添加受限的 open 函数（替换原生的 open）
         safe_open = self._create_safe_open()
         safe_globals['open'] = safe_open
         safe_globals['__builtins__']['open'] = safe_open
+        
+        # 保留 print 函数（内置的）
+        safe_globals['print'] = print
         
         # 添加其他安全的全局函数
         safe_globals['print'] = print
