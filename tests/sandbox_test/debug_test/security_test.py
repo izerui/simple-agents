@@ -14,7 +14,7 @@ import os
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.backends.sandbox import RestrictedPythonBackend
+from src.backends.sandbox import SandboxFilesystemBackend
 
 print("=" * 70)
 print("安全漏洞演示测试")
@@ -24,7 +24,7 @@ print(f"Python 版本: {sys.version}")
 print()
 
 # 创建测试实例
-backend = RestrictedPythonBackend(root_dir=str(tempfile.mkdtemp()))
+backend = SandboxFilesystemBackend(root_dir=str(tempfile.mkdtemp()))
 
 # 漏洞 1: 读取系统文件
 print("【漏洞 1】读取系统敏感文件")

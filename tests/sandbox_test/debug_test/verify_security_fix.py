@@ -12,7 +12,7 @@ import tempfile
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.backends.sandbox import RestrictedPythonBackend
+from src.backends.sandbox import SandboxFilesystemBackend
 
 print("=" * 80)
 print("安全修复验证报告")
@@ -20,7 +20,7 @@ print("=" * 80)
 print()
 
 # 创建测试实例
-backend = RestrictedPythonBackend(root_dir=str(tempfile.mkdtemp()))
+backend = SandboxFilesystemBackend(root_dir=str(tempfile.mkdtemp()))
 
 # 在 root_dir 内创建测试文件
 root_dir = backend.root_dir

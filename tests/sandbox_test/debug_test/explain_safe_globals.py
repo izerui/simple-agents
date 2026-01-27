@@ -76,11 +76,11 @@ print()
 print("【3】safe_globals 的安全性")
 print("-" * 80)
 
-from src.backends.sandbox import RestrictedPythonBackend
+from src.backends.sandbox import SandboxFilesystemBackend
 import tempfile
 
 # 创建沙箱实例
-backend = RestrictedPythonBackend(root_dir=str(tempfile.mkdtemp()))
+backend = SandboxFilesystemBackend(root_dir=str(tempfile.mkdtemp()))
 
 print("使用 safe_globals 的沙箱环境测试（安全操作）：")
 print()

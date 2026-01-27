@@ -196,7 +196,7 @@ class FileAccessControl:
         return file_path
 
 
-class RestrictedPythonBackend(FilesystemBackend, SandboxBackendProtocol):
+class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
     """
     基于 RestrictedPython 的安全沙箱后端 V2（只支持标准执行格式）
     

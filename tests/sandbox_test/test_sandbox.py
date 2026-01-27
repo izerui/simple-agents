@@ -20,7 +20,7 @@ import json
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.backends.sandbox import RestrictedPythonBackend
+from src.backends.sandbox import SandboxFilesystemBackend
 
 # 测试工作目录
 WORKSPACE_DIR = Path(__file__).parent / "workspace"
@@ -32,7 +32,7 @@ class TestSandbox:
     
     def __init__(self):
         """初始化测试环境"""
-        self.backend = RestrictedPythonBackend(
+        self.backend = SandboxFilesystemBackend(
             root_dir=str(WORKSPACE_DIR),
             timeout_seconds=30,
             max_memory_mb=512,
@@ -487,7 +487,7 @@ def test_timeout_and_resources(test_runner):
     
     # 测试 8.2: 超时执行（创建一个短超时的后端）
     print("\n测试 8.2: 超时执行")
-    from src.backends.sandbox import RestrictedPythonBackend as Sandbox
+    from src.backends.sandbox import SandboxFilesystemBackend as Sandbox
     timeout_backend = Sandbox(
         root_dir=str(WORKSPACE_DIR),
         timeout_seconds=2  # 2 秒超时

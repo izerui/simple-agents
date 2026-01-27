@@ -13,7 +13,7 @@ import tempfile
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.backends.sandbox import RestrictedPythonBackend
+from src.backends.sandbox import SandboxFilesystemBackend
 
 print("=" * 80)
 print("黑名单模式测试")
@@ -21,7 +21,7 @@ print("=" * 80)
 print()
 
 # 创建测试实例
-backend = RestrictedPythonBackend(root_dir=str(tempfile.mkdtemp()))
+backend = SandboxFilesystemBackend(root_dir=str(tempfile.mkdtemp()))
 
 print(f"root_dir: {backend.root_dir}")
 print()
