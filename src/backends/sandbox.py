@@ -20,7 +20,7 @@
 只支持两种标准执行格式：
 1. python -c "code" - 直接执行代码字符串
 2. python script.py - 执行脚本文件
-"""
+ """
 import sys
 import io
 import os
@@ -31,8 +31,9 @@ from pathlib import Path
 import tempfile
 from typing import Optional, Union, Any, Dict
 import re
-
-# 全局线程本地变量，用于存储每个线程的 root_dir
+import codecs
+ 
+ # 全局线程本地变量，用于存储每个线程的 root_dir
 _thread_local = threading.local()
 
 # 全局标志，标记是否已经替换了 builtins.open
@@ -80,24 +81,17 @@ def _get_safe_open():
     """创建线程安全的 safe_open 函数
     
     该函数从线程本地变量读取当前线程的 root_dir
+    如果没有设置 root_dir，回退到原始的 open（避免影响其他代码）
     """
     def safe_open(filename: Union[str, Path], mode: str = 'r', *args, **kwargs):
-        """线程安全的 open 函数
-        
-        从线程本地变量读取 root_dir，所有路径都相对于该 root_dir
-        
-        Raises:
-            RuntimeError: 如果没有设置 root_dir（线程本地变量未初始化）
-        """
+        """线程安全的 open 函数"""
         # 从线程本地变量获取 root_dir
         root_dir = getattr(_thread_local, 'root_dir', None)
+        
+        # 🔧 回退机制：如果没有设置 root_dir，使用原始的 open
         if root_dir is None:
-            # 🔒 严格模式：如果没有设置 root_dir，直接报错
-            raise RuntimeError(
-                "文件操作错误：root_dir 未初始化。"
-                "这可能是因为在 execute() 方法外部直接调用 open()。"
-                "请确保文件操作在 execute() 方法内执行。"
-            )
+            # 不是 backend.execute() 调用，回退到原始行为
+            return _original_builtins_open(filename, mode, *args, **kwargs)
         
         # 处理路径：去掉开头的斜杠，然后添加 root_dir
         path_str = str(filename).lstrip('/')
@@ -113,11 +107,7 @@ def _get_safe_open():
         except ValueError:
             # 路径不在 root_dir 内，拒绝访问
             raise PermissionError(
-                f"安全错误：禁止访问 当前对话目录(root_dir) 外的文件\n"
-                f"请求路径: {filename}\n"
-                f"解析路径: {resolved_path}\n"
-                f"允许目录: {root_dir}\n"
-                f"注意：路径遍历（..）和符号链接已被阻止"
+                f"安全错误：禁止访问 root_dir 外的文件\n请求路径: {filename}\n解析路径: {resolved_path}\n允许目录: {root_dir}\n注意：路径遍历（..）和符号链接已被阻止"
             )
         
         # 使用原始的 builtins.open 打开文件
@@ -130,6 +120,16 @@ _safe_open_func = _get_safe_open()
 
 # 保存原始的 builtins.open
 _original_builtins_open = builtins.open
+
+# 保存原始的 io.open
+_original_io_open = io.open
+
+# 保存原始的 codecs.open
+_original_codecs_open = codecs.open
+
+# 保存原始的 os.open（os.open 是系统调用，参数不同，不替换）
+_original_os_open = os.open
+
 
 
 
@@ -310,19 +310,28 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         # 🚫 移除危险函数
         for func_name in DANGEROUS_FUNCTIONS:
             if func_name in safe_globals['__builtins__']:
-                del safe_globals['__builtins__'][func_name]
-
-        # 🔒 确保全局只替换一次 builtins.open
+                del safe_globals['__builtins__'][func_name] 
+        
+        # 🔒 确保全局只替换一次所有 open 函数
         with self._patch_lock:
             global _builtins_open_patched
             if not _builtins_open_patched:
                 # 替换全局的 builtins.open
                 builtins.open = _safe_open_func
+                # 同时替换 io.open（zipfile 等库使用 io.open）
+                io.open = _safe_open_func
+                # 替换 codecs.open（处理编码文件）
+                codecs.open = _safe_open_func
+                # 注意：os.open 是系统调用，参数不同，不能直接替换
+                # 但 os.open 通常返回文件描述符，不会直接用于文件路径
                 _builtins_open_patched = True
         
         # 🔒 添加受限的 open 函数（替换原生的 open）
         safe_globals['open'] = _safe_open_func
         safe_globals['__builtins__']['open'] = _safe_open_func
+        # 同时在全局变量中注入 io 和 codecs 模块
+        safe_globals['io'] = io
+        safe_globals['codecs'] = codecs
         
         # 注入 builtins 模块到全局变量中
         safe_globals['builtins'] = builtins
