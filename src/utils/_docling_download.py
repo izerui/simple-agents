@@ -18,7 +18,7 @@ def ensure_docling_installed():
         logger.info("docling 未安装，开始动态安装...")
         try:
             # 使用 uv pip 安装 docling
-            subprocess.check_call(['uv', 'pip', 'install', 'docling>=2.68.0', '-i',
+            subprocess.check_call(['uv', 'pip', 'install', 'docling', '-i',
                                    'https://mirrors.aliyun.com/pypi/simple/'])
 
             # 清除导入缓存，使新安装的包生效
