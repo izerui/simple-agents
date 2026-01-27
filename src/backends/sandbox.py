@@ -12,13 +12,15 @@
 """
 import sys
 import io
-import signal
 import resource
 import builtins
+
 from pathlib import Path
 import tempfile
 from typing import Optional, Union, Any, Dict
 import re
+import multiprocessing
+from queue import Empty
 
 try:
     from RestrictedPython import compile_restricted, safe_builtins
@@ -34,58 +36,50 @@ from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse
 
 
-class TimeoutException(Exception):
-    """执行超时异常"""
-    pass
-
-
-def timeout_handler(signum, frame):
-    """超时信号处理器"""
-    raise TimeoutException("代码执行超时")
 
 
 class RestrictedOutputCapture:
     """捕获 print 和其他输出"""
     
     def __init__(self):
-        self.stdout_buffer = io.StringIO()
-        self.stderr_buffer = io.StringIO()
         self._original_stdout = None
         self._original_stderr = None
+        self._stdout_buffer = io.StringIO()
+        self._stderr_buffer = io.StringIO()
     
     def __enter__(self):
         self._original_stdout = sys.stdout
         self._original_stderr = sys.stderr
-        sys.stdout = self.stdout_buffer
-        sys.stderr = self.stderr_buffer
+        sys.stdout = self._stdout_buffer
+        sys.stderr = self._stderr_buffer
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         sys.stdout = self._original_stdout
         sys.stderr = self._original_stderr
     
-    def get_output(self, print_collector=None) -> str:
+    def get_output(self, print_collector):
         """获取所有输出
         
         Args:
             print_collector: RestrictedPython 的 PrintCollector 实例
+            
+        Returns:
+            合并后的输出字符串
         """
-        # 如果有 PrintCollector 实例，先调用它获取收集的输出
-        output = ""
-        if print_collector and hasattr(print_collector, '__call__'):
-            try:
-                collected = print_collector()
-                if collected:
-                    output += collected
-            except Exception:
-                pass
+        output = self._stdout_buffer.getvalue()
+        stderr_output = self._stderr_buffer.getvalue()
         
-        # 添加 stdout 和 stderr
-        stdout = self.stdout_buffer.getvalue()
-        stderr = self.stderr_buffer.getvalue()
-        output += stdout
-        if stderr:
-            output += f"\n[错误输出]\n{stderr}"
+        # 添加 stderr 输出
+        if stderr_output:
+            output += f"\n[标准错误输出]\n{stderr_output}"
+        
+        # 添加 PrintCollector 的输出
+        if print_collector is not None:
+            collected_output = print_collector()
+            if collected_output:
+                output += collected_output
+        
         return output
 
 
@@ -497,6 +491,131 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         
         return compiled_code
     
+    @staticmethod
+    def _create_safe_globals_static():
+        """创建安全的全局变量字典（静态方法，用于子进程）
+        
+        Returns:
+            包含安全内置函数和变量的字典
+        """
+        from RestrictedPython import compile_restricted, safe_builtins
+        from RestrictedPython.PrintCollector import PrintCollector
+        from RestrictedPython.Guards import safer_getattr, full_write_guard, guarded_iter_unpack_sequence
+        
+        # 导入 builtins 模块以获取所有内置函数
+        import builtins
+        
+        # 创建基础的全局变量字典（复制所有内置函数）
+        safe_globals = {
+            '__builtins__': builtins.__dict__.copy()
+        }
+        
+        # 定义危险函数列表
+        DANGEROUS_FUNCTIONS = [
+            'eval',
+            'exec',
+            'compile',
+            'open',
+            'file',
+            'memoryview',
+            'buffer',
+        ]
+        
+        # 移除危险函数
+        for func_name in DANGEROUS_FUNCTIONS:
+            if func_name in safe_globals['__builtins__']:
+                del safe_globals['__builtins__'][func_name]
+        
+        # RestrictedPython 需要的特殊全局函数
+        safe_globals['_print_'] = PrintCollector
+        safe_globals['_getattr_'] = safer_getattr
+        safe_globals['_write_'] = full_write_guard
+        safe_globals['_getitem_'] = lambda obj, key: obj[key]
+        safe_globals['_getiter_'] = iter
+        safe_globals['_unpack_sequence_'] = guarded_iter_unpack_sequence
+        safe_globals['_iter_unpack_sequence_'] = guarded_iter_unpack_sequence
+
+        
+        # 添加一些有用的常量和函数
+        safe_globals['__name__'] = '__main__'
+        safe_globals['__doc__'] = None
+        safe_globals['print'] = print
+        
+        return safe_globals
+    
+    @staticmethod
+    def _execute_in_subprocess(code_str, max_memory_mb, result_queue):
+        """在子进程中执行代码
+        
+        Args:
+            code_str: 代码字符串（会在子进程中重新编译）
+            max_memory_mb: 最大内存限制（MB）
+            result_queue: 结果队列
+        """
+        import resource
+        import sys
+        import io
+        
+        from RestrictedPython import compile_restricted
+        from RestrictedPython.PrintCollector import PrintCollector
+        
+        try:
+            # 设置内存限制
+            if hasattr(resource, 'RLIMIT_AS'):
+                try:
+                    resource.setrlimit(resource.RLIMIT_AS, (max_memory_mb * 1024 * 1024, -1))
+                except (ValueError, OSError):
+                    pass
+            
+            # 在子进程中重新编译代码
+            compiled_code = compile_restricted(
+                code_str,
+                filename='<restricted>',
+                mode='exec'
+            )
+            
+            if compiled_code is None:
+                raise SyntaxError("代码编译失败：包含受限的语法或不安全的操作")
+            
+            # 在子进程中重新创建安全全局变量
+            safe_globals = SandboxFilesystemBackend._create_safe_globals_static()
+            
+            # 创建输出捕获器
+            with RestrictedOutputCapture() as output_capture:
+                # 创建局部命名空间
+                restricted_locals = {}
+                
+                # 初始化 PrintCollector
+                restricted_locals['_print'] = PrintCollector()
+                
+                # 执行受限代码
+                exec(compiled_code, safe_globals, restricted_locals)
+                
+                # 获取输出
+                print_collector = restricted_locals.get('_print')
+                output = output_capture.get_output(print_collector)
+                
+                # 将结果放入队列
+                result_queue.put({
+                    'success': True,
+                    'output': output,
+                    'exit_code': 0,
+                    'error': None
+                })
+        except Exception as e:
+            import traceback
+            tb_str = traceback.format_exc()
+            result_queue.put({
+                'success': False,
+                'output': None,
+                'exit_code': 1,
+                'error': {
+                    'type': type(e).__name__,
+                    'message': str(e),
+                    'traceback': tb_str
+                }
+            })
+    
     def execute(self, command: str) -> ExecuteResponse:
         """执行受限的 Python 代码或脚本文件
         
@@ -545,7 +664,8 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                     )
             
             # 去除代码两端的空白
-            code = code.strip()
+            if code is not None:
+                code = code.strip()
             
             if not code:
                 return ExecuteResponse(
@@ -564,92 +684,83 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                     truncated=False
                 )
             
-            # 步骤 4: 准备执行环境
-            # 创建输出捕获器
-            with RestrictedOutputCapture() as output_capture:
-                # 创建局部命名空间
-                restricted_locals: Dict[str, Any] = {}
-                
-                # 步骤 5: 执行代码（带超时）
-                exit_code = 0
-                
-                try:
-                    # 设置资源限制
-                    self._set_resource_limits()
-                    
-                    # 设置超时信号（仅在 Unix 系统上）
-                    if hasattr(signal, 'SIGALRM'):
-                        signal.signal(signal.SIGALRM, timeout_handler)
-                        signal.alarm(self.timeout_seconds)
-                    
-                    # 执行受限代码
-                    try:
-                        exec(compiled_code, self._safe_globals, restricted_locals)
-                    finally:
-                        # 取消超时信号
-                        if hasattr(signal, 'SIGALRM'):
-                            signal.alarm(0)
-                            
-                except TimeoutException:
-                    exit_code = -1
-                    return ExecuteResponse(
-                        output=f"错误: 代码执行超时（超过 {self.timeout_seconds} 秒）",
-                        exit_code=exit_code,
-                        truncated=False
-                    )
-                except MemoryError:
-                    exit_code = -1
-                    return ExecuteResponse(
-                        output=f"错误: 内存使用超过限制 ({self.max_memory_mb} MB)",
-                        exit_code=exit_code,
-                        truncated=False
-                    )
-                except RecursionError:
-                    exit_code = -1
-                    return ExecuteResponse(
-                        output="错误: 递归深度超过限制（可能导致无限递归）",
-                        exit_code=exit_code,
-                        truncated=False
-                    )
-                except Exception as e:
-                    # 捕获执行过程中的其他异常
-                    import traceback
-                    tb_str = traceback.format_exc()
-                    exit_code = 1
-                    
-                    # 获取 PrintCollector 实例
-                    print_collector = restricted_locals.get('_print')
-                    
-                    # 获取输出并附加错误信息
-                    output = output_capture.get_output(print_collector)
-                    output += f"\n[执行错误]\n{type(e).__name__}: {str(e)}\n{tb_str}"
-                    
-                    # 检查输出长度
-                    truncated = len(output) > self.max_output_length
-                    if truncated:
-                        output = output[:self.max_output_length]
-                        output += "\n\n... [输出被截断，超过最大长度限制] ..."
-                    
-                    return ExecuteResponse(
-                        output=output,
-                        exit_code=exit_code,
-                        truncated=truncated
-                    )
+            # 步骤 4: 使用多进程执行代码（带超时）
+            result_queue = multiprocessing.Queue()
+            process = multiprocessing.Process(
+                target=self._execute_in_subprocess,
+                args=(code, self.max_memory_mb, result_queue)
+            )
             
-            # 步骤 6: 获取输出（包括 PrintCollector 收集的输出）
-            print_collector = restricted_locals.get('_print')
-            output = output_capture.get_output(print_collector)
+            # 启动进程
+            process.start()
             
-            # 步骤 7: 检查输出长度并截断
-            truncated = False
-            if len(output) > self.max_output_length:
+            # 等待进程结束，带超时
+            process.join(timeout=self.timeout_seconds)
+            
+            if process.is_alive():
+                # 超时，终止进程
+                process.terminate()
+                process.join(timeout=2)  # 等待 2 秒让进程清理
+                
+                if process.is_alive():
+                    # 强制杀死进程
+                    process.kill()
+                    process.join()
+                
+                return ExecuteResponse(
+                    output=f"错误: 代码执行超时（超过 {self.timeout_seconds} 秒）",
+                    exit_code=-1,
+                    truncated=False
+                )
+            
+            # 检查进程退出码
+            if process.exitcode != 0:
+                # 进程异常退出
+                return ExecuteResponse(
+                    output=f"错误: 进程异常退出（退出码: {process.exitcode}）",
+                    exit_code=process.exitcode,
+                    truncated=False
+                )
+            
+            # 获取执行结果
+            try:
+                result = result_queue.get(timeout=1)
+            except Empty:
+                return ExecuteResponse(
+                    output="错误: 无法获取执行结果",
+                    exit_code=-1,
+                    truncated=False
+                )
+            
+            if not result['success']:
+                # 执行过程中发生异常
+                error_info = result['error']
+                output = f"[执行错误]\n{error_info['type']}: {error_info['message']}\n{error_info['traceback']}"
+                
+                # 检查输出长度
+                truncated = len(output) > self.max_output_length
+                if truncated:
+                    output = output[:self.max_output_length]
+                    output += "\n\n... [输出被截断，超过最大长度限制] ..."
+                
+                return ExecuteResponse(
+                    output=output,
+                    exit_code=result['exit_code'],
+                    truncated=truncated
+                )
+            
+            # 获取输出
+            output = result['output']
+            
+            # 检查输出长度并截断
+            truncated = len(output) > self.max_output_length
+            if truncated:
                 output = output[:self.max_output_length]
-                truncated = True
                 output += "\n\n... [输出被截断，超过最大长度限制] ..."
             
             return ExecuteResponse(
                 output=output,
-                exit_code=exit_code,
+                exit_code=result['exit_code'],
                 truncated=truncated
             )
             
