@@ -236,9 +236,6 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         self.root_dir = Path(root_dir) if root_dir else Path(tempfile.mkdtemp())
         self.root_dir = self.root_dir.resolve()
         
-        # 确保根目录存在
-        self.root_dir.mkdir(parents=True, exist_ok=True)
-        
         self.max_output_length = max_output_length
         self.timeout_seconds = timeout_seconds
         self.max_memory_mb = max_memory_mb
