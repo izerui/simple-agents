@@ -227,7 +227,7 @@ Examples:
 - Search Python files only: `grep(pattern="import", glob="*.py")`
 - Show matching lines: `grep(pattern="error", output_mode="content")`"""
 
-EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令。
+EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令（python版本 3.12）。
 
 支持的执行格式（仅限以下两种）：
 
@@ -235,16 +235,17 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令。
    示例：python -c "print('Hello World')"
 
 2. 执行脚本文件：python script.py
-   示例：python /path/to/script.py
+   示例：python path/to/script.py
 
 除上述两种格式外，其他任何命令均不支持。
 
 使用说明：
-- 执行脚本文件时，建议使用绝对路径
 - 如果路径包含空格，请使用双引号包裹
 - 命令在隔离的沙箱环境中运行
 - 返回 stdout/stderr 合并输出及退出码
-- 如果输出过大，可能会被截断"""
+- 如果输出过大，可能会被截断
+- 建议执行脚本或者脚本内读写文件使用相对路径"""
+
 
 
 FILESYSTEM_SYSTEM_PROMPT = """## Filesystem Tools `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`

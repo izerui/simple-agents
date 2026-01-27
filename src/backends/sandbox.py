@@ -14,6 +14,7 @@ import sys
 import io
 import signal
 import resource
+import builtins
 from pathlib import Path
 import tempfile
 from typing import Optional, Union, Any, Dict
@@ -141,8 +142,10 @@ class FileAccessControl:
     def validate_file_access(self, file_path: Union[str, Path], mode: str = 'r') -> Path:
         """验证文件访问权限并返回验证后的绝对路径
         
+        🎯 假设：file_path 已经是完整路径（包含 root_dir）
+        
         Args:
-            file_path: 文件路径
+            file_path: 文件路径（应该已经包含 root_dir）
             mode: 文件打开模式
             
         Returns:
@@ -152,48 +155,37 @@ class FileAccessControl:
             PermissionError: 如果权限不足
             FileNotFoundError: 如果文件不存在且尝试读取
         """
-        file_path = Path(file_path)
-        
-        # 如果是相对路径，先转换为绝对路径（相对于 root_dir）
-        if not file_path.is_absolute():
-            file_path = (self.root_dir / file_path).resolve()
-        else:
-            file_path = file_path.resolve()
-        
+        file_path = Path(file_path).resolve()
         can_read, can_write = self.get_file_mode_permission(mode)
         
         # 检查是否在 root_dir 内
         is_inside = self.is_inside_root_dir(file_path)
         
         if not is_inside:
-            # 🔒 安全修复：完全禁止 root_dir 外的访问
+            # 🔒 安全：完全禁止 root_dir 外的访问
             raise PermissionError(
                 f"禁止访问 root_dir 外的文件: {file_path}\n"
                 f"出于安全考虑，沙箱只允许访问 root_dir 内的文件"
             )
-        else:
-            # root_dir 内：允许所有操作
-            # 如果是写入模式，确保父目录存在
-            if can_write:
-                parent_dir = file_path.parent
-                if not parent_dir.exists():
-                    # 再次确认父目录在 root_dir 内
-                    try:
-                        parent_dir.relative_to(self.root_dir)
-                    except ValueError:
-                        raise PermissionError(
-                            f"只能在 root_dir 内创建目录: {parent_dir}"
-                        )
-                    # 尝试创建父目录
-                    try:
-                        parent_dir.mkdir(parents=True, exist_ok=True)
-                    except Exception as e:
-                        raise PermissionError(
-                            f"无法创建目录 {parent_dir}: {str(e)}"
-                        )
+        
+        # root_dir 内：允许所有操作
+        # 如果是写入模式，确保父目录存在
+        if can_write:
+            parent_dir = file_path.parent
+            if not parent_dir.exists():
+                # 尝试创建父目录
+                try:
+                    parent_dir.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    raise PermissionError(
+                        f"无法创建目录 {parent_dir}: {str(e)}"
+                    )
         
         # 返回验证后的绝对路径
         return file_path
+
+
+
 
 
 class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
@@ -290,11 +282,17 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         
         # 格式 2: python script.py
         # 支持：python script.py, python /path/to/script.py, python3 script.py
+        # 所有路径都会以 root_dir 为根目录处理
         pattern_script = r'^(?:python(?:3)?|/usr/bin/python(?:3)?)\s+([^\s]+)$'
         match_script = re.match(pattern_script, command, re.IGNORECASE)
-        
+    
         if match_script:
             script_path = match_script.group(1).strip()
+            # 🎯 所有脚本路径都以 root_dir 为根
+            # 去掉开头的斜杠，因为所有路径都是相对于 root_dir 的
+            script_path = script_path.lstrip('/')
+            # 拼接 root_dir 前缀
+            script_path = str(self.root_dir / script_path)
             return None, script_path
         
         # 不支持的格式
@@ -310,7 +308,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         """读取脚本文件内容
         
         Args:
-            script_path: 脚本文件路径
+            script_path: 脚本文件路径（已经是绝对路径，包含 root_dir）
             
         Returns:
             脚本文件内容
@@ -319,8 +317,12 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             FileNotFoundError: 如果文件不存在
             PermissionError: 如果没有读取权限
         """
-        # 验证并获取绝对路径
-        validated_path = self.file_access_control.validate_file_access(script_path, 'r')
+        # script_path 已经是绝对路径（包含 root_dir），直接验证
+        validated_path = Path(script_path)
+        
+        # 确保文件在 root_dir 内
+        if not self.file_access_control.is_inside_root_dir(validated_path):
+            raise PermissionError(f"禁止访问 root_dir 外的文件: {validated_path}")
         
         # 读取文件内容
         try:
@@ -403,15 +405,29 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         return safe_globals
     
     def _create_safe_open(self):
-        """创建受限的 open 函数"""
+        """创建受限的 open 函数
+        
+        🎯 设计原则：自动为所有路径添加 root_dir 前缀
+        - 相对路径：直接添加 root_dir 前缀
+        - 绝对路径：去掉开头的斜杠，然后添加 root_dir 前缀
+        - 所有路径都以 root_dir 为根目录
+        """
         file_access_control = self.file_access_control
+        root_dir = self.root_dir
         
         def safe_open(filename: Union[str, Path], mode: str = 'r', *args, **kwargs):
             """受限的 open 函数
             
+            🎯 自动添加 root_dir 前缀：
+            - "test.txt" → root_dir/test.txt
+            - "/test.txt" → root_dir/test.txt（去掉开头的斜杠）
+            - "subdir/file.txt" → root_dir/subdir/file.txt
+            - "/subdir/file.txt" → root_dir/subdir/file.txt
+            
             权限规则：
+            - 所有路径都以 root_dir 为根目录
             - root_dir 内：允许所有读写操作
-            - root_dir 外：只允许只读操作
+            - root_dir 外：完全禁止（由 validate_file_access 检查）
             
             Args:
                 filename: 文件名
@@ -425,11 +441,15 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                 PermissionError: 权限不足
                 FileNotFoundError: 文件不存在
             """
+            # 转换为字符串并处理路径
+            path_str = str(filename).lstrip('/')  # 去掉开头的斜杠
+            full_path = root_dir / path_str  # 添加 root_dir 前缀
+            
             # 验证文件访问权限并获取验证后的绝对路径
-            validated_path = file_access_control.validate_file_access(filename, mode)
+            validated_path = file_access_control.validate_file_access(full_path, mode)
             
             # 使用验证后的路径打开文件
-            return open(str(validated_path), mode, *args, **kwargs)
+            return builtins.open(str(validated_path), mode, *args, **kwargs)
         
         return safe_open
     
