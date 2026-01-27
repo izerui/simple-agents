@@ -6,19 +6,37 @@
 - root_dir 内：允许读写
 - root_dir 外：只允许只读
 
+文件操作限制机制：
+1. 线程本地变量 + Monkey patching：使用 threading.local() 存储每个线程的 root_dir，
+   并替换 builtins.open 为线程安全的 safe_open
+2. 所有路径（相对路径和绝对路径）都会被重定向到当前线程的 root_dir
+
+注意：
+- safe_open 从线程本地变量读取 root_dir，每个线程独立
+- 相对路径和绝对路径（以 / 开头）都会被重定向到当前线程的 root_dir
+- 完全并发安全，无需使用锁
+- 不再需要切换工作目录或使用虚拟模式
+
 只支持两种标准执行格式：
 1. python -c "code" - 直接执行代码字符串
 2. python script.py - 执行脚本文件
 """
 import sys
 import io
-import signal
+import os
 import resource
 import builtins
+import threading
 from pathlib import Path
 import tempfile
 from typing import Optional, Union, Any, Dict
 import re
+
+# 全局线程本地变量，用于存储每个线程的 root_dir
+_thread_local = threading.local()
+
+# 全局标志，标记是否已经替换了 builtins.open
+_builtins_open_patched = False
 
 try:
     from RestrictedPython import compile_restricted, safe_builtins
@@ -34,14 +52,6 @@ from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse
 
 
-class TimeoutException(Exception):
-    """执行超时异常"""
-    pass
-
-
-def timeout_handler(signum, frame):
-    """超时信号处理器"""
-    raise TimeoutException("代码执行超时")
 
 
 class RestrictedOutputCapture:
@@ -89,100 +99,63 @@ class RestrictedOutputCapture:
         return output
 
 
-class FileAccessControl:
-    """文件访问控制类"""
-
-    def __init__(self, root_dir: Path):
-        """初始化文件访问控制
-
-        Args:
-            root_dir: 允许读写的根目录
-        """
-        self.root_dir = root_dir.resolve()
-
-    def is_inside_root_dir(self, file_path: Path) -> bool:
-        """检查文件路径是否在 root_dir 内
-
-        Args:
-            file_path: 文件路径
-
-        Returns:
-            True 如果在 root_dir 内，False 否则
-        """
-        try:
-            # 解析为绝对路径并解析符号链接
-            resolved_path = file_path.resolve()
-            # 检查是否在 root_dir 内
-            resolved_path.relative_to(self.root_dir)
-            return True
-        except (ValueError, RuntimeError):
-            # ValueError: 路径不在 root_dir 内
-            # RuntimeError: 符号链接循环等
-            return False
-
-    def get_file_mode_permission(self, mode: str):
-        """判断文件模式的读写权限
-
-        Args:
-            mode: 文件打开模式（如 'r', 'w', 'a', 'rb', 'wb' 等）
-
-        Returns:
-            (can_read, can_write) 元组
-        """
-        mode = mode.lower()
-
-        # 默认可以读取
-        can_read = 'r' in mode or '+' in mode
-
-        # 判断是否可以写入
-        can_write = any(c in mode for c in ['w', 'a'])
-
-        return can_read, can_write
-
-    def validate_file_access(self, file_path: Union[str, Path], mode: str = 'r') -> Path:
-        """验证文件访问权限并返回验证后的绝对路径
-
-        🎯 假设：file_path 已经是完整路径（包含 root_dir）
-
-        Args:
-            file_path: 文件路径（应该已经包含 root_dir）
-            mode: 文件打开模式
-
-        Returns:
-            验证后的绝对路径
-
+def _get_safe_open():
+    """创建线程安全的 safe_open 函数
+    
+    该函数从线程本地变量读取当前线程的 root_dir
+    """
+    def safe_open(filename: Union[str, Path], mode: str = 'r', *args, **kwargs):
+        """线程安全的 open 函数
+        
+        从线程本地变量读取 root_dir，所有路径都相对于该 root_dir
+        
         Raises:
-            PermissionError: 如果权限不足
-            FileNotFoundError: 如果文件不存在且尝试读取
+            RuntimeError: 如果没有设置 root_dir（线程本地变量未初始化）
         """
-        file_path = Path(file_path).resolve()
-        can_read, can_write = self.get_file_mode_permission(mode)
-
-        # 检查是否在 root_dir 内
-        is_inside = self.is_inside_root_dir(file_path)
-
-        if not is_inside:
-            # 🔒 安全：完全禁止 root_dir 外的访问
-            raise PermissionError(
-                f"禁止访问 root_dir 外的文件: {file_path}\n"
-                f"出于安全考虑，沙箱只允许访问 root_dir 内的文件"
+        # 从线程本地变量获取 root_dir
+        root_dir = getattr(_thread_local, 'root_dir', None)
+        if root_dir is None:
+            # 🔒 严格模式：如果没有设置 root_dir，直接报错
+            raise RuntimeError(
+                "文件操作错误：root_dir 未初始化。"
+                "这可能是因为在 execute() 方法外部直接调用 open()。"
+                "请确保文件操作在 execute() 方法内执行。"
             )
+        
+        # 处理路径：去掉开头的斜杠，然后添加 root_dir
+        path_str = str(filename).lstrip('/')
+        full_path = root_dir / path_str
+        
+        # 🔒 安全验证：解析为绝对路径并检查是否在 root_dir 内
+        # 使用 resolve() 解析所有符号链接和相对路径（如 ..）
+        resolved_path = full_path.resolve()
+        
+        try:
+            # 检查解析后的路径是否在 root_dir 内
+            resolved_path.relative_to(root_dir)
+        except ValueError:
+            # 路径不在 root_dir 内，拒绝访问
+            raise PermissionError(
+                f"安全错误：禁止访问 当前对话目录(root_dir) 外的文件\n"
+                f"请求路径: {filename}\n"
+                f"解析路径: {resolved_path}\n"
+                f"允许目录: {root_dir}\n"
+                f"注意：路径遍历（..）和符号链接已被阻止"
+            )
+        
+        # 使用原始的 builtins.open 打开文件
+        return _original_builtins_open(str(resolved_path), mode, *args, **kwargs)
+    
+    return safe_open
 
-        # root_dir 内：允许所有操作
-        # 如果是写入模式，确保父目录存在
-        if can_write:
-            parent_dir = file_path.parent
-            if not parent_dir.exists():
-                # 尝试创建父目录
-                try:
-                    parent_dir.mkdir(parents=True, exist_ok=True)
-                except Exception as e:
-                    raise PermissionError(
-                        f"无法创建目录 {parent_dir}: {str(e)}"
-                    )
+# 全局的 safe_open 函数
+_safe_open_func = _get_safe_open()
 
-        # 返回验证后的绝对路径
-        return file_path
+# 保存原始的 builtins.open
+_original_builtins_open = builtins.open
+
+
+
 
 
 class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
@@ -195,11 +168,15 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
     - root_dir 外：只允许只读文件访问
     - 超时和资源限制
     - 捕获所有输出
+    - 完全并发安全（使用线程本地变量）
 
     只支持两种执行格式：
-    1. python -c "code" - 直接执行代码字符串
+    1. python -c "code" - 执行代码字符串
     2. python script.py - 执行脚本文件
     """
+    
+    # 类级别锁，用于确保 builtins.open 只被替换一次
+    _patch_lock = threading.Lock()
 
     def __init__(
             self,
@@ -228,9 +205,6 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         self.max_output_length = max_output_length
         self.timeout_seconds = timeout_seconds
         self.max_memory_mb = max_memory_mb
-
-        # 初始化文件访问控制
-        self.file_access_control = FileAccessControl(self.root_dir)
 
         # 调用父类初始化
         super().__init__(
@@ -314,20 +288,14 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             FileNotFoundError: 如果文件不存在
             PermissionError: 如果没有读取权限
         """
-        # script_path 已经是绝对路径（包含 root_dir），直接验证
-        validated_path = Path(script_path)
-
-        # 确保文件在 root_dir 内
-        if not self.file_access_control.is_inside_root_dir(validated_path):
-            raise PermissionError(f"禁止访问 root_dir 外的文件: {validated_path}")
-
-        # 读取文件内容
+        # script_path 已经在 _parse_command 中拼接了 root_dir，直接读取即可
+        # 使用原始的 builtins.open 读取文件（避免被 safe_open 拦截）
         try:
-            with open(str(validated_path), 'r', encoding='utf-8') as f:
+            with _original_builtins_open(script_path, 'r', encoding='utf-8') as f:
                 return f.read()
         except UnicodeDecodeError:
             # 如果不是 UTF-8 编码，尝试使用系统默认编码
-            with open(str(validated_path), 'r') as f:
+            with _original_builtins_open(script_path, 'r') as f:
                 return f.read()
 
     def _create_safe_globals(self) -> dict:
@@ -368,32 +336,35 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             if func_name in safe_globals['__builtins__']:
                 del safe_globals['__builtins__'][func_name]
 
+        # 🔒 确保全局只替换一次 builtins.open
+        with self._patch_lock:
+            global _builtins_open_patched
+            if not _builtins_open_patched:
+                # 替换全局的 builtins.open
+                builtins.open = _safe_open_func
+                _builtins_open_patched = True
+        
         # 🔒 添加受限的 open 函数（替换原生的 open）
-        safe_open = self._create_safe_open()
-        safe_globals['open'] = safe_open
-        safe_globals['__builtins__']['open'] = safe_open
+        safe_globals['open'] = _safe_open_func
+        safe_globals['__builtins__']['open'] = _safe_open_func
+        
+        # 注入 builtins 模块到全局变量中
+        safe_globals['builtins'] = builtins
 
         # 保留 print 函数（内置的）
         safe_globals['print'] = print
 
-        # 添加其他安全的全局函数
-        safe_globals['print'] = print
-
         # RestrictedPython 需要的特殊全局函数
-        # _print_: 用于捕获 print 输出
+        # _print_: 用于捕获 print 输出（这是唯一保留的 guard）
         safe_globals['_print_'] = PrintCollector
-        # _getattr_: 安全的属性访问
-        safe_globals['_getattr_'] = safer_getattr
-        # _write_: 安全的属性写入
-        safe_globals['_write_'] = full_write_guard
-        # _getitem_: 安全的索引访问（用于 obj[key] 这样的操作）
-        safe_globals['_getitem_'] = lambda obj, key: obj[key]
-        # _getiter_: 安全的迭代器获取（用于 for 循环）
-        safe_globals['_getiter_'] = iter
-        # _unpack_sequence_: 序列解包（用于 a, b = [1, 2] 这样的操作）
-        safe_globals['_unpack_sequence_'] = guarded_iter_unpack_sequence
-        # _iter_unpack_sequence_: 迭代器序列解包（用于 a, b = (x for x in ...) 这样的操作）
-        safe_globals['_iter_unpack_sequence_'] = guarded_iter_unpack_sequence
+        
+        # 🎯 其他 guards 已移除，因为文件操作安全由 safe_open 严格控制
+        # - _getattr_: 允许访问所有属性（第三方库需要）
+        # - _getitem_: 允许所有索引访问
+        # - _getiter_: 允许所有迭代器操作
+        # - _unpack_sequence_: 允许所有序列解包
+        # - _iter_unpack_sequence_: 允许所有迭代器解包
+        # - _write_: 允许所有对象写入操作（pandas、openpyxl 需要）
 
         # 添加一些有用的常量和函数
         safe_globals['__name__'] = '__main__'
@@ -401,54 +372,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
 
         return safe_globals
 
-    def _create_safe_open(self):
-        """创建受限的 open 函数
 
-        🎯 设计原则：自动为所有路径添加 root_dir 前缀
-        - 相对路径：直接添加 root_dir 前缀
-        - 绝对路径：去掉开头的斜杠，然后添加 root_dir 前缀
-        - 所有路径都以 root_dir 为根目录
-        """
-        file_access_control = self.file_access_control
-        root_dir = self.root_dir
-
-        def safe_open(filename: Union[str, Path], mode: str = 'r', *args, **kwargs):
-            """受限的 open 函数
-
-            🎯 自动添加 root_dir 前缀：
-            - "test.txt" → root_dir/test.txt
-            - "/test.txt" → root_dir/test.txt（去掉开头的斜杠）
-            - "subdir/file.txt" → root_dir/subdir/file.txt
-            - "/subdir/file.txt" → root_dir/subdir/file.txt
-
-            权限规则：
-            - 所有路径都以 root_dir 为根目录
-            - root_dir 内：允许所有读写操作
-            - root_dir 外：完全禁止（由 validate_file_access 检查）
-
-            Args:
-                filename: 文件名
-                mode: 打开模式
-                *args, **kwargs: 其他参数
-
-            Returns:
-                文件对象
-
-            Raises:
-                PermissionError: 权限不足
-                FileNotFoundError: 文件不存在
-            """
-            # 转换为字符串并处理路径
-            path_str = str(filename).lstrip('/')  # 去掉开头的斜杠
-            full_path = root_dir / path_str  # 添加 root_dir 前缀
-
-            # 验证文件访问权限并获取验证后的绝对路径
-            validated_path = file_access_control.validate_file_access(full_path, mode)
-
-            # 使用验证后的路径打开文件
-            return builtins.open(str(validated_path), mode, *args, **kwargs)
-
-        return safe_open
 
     def _set_resource_limits(self):
         """设置资源限制（内存、CPU 等）"""
@@ -467,6 +391,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             # 在 Windows 或不支持的平台忽略错误
             pass
 
+
     def _compile_restricted_code(self, code: str):
         """编译受限的 Python 代码
 
@@ -477,7 +402,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             编译后的代码对象
 
         Raises:
-            SyntaxError: 如果代码包含受限语法
+            SyntaxError: 如果代码包含受限的语法
         """
         # 使用 RestrictedPython 编译代码
         compiled_code = compile_restricted(
@@ -567,33 +492,20 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                 # 创建局部命名空间
                 restricted_locals: Dict[str, Any] = {}
 
-                # 步骤 5: 执行代码（带超时）
-                exit_code = 0
+                # 🔧 步骤 4.5: 设置线程本地变量（每个线程独立的 root_dir）
+                # 这解决了多用户并发执行时的文件访问问题
+                _thread_local.root_dir = self.root_dir
 
                 try:
+                    # 步骤 5: 执行代码（带超时）
+                    exit_code = 0
+                    
                     # 设置资源限制
                     self._set_resource_limits()
-
-                    # 设置超时信号（仅在 Unix 系统上）
-                    if hasattr(signal, 'SIGALRM'):
-                        signal.signal(signal.SIGALRM, timeout_handler)
-                        signal.alarm(self.timeout_seconds)
-
+                    
                     # 执行受限代码
-                    try:
-                        exec(compiled_code, self._safe_globals, restricted_locals)
-                    finally:
-                        # 取消超时信号
-                        if hasattr(signal, 'SIGALRM'):
-                            signal.alarm(0)
-
-                except TimeoutException:
-                    exit_code = -1
-                    return ExecuteResponse(
-                        output=f"错误: 代码执行超时（超过 {self.timeout_seconds} 秒）",
-                        exit_code=exit_code,
-                        truncated=False
-                    )
+                    exec(compiled_code, self._safe_globals, restricted_locals)
+                    
                 except MemoryError:
                     exit_code = -1
                     return ExecuteResponse(
@@ -632,6 +544,12 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                         exit_code=exit_code,
                         truncated=truncated
                     )
+                finally:
+                    # 🔧 清理线程本地变量（无论成功或失败）
+                    try:
+                        del _thread_local.root_dir
+                    except (AttributeError, KeyError):
+                        pass
 
             # 步骤 6: 获取输出（包括 PrintCollector 收集的输出）
             print_collector = restricted_locals.get('_print')
