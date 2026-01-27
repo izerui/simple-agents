@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-基于 RestrictedPython 的安全沙箱后端 V2（只支持标准执行格式）
+安全沙箱后端（只支持标准执行格式）
 
 实现文件操作权限控制：
 - root_dir 内：允许读写
@@ -15,7 +15,7 @@
 - safe_open 从线程本地变量读取 root_dir，每个线程独立
 - 相对路径和绝对路径（以 / 开头）都会被重定向到当前线程的 root_dir
 - 完全并发安全，无需使用锁
-- 不再需要切换工作目录或使用虚拟模式
+- 使用标准 Python compile 编译代码
 
 只支持两种标准执行格式：
 1. python -c "code" - 直接执行代码字符串
@@ -38,23 +38,13 @@ _thread_local = threading.local()
 # 全局标志，标记是否已经替换了 builtins.open
 _builtins_open_patched = False
 
-try:
-    from RestrictedPython import compile_restricted, safe_builtins
-    from RestrictedPython.PrintCollector import PrintCollector
-    from RestrictedPython.Guards import safer_getattr, full_write_guard, guarded_iter_unpack_sequence
-except ImportError:
-    raise ImportError(
-        "请先安装 RestrictedPython: pip install RestrictedPython\n"
-        "项目地址: https://github.com/zopefoundation/RestrictedPython"
-    )
-
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse
 
 
 
 
-class RestrictedOutputCapture:
+class OutputCapture:
     """捕获 print 和其他输出"""
 
     def __init__(self):
@@ -74,22 +64,9 @@ class RestrictedOutputCapture:
         sys.stdout = self._original_stdout
         sys.stderr = self._original_stderr
 
-    def get_output(self, print_collector=None) -> str:
-        """获取所有输出
-
-        Args:
-            print_collector: RestrictedPython 的 PrintCollector 实例
-        """
-        # 如果有 PrintCollector 实例，先调用它获取收集的输出
+    def get_output(self) -> str:
+        """获取所有输出"""
         output = ""
-        if print_collector and hasattr(print_collector, '__call__'):
-            try:
-                collected = print_collector()
-                if collected:
-                    output += collected
-            except Exception:
-                pass
-
         # 添加 stdout 和 stderr
         stdout = self.stdout_buffer.getvalue()
         stderr = self.stderr_buffer.getvalue()
@@ -160,15 +137,14 @@ _original_builtins_open = builtins.open
 
 class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
     """
-    基于 RestrictedPython 的安全沙箱后端 V2（只支持标准执行格式）
+    安全沙箱后端（只支持标准执行格式）
 
     特性：
-    - 使用 RestrictedPython 编译受限代码
+    - 使用标准 Python compile 编译代码
     - root_dir 内：允许读写文件
     - root_dir 外：只允许只读文件访问
     - 超时和资源限制
     - 捕获所有输出
-    - 完全并发安全（使用线程本地变量）
 
     只支持两种执行格式：
     1. python -c "code" - 执行代码字符串
@@ -188,11 +164,11 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             max_memory_mb: int = 512,
             **kwargs
     ) -> None:
-        """初始化 RestrictedPython 沙箱
+        """初始化安全沙箱
 
         Args:
             root_dir: 允许读写的根目录
-            virtual_mode: 虚拟模式
+            virtual_mode: 虚拟模式（由父类 FilesystemBackend 使用）
             max_file_size_mb: 最大文件大小限制（MB）
             max_output_length: 最大输出长度
             timeout_seconds: 执行超时时间（秒）
@@ -354,18 +330,6 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         # 保留 print 函数（内置的）
         safe_globals['print'] = print
 
-        # RestrictedPython 需要的特殊全局函数
-        # _print_: 用于捕获 print 输出（这是唯一保留的 guard）
-        safe_globals['_print_'] = PrintCollector
-        
-        # 🎯 其他 guards 已移除，因为文件操作安全由 safe_open 严格控制
-        # - _getattr_: 允许访问所有属性（第三方库需要）
-        # - _getitem_: 允许所有索引访问
-        # - _getiter_: 允许所有迭代器操作
-        # - _unpack_sequence_: 允许所有序列解包
-        # - _iter_unpack_sequence_: 允许所有迭代器解包
-        # - _write_: 允许所有对象写入操作（pandas、openpyxl 需要）
-
         # 添加一些有用的常量和函数
         safe_globals['__name__'] = '__main__'
         safe_globals['__doc__'] = None
@@ -392,8 +356,8 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             pass
 
 
-    def _compile_restricted_code(self, code: str):
-        """编译受限的 Python 代码
+    def _compile_code(self, code: str):
+        """编译 Python 代码
 
         Args:
             code: 要编译的 Python 代码
@@ -402,22 +366,21 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             编译后的代码对象
 
         Raises:
-            SyntaxError: 如果代码包含受限的语法
+            SyntaxError: 如果代码包含语法错误
         """
-        # 使用 RestrictedPython 编译代码
-        compiled_code = compile_restricted(
-            code,
-            filename='<restricted>',
-            mode='exec'
-        )
-
-        # 检查编译是否成功
-        if compiled_code is None:
-            raise SyntaxError(
-                "代码编译失败：包含受限的语法或不安全的操作"
+        # 使用标准 Python compile 编译代码
+        try:
+            compiled_code = compile(
+                code,
+                filename='<sandbox>',
+                mode='exec'
             )
 
-        return compiled_code
+            return compiled_code
+        except SyntaxError as e:
+            raise SyntaxError(
+                f"代码编译失败：{str(e)}"
+            )
 
     def execute(self, command: str) -> ExecuteResponse:
         """执行受限的 Python 代码或脚本文件
@@ -476,9 +439,9 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                     truncated=False
                 )
 
-            # 步骤 3: 编译受限代码
+            # 步骤 3: 编译代码
             try:
-                compiled_code = self._compile_restricted_code(code)
+                compiled_code = self._compile_code(code)
             except SyntaxError as e:
                 return ExecuteResponse(
                     output=f"语法错误: {str(e)}",
@@ -488,9 +451,9 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
 
             # 步骤 4: 准备执行环境
             # 创建输出捕获器
-            with RestrictedOutputCapture() as output_capture:
+            with OutputCapture() as output_capture:
                 # 创建局部命名空间
-                restricted_locals: Dict[str, Any] = {}
+                locals: Dict[str, Any] = {}
 
                 # 🔧 步骤 4.5: 设置线程本地变量（每个线程独立的 root_dir）
                 # 这解决了多用户并发执行时的文件访问问题
@@ -503,9 +466,9 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                     # 设置资源限制
                     self._set_resource_limits()
                     
-                    # 执行受限代码
-                    exec(compiled_code, self._safe_globals, restricted_locals)
-                    
+                    # 执行代码
+                    exec(compiled_code, self._safe_globals, locals)
+                
                 except MemoryError:
                     exit_code = -1
                     return ExecuteResponse(
@@ -526,11 +489,8 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                     tb_str = traceback.format_exc()
                     exit_code = 1
 
-                    # 获取 PrintCollector 实例
-                    print_collector = restricted_locals.get('_print')
-
                     # 获取输出并附加错误信息
-                    output = output_capture.get_output(print_collector)
+                    output = output_capture.get_output()
                     output += f"\n[执行错误]\n{type(e).__name__}: {str(e)}\n{tb_str}"
 
                     # 检查输出长度
@@ -551,9 +511,8 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                     except (AttributeError, KeyError):
                         pass
 
-            # 步骤 6: 获取输出（包括 PrintCollector 收集的输出）
-            print_collector = restricted_locals.get('_print')
-            output = output_capture.get_output(print_collector)
+            # 步骤 6: 获取输出
+            output = output_capture.get_output()
 
             # 步骤 7: 检查输出长度并截断
             truncated = False
