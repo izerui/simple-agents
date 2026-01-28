@@ -488,8 +488,9 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             # 步骤 4: 准备执行环境
             # 创建输出捕获器
             with OutputCapture() as output_capture:
-                # 创建局部命名空间
-                locals: Dict[str, Any] = {}
+                # 创建局部命名空间，初始化为 safe_globals 的副本
+                # 这样导入的模块会被保存到这个字典中
+                locals: Dict[str, Any] = self._safe_globals.copy()
 
                 # 🔧 步骤 4.5: 设置线程本地变量（每个线程独立的 root_dir）
                 # 这解决了多用户并发执行时的文件访问问题
@@ -503,7 +504,8 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                     self._set_resource_limits()
                     
                     # 执行代码
-                    exec(compiled_code, self._safe_globals, locals)
+                    # 使用 locals 作为命名空间，这样导入的模块会被保存到 locals 中
+                    exec(compiled_code, locals, locals)
                 
                 except MemoryError:
                     exit_code = -1
