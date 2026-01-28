@@ -93,6 +93,23 @@ def _get_safe_open():
             # 不是 backend.execute() 调用，回退到原始行为
             return _original_builtins_open(filename, mode, *args, **kwargs)
         
+        # 🔧 特殊处理：允许访问系统临时目录
+        # 某些库（如 openpyxl、pandas、tempfile）需要使用系统临时目录
+        import tempfile
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+        
+        # 解析原始路径（处理符号链接和相对路径）
+        resolved_original_path = Path(filename).resolve()
+        
+        # 检查是否是系统临时目录下的文件
+        try:
+            resolved_original_path.relative_to(temp_dir)
+            # 是系统临时目录，允许直接访问
+            return _original_builtins_open(filename, mode, *args, **kwargs)
+        except ValueError:
+            # 不是系统临时目录，继续处理
+            pass
+        
         # 处理路径：去掉开头的斜杠，然后添加 root_dir
         path_str = str(filename).lstrip('/')
         full_path = root_dir / path_str
@@ -109,6 +126,16 @@ def _get_safe_open():
             raise PermissionError(
                 f"安全错误：禁止访问 root_dir 外的文件\n请求路径: {filename}\n解析路径: {resolved_path}\n允许目录: {root_dir}\n注意：路径遍历（..）和符号链接已被阻止"
             )
+        
+        # 🔧 对于写入操作，自动创建父目录
+        # 支持的写入模式: 'w', 'a', 'x', 'w+', 'a+', 'x+', 'wb', 'ab', 'xb'
+        write_modes = {'w', 'a', 'x'}
+        mode_lower = mode.lower()
+        needs_write = any(mode_lower.startswith(m) for m in write_modes) or any(m in mode_lower for m in write_modes)
+        
+        if needs_write:
+            # 确保父目录存在
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
         
         # 使用原始的 builtins.open 打开文件
         return _original_builtins_open(str(resolved_path), mode, *args, **kwargs)

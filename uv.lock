@@ -3001,6 +3001,7 @@ dependencies = [
     { name = "rich" },
     { name = "sse-starlette" },
     { name = "wcmatch" },
+    { name = "xlsxwriter" },
 ]
 
 [package.optional-dependencies]
@@ -3036,6 +3037,7 @@ requires-dist = [
     { name = "rich", specifier = ">=14.2.0" },
     { name = "sse-starlette", specifier = ">=2.1.0,<2.2.0" },
     { name = "wcmatch" },
+    { name = "xlsxwriter", specifier = ">=3.2.9" },
 ]
 provides-extras = ["docling"]
 
