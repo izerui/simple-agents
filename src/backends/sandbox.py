@@ -154,8 +154,97 @@ _original_io_open = io.open
 # 保存原始的 codecs.open
 _original_codecs_open = codecs.open
 
-# 保存原始的 os.open（os.open 是系统调用，参数不同，不替换）
+# 保存原始的 os.open
 _original_os_open = os.open
+
+def _get_safe_os_open():
+    """创建线程安全的 safe_os_open 函数
+    
+    该函数从线程本地变量读取当前线程的 root_dir
+    如果没有设置 root_dir，回退到原始的 os.open
+    """
+    def safe_os_open(filename: Union[str, Path], flags: int, mode: int = 0o777, *args, **kwargs) -> int:
+        """线程安全的 os.open 函数"""
+        # 从线程本地变量获取 root_dir
+        root_dir = getattr(_thread_local, 'root_dir', None)
+        
+        # 🔧 回退机制：如果没有设置 root_dir，使用原始的 os.open
+        if root_dir is None:
+            return _original_os_open(filename, flags, mode, *args, **kwargs)
+        
+        # 🔧 特殊处理：允许访问系统临时目录
+        import tempfile
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+        
+        # 解析原始路径（处理符号链接和相对路径）
+        resolved_original_path = Path(filename).resolve()
+        
+        # 检查是否是系统临时目录下的文件
+        try:
+            resolved_original_path.relative_to(temp_dir)
+            # 是系统临时目录，允许直接访问
+            return _original_os_open(filename, flags, mode, *args, **kwargs)
+        except ValueError:
+            # 不是系统临时目录，继续处理
+            pass
+        
+        # 处理路径：去掉开头的斜杠，然后添加 root_dir
+        path_str = str(filename).lstrip('/')
+        full_path = root_dir / path_str
+        
+        # 🔒 安全验证：解析为绝对路径并检查是否在 root_dir 内
+        resolved_path = full_path.resolve()
+        
+        try:
+            resolved_path.relative_to(root_dir)
+        except ValueError:
+            # 路径不在 root_dir 内，拒绝访问
+            raise PermissionError(
+                f"安全错误：禁止访问 root_dir 外的文件\n请求路径: {filename}\n解析路径: {resolved_path}\n允许目录: {root_dir}"
+            )
+        
+        # 🔧 对于写入操作，自动创建父目录
+        # os.O_WRONLY、os.O_RDWR、os.O_CREAT 等标志表示写入
+        write_flags = {os.O_WRONLY, os.O_RDWR, os.O_CREAT, os.O_TRUNC, os.O_APPEND}
+        needs_write = bool(flags & (os.O_WRONLY | os.O_RDWR))
+        
+        if needs_write or (flags & os.O_CREAT):
+            # 确保父目录存在
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 使用原始的 os.open 打开文件
+        return _original_os_open(str(resolved_path), flags, mode, *args, **kwargs)
+    
+    return safe_os_open
+
+# 全局的 safe_os_open 函数
+_safe_os_open_func = _get_safe_os_open()
+
+def _get_safe_import():
+    """创建安全的 __import__ 函数，拦截 os 模块的导入并替换 os.open"""
+    # 获取原始的 __import__（处理 __builtins__ 可能是字典或模块的情况）
+    if isinstance(__builtins__, dict):
+        original_import = __builtins__['__import__']
+    else:
+        original_import = __builtins__.__import__
+    
+    def safe_import(name, *args, **kwargs):
+        """安全的 import 函数"""
+        # 先调用原始的 import
+        module = original_import(name, *args, **kwargs)
+        
+        # 如果导入的是 os 模块，替换 os.open
+        if name == 'os' and hasattr(module, 'open'):
+            # 只在沙箱执行环境中替换（检查是否有 root_dir）
+            if hasattr(_thread_local, 'root_dir') and _thread_local.root_dir is not None:
+                module.open = _safe_os_open_func
+        
+        return module
+    
+    return safe_import
+
+# 全局的 safe_import 函数
+_safe_import_func = _get_safe_import()
 
 
 
@@ -349,16 +438,22 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                 io.open = _safe_open_func
                 # 替换 codecs.open（处理编码文件）
                 codecs.open = _safe_open_func
-                # 注意：os.open 是系统调用，参数不同，不能直接替换
-                # 但 os.open 通常返回文件描述符，不会直接用于文件路径
+                # 🔒 替换 os.open（防止绕过安全限制）
+                os.open = _safe_os_open_func
                 _builtins_open_patched = True
         
         # 🔒 添加受限的 open 函数（替换原生的 open）
         safe_globals['open'] = _safe_open_func
         safe_globals['__builtins__']['open'] = _safe_open_func
+        
+        # 🔒 替换 __import__ 函数，拦截 os 模块的导入
+        safe_globals['__import__'] = _safe_import_func
+        safe_globals['__builtins__']['__import__'] = _safe_import_func
+        
         # 同时在全局变量中注入 io 和 codecs 模块
         safe_globals['io'] = io
         safe_globals['codecs'] = codecs
+        safe_globals['Path'] = Path
         
         # 注入 builtins 模块到全局变量中
         safe_globals['builtins'] = builtins
