@@ -277,7 +277,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             max_file_size_mb: int = 10,
             max_output_length: int = 100000,  # 100KB
             timeout_seconds: int = 30,
-            max_memory_mb: int = 512,
+            max_memory_mb: int = 128,
             **kwargs
     ) -> None:
         """初始化安全沙箱
