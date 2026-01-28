@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from src.utils._docling_download import ensure_docling_installed, download_docling_models
+from src.utils._library_download import ensure_docling_installed, download_docling_models
 
 # 确保依赖已安装
 ensure_docling_installed()
