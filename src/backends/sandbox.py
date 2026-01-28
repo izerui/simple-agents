@@ -468,27 +468,6 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         return safe_globals
 
 
-
-    def _set_resource_limits(self):
-        """设置资源限制（内存、CPU 等）"""
-        try:
-            # 设置内存限制（仅在 Unix 系统上有效）
-            soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-            new_limit = self.max_memory_mb * 1024 * 1024
-            resource.setrlimit(resource.RLIMIT_AS, (new_limit, hard))
-
-            # 设置 CPU 时间限制
-            cpu_limit = self.timeout_seconds + 5  # 留一点余量
-            soft, hard = resource.getrlimit(resource.RLIMIT_CPU)
-            resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit, hard))
-
-        except (ValueError, resource.error, AttributeError):
-            # 在 Windows 或不支持的平台忽略错误
-            pass
-
-
-
-
     def _check_code_safety(self, code: str) -> None:
         """使用 AST 检查代码安全性，禁止危险函数调用
 
@@ -691,10 +670,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                     # 步骤 5: 执行代码（带超时）
                     exit_code = 0
                     
-                    # 设置资源限制
-                    self._set_resource_limits()
-                    
-                    # 执行代码
+
                     # 使用 locals 作为命名空间，这样导入的模块会被保存到 locals 中
                     exec(compiled_code, locals, locals)
                 
