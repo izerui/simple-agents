@@ -70,23 +70,20 @@ A user may ask you to create, edit, or analyze the contents of an .xlsx file. Yo
 
 **LibreOffice Required for Formula Recalculation**: You can assume LibreOffice is installed for recalculating formula values using the `recalc.py` script. The script automatically configures LibreOffice on first run
 
-**Use `uvx` for Command Execution (MANDATORY)**: All Python script executions MUST use `uvx` with the exact format:
+**Use `python` for Command Execution (MANDATORY)**: All Python script executions MUST use `python` with the exact format:
 
 ```bash
-uvx --cache-dir .uvx/cache --with pandas --with openpyxl python <script_name>.py [additional_args]
+python <script_name>.py [additional_args]
 ```
 
 **Examples:**
 ```bash
-uvx --cache-dir .uvx/cache --with pandas --with openpyxl python recalc.py output.xlsx 30
-uvx --cache-dir .uvx/cache --with pandas --with openpyxl python excel_processor.py --input data.xlsx --output result.xlsx
+python recalc.py output.xlsx 30
+python excel_processor.py --input data.xlsx --output result.xlsx
 ```
 
 **IMPORTANT:**
-- Use `uvx --cache-dir .uvx/cache --with pandas --with openpyxl python` prefix before every script execution
-- Do NOT use `python script.py` - this will NOT work
-- Do NOT use `uvx script.py` - this will NOT work
-- Always include the `python` keyword after the packages
+- Use `python` prefix before every script execution
 - Any additional arguments (file paths, options, etc.) should follow the script name
 
 ## Reading and analyzing data
@@ -152,7 +149,7 @@ This applies to ALL calculations - totals, percentages, ratios, differences, etc
 4. **Save**: Write to file
 5. **Recalculate formulas (MANDATORY IF USING FORMULAS)**: Use the recalc.py script
    ```bash
-   uvx recalc.py output.xlsx
+   python recalc.py output.xlsx
    ```
 6. **Verify and fix any errors**: 
    - The script returns JSON with error details
@@ -225,12 +222,12 @@ wb.save('modified.xlsx')
 Excel files created or modified by openpyxl contain formulas as strings but not calculated values. Use the provided `recalc.py` script to recalculate formulas:
 
 ```bash
-uvx --cache-dir .uvx/cache --with pandas --with openpyxl python recalc.py <excel_file> [timeout_seconds]
+python recalc.py <excel_file> [timeout_seconds]
 ```
 
 Example:
 ```bash
-uvx --cache-dir .uvx/cache --with pandas --with openpyxl python recalc.py output.xlsx 30
+python recalc.py output.xlsx 30
 ```
 
 The script:
