@@ -234,8 +234,8 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令（
 1. 直接执行代码字符串：python -c "code"
    示例：python -c "print('Hello World')"
 
-2. 执行脚本文件：python script.py
-   示例：python path/to/script.py
+2. 执行脚本文件：python scripts/script.py
+   示例：python scripts/script.py
 
 除上述两种格式外，其他任何命令均不支持。
 
@@ -244,7 +244,7 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令（
 - 命令在隔离的沙箱环境中运行
 - 返回 stdout/stderr 合并输出及退出码
 - 如果输出过大，可能会被截断
-- 建议执行脚本或者脚本内读写文件使用相对路径"""
+- 建议执行脚本放到 `scripts` 目录下, 通过 `python scripts/script.py` 方式执行"""
 
 
 

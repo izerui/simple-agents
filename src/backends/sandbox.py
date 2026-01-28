@@ -487,31 +487,91 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             pass
 
 
-    def _compile_code(self, code: str):
-        """编译 Python 代码
+
+
+    def _check_code_safety(self, code: str) -> None:
+        """使用 AST 检查代码安全性，禁止危险函数调用
 
         Args:
-            code: 要编译的 Python 代码
-
-        Returns:
-            编译后的代码对象
+            code: 要检查的 Python 代码
 
         Raises:
             SyntaxError: 如果代码包含语法错误
+            ValueError: 如果代码包含危险操作
         """
-        # 使用标准 Python compile 编译代码
-        try:
-            compiled_code = compile(
-                code,
-                filename='<sandbox>',
-                mode='exec'
-            )
+        import ast
 
-            return compiled_code
+        # 定义禁止的危险函数调用
+        # 格式: (模块名, 函数名, 错误消息)
+        DANGEROUS_CALLS = [
+            ('os', 'remove', '禁止使用 os.remove() 删除文件'),
+            ('os', 'unlink', '禁止使用 os.unlink() 删除文件'),
+            ('os', 'rmdir', '禁止使用 os.rmdir() 删除目录'),
+            ('os', 'removedirs', '禁止使用 os.removedirs() 递归删除目录'),
+            ('os', 'rename', '禁止使用 os.rename() 移动或重命名文件'),
+            ('os', 'replace', '禁止使用 os.replace() 替换文件'),
+            ('os', 'chmod', '禁止使用 os.chmod() 修改文件权限'),
+            ('os', 'chown', '禁止使用 os.chown() 修改文件所有者'),
+            ('os', 'listdir', '禁止使用 os.listdir() 列出目录'),
+            ('os', 'scandir', '禁止使用 os.scandir() 列出目录'),
+            ('pathlib', 'Path', '禁止使用 pathlib.Path 进行目录操作'),
+        ]
+
+        # 禁止的 Path 方法
+        FORBIDDEN_PATH_METHODS = ['iterdir', 'glob', 'rglob', 'unlink']
+
+        class SafetyChecker(ast.NodeVisitor):
+            def __init__(self):
+                self.dangerous_calls = []
+
+            def visit_Call(self, node):
+                # 检查函数调用
+                func_name = None
+                module_name = None
+
+                # 处理 os.remove() 这样的调用
+                if isinstance(node.func, ast.Attribute):
+                    if isinstance(node.func.value, ast.Name):
+                        module_name = node.func.value.id
+                    func_name = node.func.attr
+
+                # 处理 Path().iterdir() 这样的调用
+                elif isinstance(node.func, ast.Attribute):
+                    func_name = node.func.attr
+
+                # 检查是否是危险调用
+                if module_name and func_name:
+                    for mod, func, msg in DANGEROUS_CALLS:
+                        if module_name == mod and func_name == func:
+                            self.dangerous_calls.append(
+                                f"在 {node.lineno} 行: {msg}"
+                            )
+
+                # 检查 Path 危险方法
+                if isinstance(node.func, ast.Attribute):
+                    if node.func.attr in FORBIDDEN_PATH_METHODS:
+                        self.dangerous_calls.append(
+                            f"在 {node.lineno} 行: 禁止使用 Path.{node.func.attr}()"
+                        )
+
+                self.generic_visit(node)
+
+        try:
+            tree = ast.parse(code)
+            checker = SafetyChecker()
+            checker.visit(tree)
+
+            if checker.dangerous_calls:
+                error_msg = "安全错误：代码包含禁止的操作\n"
+                error_msg += "\n".join(checker.dangerous_calls)
+                error_msg += "\n\n原因：为了保护系统安全，禁止以下危险操作："
+                error_msg += "\n  - 删除、移动、重命名文件"
+                error_msg += "\n  - 修改文件权限"
+                error_msg += "\n  - 列出目录内容"
+                error_msg += "\n  - 遍历目录"
+                raise ValueError(error_msg)
         except SyntaxError as e:
-            raise SyntaxError(
-                f"代码编译失败：{str(e)}"
-            )
+            raise SyntaxError(f"代码语法错误：{str(e)}")
 
     def execute(self, command: str) -> ExecuteResponse:
         """执行受限的 Python 代码或脚本文件
@@ -570,7 +630,17 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                     truncated=False
                 )
 
-            # 步骤 3: 编译代码
+            # 步骤 3: 检查代码安全性（AST 检查）
+            try:
+                self._check_code_safety(code)
+            except (SyntaxError, ValueError) as e:
+                return ExecuteResponse(
+                    output=f"安全检查失败:\n{str(e)}",
+                    exit_code=-1,
+                    truncated=False
+                )
+
+            # 步骤 4: 编译代码
             try:
                 compiled_code = self._compile_code(code)
             except SyntaxError as e:
