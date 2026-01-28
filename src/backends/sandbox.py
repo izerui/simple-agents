@@ -573,6 +573,32 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         except SyntaxError as e:
             raise SyntaxError(f"代码语法错误：{str(e)}")
 
+    def _compile_code(self, code: str):
+        """编译 Python 代码
+
+        Args:
+            code: 要编译的 Python 代码
+
+        Returns:
+            编译后的代码对象
+
+        Raises:
+            SyntaxError: 如果代码包含语法错误
+        """
+        # 使用标准 Python compile 编译代码
+        try:
+            compiled_code = compile(
+                code,
+                filename='<sandbox>',
+                mode='exec'
+            )
+
+            return compiled_code
+        except SyntaxError as e:
+            raise SyntaxError(
+                f"代码编译失败：{str(e)}"
+            )
+
     def execute(self, command: str) -> ExecuteResponse:
         """执行受限的 Python 代码或脚本文件
 
