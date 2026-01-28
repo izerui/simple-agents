@@ -244,7 +244,9 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令（
 - 命令在隔离的沙箱环境中运行
 - 返回 stdout/stderr 合并输出及退出码
 - 如果输出过大，可能会被截断
-- 建议执行脚本放到 `scripts` 目录下, 通过 `python scripts/script.py` 方式执行"""
+- 建议执行脚本放到 `scripts` 目录下, 通过 `python scripts/script.py` 方式执行
+- 脚本生成的文件放到 `outputs` 目录下
+"""
 
 
 
