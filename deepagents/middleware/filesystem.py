@@ -246,6 +246,7 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令（
 - 如果输出过大，可能会被截断
 - 建议执行脚本放到 `scripts` 目录下, 通过 `python scripts/script.py` 方式执行
 - 脚本生成的文件放到 `outputs` 目录下
+- 尽量以操作文件的方式执行脚本,避免使用很长的字符串脚本形式运行.
 """
 
 
