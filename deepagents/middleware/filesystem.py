@@ -227,17 +227,24 @@ Examples:
 - Search Python files only: `grep(pattern="import", glob="*.py")`
 - Show matching lines: `grep(pattern="error", output_mode="content")`"""
 
-EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令（python版本 3.12）。
+EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行命令（Python 版本 3.12，支持依赖管理）。
 
-支持的执行格式（仅限以下两种）：
+支持的执行格式（仅限以下两类）：
 
-1. 直接执行代码字符串：python -c "code"
-   示例：python -c "print('Hello World')"
+1. Python 代码执行：
+   - 直接执行代码字符串：python -c "code"
+     示例：python -c "print('Hello World')"
+   - 执行脚本文件：python script.py
+     示例：python scripts/my_script.py
 
-2. 执行脚本文件：python scripts/script.py
-   示例：python scripts/script.py
-
-除上述两种格式外，其他任何命令均不支持。
+2. 依赖管理命令（使用 uv pip）：
+   - 安装新包：uv pip install <package>
+     示例：uv pip install numpy pandas
+   - 列出已安装包：uv pip list
+   - 查看包信息：uv pip show <package>
+     示例：uv pip show numpy
+   - 冻结依赖：uv pip freeze
+   - 检查依赖冲突：uv pip check
 
 使用说明：
 - 如果路径包含空格，请使用双引号包裹
@@ -246,7 +253,49 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行 Python 命令（
 - 如果输出过大，可能会被截断
 - 建议执行脚本放到 `scripts` 目录下, 通过 `python scripts/script.py` 方式执行
 - 脚本生成的文件放到 `outputs` 目录下
-- 尽量以操作文件的方式执行脚本,避免使用很长的字符串脚本形式运行.
+- 尽量以操作文件的方式执行脚本,避免使用很长的字符串脚本形式运行
+
+安全限制（禁止破坏环境的操作）：
+
+【Python 代码执行安全限制】
+⚠️ 严格禁止在 Python 代码中调用系统命令或执行危险操作：
+
+禁止的函数调用（外部系统命令）：
+- subprocess 模块：subprocess.run()、subprocess.call()、subprocess.Popen()
+  ❌ 禁止调用：curl、npm、npm install、pip、apt、yum、brew、wget、git 等任何外部命令
+  ❌ 禁止调用：ls、rm、cp、mv、chmod、chown 等 Linux 系统命令
+- os.system()、os.popen()
+
+禁止的文件操作：
+- os.remove()、os.unlink()、os.rmdir()（删除文件或目录）
+- os.rename()、os.replace()（移动或重命名文件）
+- os.chmod()、os.chown()（修改文件权限或所有者）
+- Path.unlink()、Path.rmdir()
+
+禁止的动态代码执行：
+- eval()、exec()、compile()
+
+禁止的模块导入：
+- subprocess 模块（完全禁止，用于防止调用外部系统命令）
+- shutil 模块（完全禁止）
+
+其他限制：
+- Python 代码在隔离环境中执行，无法访问沙箱外的文件系统
+- 只能使用内置的 open() 函数读写文件，且受限在沙箱根目录内
+- ⚠️ 不允许通过 subprocess 调用 curl 下载文件
+- ⚠️ 不允许通过 subprocess 调用 npm install 安装 Node.js 依赖
+- ⚠️ 不允许通过 subprocess 调用任何包管理器（npm、yarn、pnpm、pip 等）
+- ⚠️ 如需安装依赖，请使用 uv pip install 命令
+
+【依赖管理安全限制（uv pip）】
+- uv pip install 不支持以下选项：
+  * -r, --requirement（批量安装 requirements.txt）
+  * --upgrade, -U（升级已安装的包）
+  * --force-reinstall, --reinstall（强制重新安装）
+  * --upgrade-strategy（升级策略）
+  * --ignore-installed（忽略已安装版本）
+- 不支持任何卸载操作（uninstall）
+- 只能安装新包，不能升级已安装的包
 """
 
 

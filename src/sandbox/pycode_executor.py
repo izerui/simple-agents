@@ -84,6 +84,12 @@ def _get_safe_open():
     """
     def safe_open(filename: Union[str, Path], mode: str = 'r', *args, **kwargs):
         """线程安全的 open 函数"""
+        # 🔧 特殊处理：文件描述符（整数）
+        # subprocess.Popen 会使用 io.open 打开文件描述符（如管道的读端）
+        # 文件描述符是系统级别的，不涉及文件路径，直接使用原始的 open
+        if isinstance(filename, int):
+            return _original_builtins_open(filename, mode, *args, **kwargs)
+        
         # 从线程本地变量获取 root_dir
         root_dir = getattr(_thread_local, 'root_dir', None)
         
@@ -229,6 +235,20 @@ def _get_safe_import():
     
     def safe_import(name, *args, **kwargs):
         """安全的 import 函数"""
+        # 🚫 禁止导入 ctypes 模块（防止绕过安全限制调用系统库）
+        if name == 'ctypes' or name.startswith('ctypes.'):
+            raise ImportError(
+                f"安全错误：禁止导入 '{name}' 模块\n"
+                f"原因：ctypes 可以绕过 Python 安全限制直接调用底层系统库"
+            )
+        
+        # 🚫 禁止导入 importlib 模块（防止动态导入被禁用的模块）
+        if name == 'importlib' or name.startswith('importlib.'):
+            raise ImportError(
+                f"安全错误：禁止导入 '{name}' 模块\n"
+                f"原因：importlib 可以动态导入被禁用的危险模块"
+            )
+        
         # 先调用原始的 import
         module = original_import(name, *args, **kwargs)
         
@@ -477,7 +497,52 @@ class CodeExecutor:
             ('os', 'chown', '禁止使用 os.chown() 修改文件所有者'),
             ('os', 'listdir', '禁止使用 os.listdir() 列出目录'),
             ('os', 'scandir', '禁止使用 os.scandir() 列出目录'),
+            # 🚫 禁止 os 模块执行系统命令
+            ('os', 'system', '禁止使用 os.system() 执行系统命令'),
+            ('os', 'popen', '禁止使用 os.popen() 执行系统命令'),
+            ('os', 'spawnl', '禁止使用 os.spawnl() 创建新进程执行命令'),
+            ('os', 'spawnle', '禁止使用 os.spawnle() 创建新进程执行命令'),
+            ('os', 'spawnlp', '禁止使用 os.spawnlp() 创建新进程执行命令'),
+            ('os', 'spawnlpe', '禁止使用 os.spawnlpe() 创建新进程执行命令'),
+            ('os', 'spawnv', '禁止使用 os.spawnv() 创建新进程执行命令'),
+            ('os', 'spawnve', '禁止使用 os.spawnve() 创建新进程执行命令'),
+            ('os', 'spawnvp', '禁止使用 os.spawnvp() 创建新进程执行命令'),
+            ('os', 'spawnvpe', '禁止使用 os.spawnvpe() 创建新进程执行命令'),
+            ('os', 'posix_spawn', '禁止使用 os.posix_spawn() 创建新进程执行命令'),
+            ('os', 'posix_spawnp', '禁止使用 os.posix_spawnp() 创建新进程执行命令'),
+            ('os', 'execl', '禁止使用 os.execl() 替换当前进程执行命令'),
+            ('os', 'execle', '禁止使用 os.execle() 替换当前进程执行命令'),
+            ('os', 'execlp', '禁止使用 os.execlp() 替换当前进程执行命令'),
+            ('os', 'execlpe', '禁止使用 os.execlpe() 替换当前进程执行命令'),
+            ('os', 'execv', '禁止使用 os.execv() 替换当前进程执行命令'),
+            ('os', 'execve', '禁止使用 os.execve() 替换当前进程执行命令'),
+            ('os', 'execvp', '禁止使用 os.execvp() 替换当前进程执行命令'),
+            ('os', 'execvpe', '禁止使用 os.execvpe() 替换当前进程执行命令'),
+            ('os', 'fork', '禁止使用 os.fork() 创建子进程'),
+            ('os', 'forkpty', '禁止使用 os.forkpty() 创建伪终端子进程'),
+            ('os', 'startfile', '禁止使用 os.startfile() 执行文件或程序'),
             ('pathlib', 'Path', '禁止使用 pathlib.Path 进行目录操作'),
+            # 🚫 禁止获取环境变量
+            ('os', 'getenv', '禁止使用 os.getenv() 获取环境变量'),
+            ('os', 'getenvb', '禁止使用 os.getenvb() 获取环境变量'),
+            ('os', 'putenv', '禁止使用 os.putenv() 修改环境变量'),
+            ('os', 'unsetenv', '禁止使用 os.unsetenv() 修改环境变量'),
+            # 🚫 禁止动态导入 ctypes
+            ('__builtins__', '__import__', '禁止使用 __import__() 动态导入 ctypes 模块'),
+            ('builtins', '__import__', '禁止使用 __import__() 动态导入 ctypes 模块'),
+            # 🚫 禁止 importlib 动态导入
+            ('importlib', 'import_module', '禁止使用 importlib.import_module() 动态导入模块'),
+            ('importlib', '__import__', '禁止使用 importlib.__import__() 动态导入模块'),
+            ('importlib.util', 'spec_from_file_location', '禁止使用 importlib.util.spec_from_file_location() 导入模块'),
+            ('importlib.util', 'module_from_spec', '禁止使用 importlib.util.module_from_spec() 创建模块'),
+            # 🚫 禁止 subprocess 调用外部命令
+            ('subprocess', 'run', '禁止使用 subprocess.run() 调用外部命令'),
+            ('subprocess', 'call', '禁止使用 subprocess.call() 调用外部命令'),
+            ('subprocess', 'Popen', '禁止使用 subprocess.Popen() 调用外部命令'),
+            ('subprocess', 'check_call', '禁止使用 subprocess.check_call() 调用外部命令'),
+            ('subprocess', 'check_output', '禁止使用 subprocess.check_output() 调用外部命令'),
+            ('subprocess', 'getoutput', '禁止使用 subprocess.getoutput() 调用外部命令'),
+            ('subprocess', 'getstatusoutput', '禁止使用 subprocess.getstatusoutput() 调用外部命令'),
         ]
 
         # 禁止的 Path 方法
@@ -486,6 +551,28 @@ class CodeExecutor:
         class SafetyChecker(ast.NodeVisitor):
             def __init__(self):
                 self.dangerous_calls = []
+
+            def visit_Subscript(self, node):
+                """检测字典订阅操作，如 os.environ['KEY']"""
+                # 检查是否是 os.environ['xxx'] 的形式
+                if isinstance(node.value, ast.Attribute):
+                    if (isinstance(node.value.value, ast.Name) and 
+                        node.value.value.id == 'os' and 
+                        node.value.attr == 'environ'):
+                        self.dangerous_calls.append(
+                            f"在 {node.lineno} 行: 禁止使用 os.environ[] 获取环境变量"
+                        )
+                self.generic_visit(node)
+
+            def visit_Attribute(self, node):
+                """检测属性访问，如 os.environ"""
+                # 检查是否访问了 os.environ 属性
+                if isinstance(node.value, ast.Name):
+                    if node.value.id == 'os' and node.attr == 'environ':
+                        self.dangerous_calls.append(
+                            f"在 {node.lineno} 行: 禁止访问 os.environ 获取环境变量"
+                        )
+                self.generic_visit(node)
 
             def visit_Call(self, node):
                 # 检查函数调用
@@ -501,6 +588,17 @@ class CodeExecutor:
                 # 处理 Path().iterdir() 这样的调用
                 elif isinstance(node.func, ast.Attribute):
                     func_name = node.func.attr
+                
+                # 🚫 特殊处理：检测 __import__('ctypes') 这样的调用
+                if isinstance(node.func, ast.Name):
+                    if node.func.id == '__import__':
+                        # 检查参数中是否包含 'ctypes'
+                        if node.args and isinstance(node.args[0], ast.Constant):
+                            import_name = node.args[0].value
+                            if import_name == 'ctypes' or (isinstance(import_name, str) and import_name.startswith('ctypes')):
+                                self.dangerous_calls.append(
+                                    f"在 {node.lineno} 行: 禁止动态导入 ctypes 模块"
+                                )
 
                 # 检查是否是危险调用
                 if module_name and func_name:
@@ -532,6 +630,9 @@ class CodeExecutor:
                 error_msg += "\n  - 修改文件权限"
                 error_msg += "\n  - 列出目录内容"
                 error_msg += "\n  - 遍历目录"
+                error_msg += "\n  - 调用外部命令"
+                error_msg += "\n  - 访问或修改环境变量"
+                error_msg += "\n  - 导入 ctypes 或动态导入模块"
                 raise ValueError(error_msg)
         except SyntaxError as e:
             raise SyntaxError(f"代码语法错误：{str(e)}")
@@ -658,6 +759,25 @@ class CodeExecutor:
                     # 使用 locals 作为命名空间，这样导入的模块会被保存到 locals 中
                     exec(compiled_code, locals, locals)
                 
+                except SystemExit as e:
+                    # SystemExit 表示程序主动退出，需要正确处理退出码
+                    # e.code 可能是整数或 None（表示退出码为 0）
+                    exit_code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+                    
+                    # 获取输出（不附加错误信息，因为 SystemExit 是正常的退出）
+                    output = output_capture.get_output()
+                    
+                    # 检查输出长度
+                    truncated = len(output) > self.max_output_length
+                    if truncated:
+                        output = output[:self.max_output_length]
+                        output += "\n\n... [输出被截断，超过最大长度限制] ..."
+                    
+                    return ExecuteResponse(
+                        output=output,
+                        exit_code=exit_code,
+                        truncated=truncated
+                    )
                 except MemoryError:
                     exit_code = -1
                     return ExecuteResponse(
