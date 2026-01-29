@@ -249,6 +249,34 @@ def _get_safe_import():
                 f"原因：importlib 可以动态导入被禁用的危险模块"
             )
         
+        # 🚫 禁止导入反序列化模块（防止执行任意代码）
+        if name in ['pickle', 'marshal', 'shelve']:
+            raise ImportError(
+                f"安全错误：禁止导入 '{name}' 模块\n"
+                f"原因：反序列化模块可以执行任意代码，存在严重安全风险"
+            )
+        
+        # 🚫 禁止导入 time 模块（防止长时间阻塞）
+        if name == 'time':
+            raise ImportError(
+                f"安全错误：禁止导入 'time' 模块\n"
+                f"原因：time.sleep() 可能导致长时间阻塞，影响系统性能"
+            )
+        
+        # 🚫 禁止导入多进程/多线程模块（防止绕过沙箱）
+        if name in ['threading', 'multiprocessing']:
+            raise ImportError(
+                f"安全错误：禁止导入 '{name}' 模块\n"
+                f"原因：多进程/多线程模块可能绕过沙箱安全限制"
+            )
+        
+        # 🚫 禁止导入 signal 模块（防止干扰系统）
+        if name == 'signal':
+            raise ImportError(
+                f"安全错误：禁止导入 'signal' 模块\n"
+                f"原因：signal 模块可能干扰系统正常运行"
+            )
+        
         # 先调用原始的 import
         module = original_import(name, *args, **kwargs)
         
@@ -633,6 +661,8 @@ class CodeExecutor:
                 error_msg += "\n  - 调用外部命令"
                 error_msg += "\n  - 访问或修改环境变量"
                 error_msg += "\n  - 导入 ctypes 或动态导入模块"
+                error_msg += "\n  - 使用反序列化模块"
+                error_msg += "\n  - 导入时间、线程、进程或信号模块"
                 raise ValueError(error_msg)
         except SyntaxError as e:
             raise SyntaxError(f"代码语法错误：{str(e)}")
