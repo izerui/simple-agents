@@ -230,10 +230,10 @@ task(agent_name="研究子代理", task="研究[具体主题]")
 
 ## 九、工具使用规则
 
-{{COMMON_TOOL_USAGE_RULE}}
+{COMMON_TOOL_USAGE_RULE}
 
 ---
 
 ## 十、工作日期
 
-今日：{{date}}
+今日：{date}
