@@ -6,7 +6,9 @@ from typing import Optional, Union
 
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse, FileInfo
-from src.sandbox.executor import CodeExecutor
+from src.sandbox.pycode_executor import CodeExecutor
+from src.sandbox.dependency_executor import DependencyExecutor
+import re
 
 
 class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
@@ -51,25 +53,50 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             max_file_size_mb=max_file_size_mb,
         )
 
-        self._executor = CodeExecutor(
+        self._pycode_executor = CodeExecutor(
+            root_dir=self.root_dir,
+            max_output_length=self.max_output_length,
+        )
+
+        # 初始化依赖安装执行器
+        self._dependency_executor = DependencyExecutor(
             root_dir=self.root_dir,
             max_output_length=self.max_output_length,
         )
 
     def execute(self, command: str) -> ExecuteResponse:
-        """执行受限的 Python 代码或脚本文件
+        """执行命令（统一入口）
 
-        只支持两种格式：
-        1. python -c "code" - 执行代码字符串
-        2. python script.py - 执行脚本文件
+        根据命令类型自动选择执行器：
+        1. uv pip 命令 -> 使用 DependencyExecutor（依赖安装和查询）
+        2. python 命令 -> 使用 CodeExecutor（Python 代码执行）
+
+        DependencyExecutor 支持的命令：
+        - uv pip install <package>（安装新包，不允许升级或重装）
+        - uv pip list
+        - uv pip show <package>
+        - uv pip freeze
+        - uv pip check
+
+        CodeExecutor 支持的命令：
+        - python -c "code" - 执行代码字符串
+        - python script.py - 执行脚本文件
 
         Args:
-            command: 命令字符串（python -c "code" 或 python script.py）
+            command: 命令字符串
 
         Returns:
             ExecuteResponse 包含输出、退出码和截断标志
         """
-        return self._executor.execute(command)
+        command = command.strip()
+        
+        # 判断是否是 uv pip 命令
+        if re.match(r'^uv\s+pip\s+', command, re.IGNORECASE):
+            # 使用依赖安装执行器
+            return self._dependency_executor.execute(command)
+        else:
+            # 使用 Python 代码执行器
+            return self._pycode_executor.execute(command)
 
     def ls_info(self, path: str) -> list[FileInfo]:
         if path.startswith('/skills'):
