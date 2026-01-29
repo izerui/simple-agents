@@ -76,7 +76,7 @@ print()
 print("【3】safe_globals 的安全性")
 print("-" * 80)
 
-from src.backends.sandbox import SandboxFilesystemBackend
+from src.sandbox.sandbox_filesystem import SandboxFilesystemBackend
 import tempfile
 
 # 创建沙箱实例

@@ -39,8 +39,7 @@ _thread_local = threading.local()
 # 全局标志，标记是否已经替换了 builtins.open
 _builtins_open_patched = False
 
-from deepagents.backends import FilesystemBackend
-from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse
+from deepagents.backends.protocol import ExecuteResponse
 
 
 
@@ -251,7 +250,7 @@ _safe_import_func = _get_safe_import()
 
 
 
-class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
+class CodeExecutor:
     """
     安全沙箱后端（只支持标准执行格式）
 
@@ -273,11 +272,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
     def __init__(
             self,
             root_dir: Optional[Union[str, Path]] = None,
-            virtual_mode: bool = False,
-            max_file_size_mb: int = 10,
             max_output_length: int = 100000,  # 100KB
-            timeout_seconds: int = 30,
-            max_memory_mb: int = 512,
             **kwargs
     ) -> None:
         """初始化安全沙箱
@@ -287,23 +282,12 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             virtual_mode: 虚拟模式（由父类 FilesystemBackend 使用）
             max_file_size_mb: 最大文件大小限制（MB）
             max_output_length: 最大输出长度
-            timeout_seconds: 执行超时时间（秒）
-            max_memory_mb: 最大内存限制（MB）
         """
         # 设置根目录
         self.root_dir = Path(root_dir) if root_dir else Path(tempfile.mkdtemp())
         self.root_dir = self.root_dir.resolve()
 
         self.max_output_length = max_output_length
-        self.timeout_seconds = timeout_seconds
-        self.max_memory_mb = max_memory_mb
-
-        # 调用父类初始化
-        super().__init__(
-            root_dir=str(self.root_dir),
-            virtual_mode=virtual_mode,
-            max_file_size_mb=max_file_size_mb,
-        )
 
         # 初始化安全的执行环境
         self._safe_globals = self._create_safe_globals()

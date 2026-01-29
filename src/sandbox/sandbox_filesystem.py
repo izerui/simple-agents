@@ -1,0 +1,83 @@
+# -*- coding: utf-8 -*-
+import shutil
+import tempfile
+from pathlib import Path
+from typing import Optional, Union
+
+from deepagents.backends import FilesystemBackend
+from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse, FileInfo
+from src.sandbox.executor import CodeExecutor
+
+
+class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
+    """
+    安全沙箱后端
+
+    实现文件操作权限控制：
+    - root_dir 内：允许读写
+    - root_dir 外：只允许临时目录读写
+
+    只支持两种标准执行格式：
+    1. python -c "code" - 直接执行代码字符串
+    2. python script.py - 执行脚本文件
+    """
+
+    def __init__(
+            self,
+            root_dir: Optional[Union[str, Path]] = None,
+            virtual_mode: bool = False,
+            max_file_size_mb: int = 10,
+            max_output_length: int = 100000,  # 100KB
+            **kwargs
+    ) -> None:
+        """初始化安全沙箱
+
+        Args:
+            root_dir: 允许读写的根目录
+            virtual_mode: 虚拟模式（由父类 FilesystemBackend 使用）
+            max_file_size_mb: 最大文件大小限制（MB）
+            max_output_length: 最大输出长度
+        """
+        # 设置根目录
+        self.root_dir = Path(root_dir) if root_dir else Path(tempfile.mkdtemp())
+        self.root_dir = self.root_dir.resolve()
+
+        self.max_output_length = max_output_length
+
+        # 调用父类初始化
+        super().__init__(
+            root_dir=str(self.root_dir),
+            virtual_mode=virtual_mode,
+            max_file_size_mb=max_file_size_mb,
+        )
+
+        self._executor = CodeExecutor(
+            root_dir=self.root_dir,
+            max_output_length=self.max_output_length,
+        )
+
+    def execute(self, command: str) -> ExecuteResponse:
+        """执行受限的 Python 代码或脚本文件
+
+        只支持两种格式：
+        1. python -c "code" - 执行代码字符串
+        2. python script.py - 执行脚本文件
+
+        Args:
+            command: 命令字符串（python -c "code" 或 python script.py）
+
+        Returns:
+            ExecuteResponse 包含输出、退出码和截断标志
+        """
+        return self._executor.execute(command)
+
+    def ls_info(self, path: str) -> list[FileInfo]:
+        if path.startswith('/skills'):
+            # 判断沙箱内 /skills 目录是否存在
+            skills_pathlib = self.root_dir / 'skills'
+            if not skills_pathlib.exists():
+                project_root = Path(__file__).parent.parent.parent
+                src_skills_path = project_root / 'src' / 'skills'
+                # 复制src_skills_path 目录到沙箱内
+                shutil.copytree(src_skills_path, skills_pathlib, dirs_exist_ok=True)
+        return super().ls_info(path)

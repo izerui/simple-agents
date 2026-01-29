@@ -40,6 +40,7 @@ def cus_tool_limiter(tool_name: str, run_limit: int) -> ToolCallLimitMiddleware:
         exit_behavior="continue"  # 强制终止并返回当前结果
     )
 
+# skills_copier = SkillsToSandboxMiddleware(backend_factory=get_backend_per_thread)
 
 upload_files = AttachmentExtractMiddleware(backend_factory=get_backend_per_thread)
 
@@ -86,7 +87,7 @@ agent = create_deep_agent(
     system_prompt=MAIN_AGENT_INSTRUCTIONS,
     subagents=[convert_agent, research_agent],
     skills=[
-        'skills/xlsx'
+        '/skills'
     ],
     middleware=[
         upload_files,

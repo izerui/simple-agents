@@ -12,7 +12,7 @@ import tempfile
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.backends.sandbox import SandboxFilesystemBackend
+from src.sandbox.sandbox_filesystem import SandboxFilesystemBackend
 
 print("=" * 80)
 print("安全修复验证报告")

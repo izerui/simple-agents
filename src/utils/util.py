@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from deepagents.backends import FilesystemBackend
-from src.backends.sandbox import SandboxFilesystemBackend
+from src.sandbox.sandbox_filesystem import SandboxFilesystemBackend
 
 console = Console()
 
