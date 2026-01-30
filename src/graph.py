@@ -79,7 +79,7 @@ my_store = InMemoryStore()
 # Create the agent
 # 每个对话会获得独立的沙箱路径（./data/sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
-    name="任务代理",
+    name="主代理",
     model=chat_model,  # 使用模型实例
     tools=[think_tool, fetch_markdown],
     store=my_store,
