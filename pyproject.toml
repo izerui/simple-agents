@@ -5,23 +5,25 @@ description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
     "aiofiles>=25.1.0",
-    "langchain-deepseek>=1.0.1",
-    "langchain-openai>=1.1.6",
-    "langgraph-cli[all]>=0.4.11",
     "load-dotenv>=0.1.0",
     "markdownify>=1.2.2",
     "requests>=2.32.5",
     "rich>=14.2.0",
     "sse-starlette>=2.1.0,<2.2.0",
     # Deepagents dependencies
+    "langchain-core>=1.2.7,<2.0.0",
+    "langchain>=1.2.7,<2.0.0",
     "langchain-anthropic>=1.3.1,<2.0.0",
-    "langchain-google-genai>=4.1.3,<5.0.0",
-    "langchain>=1.2.4,<2.0.0",
-    "langchain-core>=1.2.6,<2.0.0",
+    "langchain-google-genai>=4.2.0,<5.0.0",
     "wcmatch",
+    # langgraph dependencies
+    "langchain-deepseek>=1.0.1",
+    "langchain-openai>=1.1.6",
     "langgraph-api>=0.6.16",
+    "langgraph-cli[all]>=0.4.11",
     "fastapi>=0.128.0",
     "huggingface-hub>=0.36.0",
+    # skills dependencies
     "openpyxl>=3.1.5",
     "pandas>=2.3.3",
     "xlsxwriter>=3.2.9",
