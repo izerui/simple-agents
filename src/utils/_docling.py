@@ -135,14 +135,10 @@ class DoclingConverter:
             # 自动创建父目录
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # 确定图片保存目录：images/{output_file的basename}/
-            images_dir = working_dir_path / "images" / output_path.stem
-
             if debug:
                 print(f"docling - 工作目录: {working_dir_path}")
                 print(f"docling - 开始转换: {source_file_for_docling}")
                 print(f"docling - 输出文件: {output_path}")
-                print(f"docling - 图片目录: {images_dir}")
 
             # 执行转换（使用绝对路径）
             print(f"docling - 正在转换文档...")
