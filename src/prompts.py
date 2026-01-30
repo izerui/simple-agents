@@ -37,7 +37,7 @@ COMMON_TOOL_USAGE_RULE = load_prompt_from_file("prompt/common_tool_prompt.md")
 # ============ 主协调者提示词 ============
 MAIN_AGENT_INSTRUCTIONS = load_prompt_from_file(
     "prompt/main_agent_prompt.md",
-    date = current_date,
+    date=current_date,
     max_concurrent_research_units=max_concurrent_research_units,
     max_researcher_iterations=max_researcher_iterations,
     COMMON_TOOL_USAGE_RULE=COMMON_TOOL_USAGE_RULE,
@@ -46,6 +46,7 @@ MAIN_AGENT_INSTRUCTIONS = load_prompt_from_file(
 # ============ 研究子代理提示词 ============
 RESEARCH_AGENT_INSTRUCTIONS = load_prompt_from_file(
     "prompt/research_agent_prompt.md",
+    date=current_date,
     COMMON_TOOL_USAGE_RULE=COMMON_TOOL_USAGE_RULE
 )
 
