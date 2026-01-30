@@ -65,7 +65,6 @@ class DoclingConverter:
     def __init__(
             self,
             converter: DocumentConverter,
-            generate_picture_images: bool = False
     ):
         """
         初始化 Docling 转换器
@@ -74,7 +73,6 @@ class DoclingConverter:
             converter: DocumentConverter 转换实例
         """
         self._converter = converter
-        self.generate_picture_images = generate_picture_images
 
     def convert(
             self,
@@ -143,7 +141,6 @@ class DoclingConverter:
             if debug:
                 print(f"docling - 工作目录: {working_dir_path}")
                 print(f"docling - 开始转换: {source_file_for_docling}")
-                print(f"docling - 生成图片: {'启用' if self.generate_picture_images else '禁用'}")
                 print(f"docling - 输出文件: {output_path}")
                 print(f"docling - 图片目录: {images_dir}")
 
@@ -156,92 +153,17 @@ class DoclingConverter:
 
             # 保存为 Markdown 文件
             print(f"docling - 保存 Markdown 文件到: {output_path.parent}")
-            if self.generate_picture_images:
-                # 创建图片目录
-                # images_dir.mkdir(parents=True, exist_ok=True)
-
-                # REFERENCED 模式：图片保存为独立文件
-                result.document.save_as_markdown(
-                    output_path,
-                    image_mode=ImageRefMode.REFERENCED,
-                    artifacts_dir=images_dir
-                )
-            else:
-                # PLACEHOLDER 模式：不生成图片
-                result.document.save_as_markdown(
-                    output_path,
-                    image_mode=ImageRefMode.PLACEHOLDER
-                )
+            # PLACEHOLDER 模式：不生成图片
+            result.document.save_as_markdown(
+                output_path,
+                image_mode=ImageRefMode.PLACEHOLDER
+            )
 
             # 读取生成的 Markdown 内容
             read_start_time = time.time()
             md_text = output_path.read_text(encoding='utf-8')
             read_time = time.time() - read_start_time
             print(f"docling - 读取 Markdown 文件完成，耗时: {read_time:.2f}秒")
-
-            # 将图片链接从绝对路径替换为相对于工作目录的相对路径
-            # 例如：/absolute/path/to/project/images/doc1/image.png -> images/doc1/image.png
-            if self.generate_picture_images:
-                import re
-                working_dir_str = str(working_dir_path)
-                # 移除工作目录前缀（确保不匹配部分路径）
-                # 使用正向预查确保只匹配完整的工作目录路径
-                md_text = re.sub(
-                    rf'^{re.escape(working_dir_str)}/',
-                    '',
-                    md_text,
-                    flags=re.MULTILINE
-                )
-                # 替换 Markdown 图片链接中的绝对路径
-                # 格式：![alt](/absolute/path/to/project/images/...)
-                md_text = re.sub(
-                    rf'!\[([^\]]*)\]\({re.escape(working_dir_str)}/([^\)]+)\)',
-                    r'![\1](\2)',
-                    md_text
-                )
-
-                # 收集图片描述信息
-                # 收集所有图片描述（按出现顺序）
-                description_list = []
-                for element, _level in result.document.iterate_items():
-                    if isinstance(element, PictureItem):
-                        print(f"图片 {element.self_ref}")
-
-                        _pic: PictureItem = element
-                        # 获取描述文本
-                        description_text = "无描述"
-                        if hasattr(_pic.meta, 'description') and _pic.meta.description:
-                            description_text = _pic.meta.description.text
-                        print(f"描述: {description_text}")
-
-                        # 将描述添加到列表中（保持顺序）
-                        description_list.append(description_text)
-                        print("-" * 80)
-
-                # 将描述按顺序插入到对应的图片位置后面
-                # 匹配以 ![Image](images/ 开头的行
-                lines = md_text.split('\n')
-                desc_index = 0
-                new_lines = []
-                for line in lines:
-                    new_lines.append(line)
-                    # 如果这行是以 ![Image](images/ 开头，就插入描述
-                    if line.strip().startswith('![Image](images/'):
-                        if desc_index < len(description_list):
-                            description = description_list[desc_index]
-                            # 插入图片说明
-                            new_lines.append(f"\n**图片说明：**")
-                            # 将描述按行分割，每行都添加 >
-                            for desc_line in description.split('\n'):
-                                new_lines.append(f"> {desc_line}")
-                            desc_index += 1
-                            print(f"已在第 {len(new_lines)} 行插入第 {desc_index} 个图片的描述")
-
-                # 重新组合文本
-                md_text = '\n'.join(new_lines)
-
-                # 写回文件
-                output_path.write_text(md_text, encoding='utf-8')
 
             total_time = time.time() - convert_start_time
             print(f"docling - 转换完成，共 {len(md_text)} 字符，总耗时: {total_time:.2f}秒")
@@ -270,7 +192,6 @@ DOCLING_FAST_CONVERTER = DoclingConverter(
             )
         }
     ),
-    generate_picture_images=False
 )
 
 cus_pipeline_options = PictureDescriptionApiOptions(
@@ -318,7 +239,6 @@ DOCLING_IMAGE_CONVERTER = DoclingConverter(
             ),
         }
     ),
-    generate_picture_images=True
 )
 
 llm_pipeline_options = VlmPipelineOptions(
@@ -362,5 +282,4 @@ DOCLING_LLM_CONVERTER = DoclingConverter(
             ),
         },
     ),
-    generate_picture_images=True
 )

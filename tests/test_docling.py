@@ -16,8 +16,8 @@ if __name__ == "__main__":
 
     # 替换为你的 PDF 文件路径
     working_dir = "/Users/liuyuhua/PycharmProjects/simple-agents/files"
-    pdf_file = "步骤分解析（左对齐）.pdf"
-    output_file = "步骤分解析（左对齐）-qwen3-vl-flash.md"
+    pdf_file = "朝天府.pdf"
+    output_file = "朝天府-docling222.md"
 
     try:
         # 示例 3: 启用高级功能（较慢）
