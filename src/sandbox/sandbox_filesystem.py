@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Optional, Union
@@ -106,5 +107,6 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                 project_root = Path(__file__).parent.parent.parent
                 src_skills_path = project_root / 'src' / 'skills'
                 # 复制src_skills_path 目录到沙箱内
-                shutil.copytree(src_skills_path, skills_pathlib, dirs_exist_ok=True)
+                # shutil.copytree(src_skills_path, skills_pathlib, dirs_exist_ok=True)
+                subprocess.run(['cp', '-al', str(src_skills_path), str(skills_pathlib)], check=True)
         return super().ls_info(path)

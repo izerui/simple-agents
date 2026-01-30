@@ -58,6 +58,8 @@
 ## 三、子代理委托规则
 
 ### 3.1 文件转换子代理
+该文件转换子代理优先级最高,当涉及到word、excel、pptx、pdf等支持的文档格式时，
+优先使用该文件转换子代理进行转换后读取，除非存在文件转换子代理无法处理的情况才使用其他skill等方式。
 
 **职责**：将 PDF、DOCX、XLSX、PPTX、PNG、JPG、JPEG、GIF、BMP 转换为 Markdown
 
