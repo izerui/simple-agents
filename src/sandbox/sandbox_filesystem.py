@@ -10,7 +10,34 @@ from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse
 from src.sandbox.pycode_executor import CodeExecutor
 from src.sandbox.dependency_executor import DependencyExecutor
 import re
+import platform
+import os
 
+def copytree_hardlink(src, dst):
+    """跨平台硬链接复制"""
+    # 如果目标已存在，跳过
+    if os.path.exists(dst):
+        print(f"⏭️ skills 已存在，跳过: {dst}")
+        return
+
+    system = platform.system()
+    success = False
+    if system == "Linux":
+        # Linux 使用 cp -al
+        try:
+            subprocess.run(['cp', '-al', str(src), str(dst)], check=True)
+            success = True
+        except Exception as e:
+            print(f"⚠️ linux 创建 skills 硬链接 失败: {e}")
+    else:
+        # 其他系统使用普通复制
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+        success = True
+
+    # 如果都失败，使用普通复制
+    if not success:
+        print("⚠️ 硬链接方法失败，使用普通复制 skills ")
+        shutil.copytree(src, dst)
 
 class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
     """
@@ -108,5 +135,6 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                 src_skills_path = project_root / 'src' / 'skills'
                 # 复制src_skills_path 目录到沙箱内
                 # shutil.copytree(src_skills_path, skills_pathlib, dirs_exist_ok=True)
-                subprocess.run(['cp', '-al', str(src_skills_path), str(skills_pathlib)], check=True)
+                # subprocess.run(['cp', '-al', str(src_skills_path), str(skills_pathlib)], check=True)
+                copytree_hardlink(str(src_skills_path), str(skills_pathlib))
         return super().ls_info(path)
