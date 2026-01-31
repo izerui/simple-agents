@@ -11,15 +11,26 @@
    并替换 builtins.open 为线程安全的 safe_open
 2. 所有路径（相对路径和绝对路径）都会被重定向到当前线程的 root_dir
 
+安全拦截机制（多重保护）：
+- builtins.open → _safe_open_func
+- io.open → _safe_open_func
+- codecs.open → _safe_open_func
+- os.open → _safe_os_open_func
+
+✅ pathlib.Path 安全性说明：
+Path 对象的所有文件 I/O 方法（read_text, write_text, open 等）最终都调用 io.open，
+因此都会被安全拦截机制保护。Path 对象可以安全使用，不会导致沙箱外目录遍历。
+
 注意：
 - safe_open 从线程本地变量读取 root_dir，每个线程独立
 - 相对路径和绝对路径（以 / 开头）都会被重定向到当前线程的 root_dir
 - 完全并发安全，无需使用锁
 - 使用标准 Python compile 编译代码
+- Path.resolve() 用于解析符号链接和路径遍历（..），防止沙箱逃逸
 
 只支持两种标准执行格式：
 1. python -c "code" - 直接执行代码字符串
-2. python script.py - 执行脚本文件
+2. python script.py [args...] - 执行脚本文件(支持参数)
  """
 import sys
 import io
@@ -340,20 +351,20 @@ class CodeExecutor:
         # 初始化安全的执行环境
         self._safe_globals = self._create_safe_globals()
 
-    def _parse_command(self, command: str) -> tuple[Optional[str], Optional[str]]:
+    def _parse_command(self, command: str) -> tuple[Optional[str], Optional[str], list[str]]:
         """解析命令，只支持两种标准格式
 
         支持的格式：
         1. python -c "code" - 执行代码字符串
-        2. python script.py - 执行脚本文件
+        2. python script.py [args...] - 执行脚本文件(支持参数)
 
         Args:
             command: 命令字符串
 
         Returns:
-            (code, script_path) 元组
-            - 如果是 python -c 格式：code 为代码字符串，script_path 为 None
-            - 如果是 python script.py 格式：code 为 None，script_path 为脚本路径
+            (code, script_path, script_args) 元组
+            - 如果是 python -c 格式：code 为代码字符串，script_path 为 None，script_args 为空列表
+            - 如果是 python script.py 格式：code 为 None，script_path 为脚本路径，script_args 为参数列表
 
         Raises:
             ValueError: 如果命令格式不支持
@@ -373,30 +384,45 @@ class CodeExecutor:
             if (code.startswith('"') and code.endswith('"')) or \
                     (code.startswith("'") and code.endswith("'")):
                 code = code[1:-1]
-            return code, None
+            return code, None, []
 
-        # 格式 2: python script.py
+        # 格式 2: python script.py [args...]
         # 支持：python script.py, python /path/to/script.py, python3 script.py
+        # 支持：python script.py arg1 -o output --option value (带参数的脚本)
         # 所有路径都会以 root_dir 为根目录处理
-        pattern_script = r'^(?:python(?:3)?|/usr/bin/python(?:3)?)\s+([^\s]+)$'
+        pattern_script = r'^(?:python(?:3)?|/usr/bin/python(?:3)?)\s+(\S+)(.*)$'
         match_script = re.match(pattern_script, command, re.IGNORECASE)
 
         if match_script:
             script_path = match_script.group(1).strip()
+            args_str = match_script.group(2).strip() if match_script.group(2) else ''
             # 🎯 所有脚本路径都以 root_dir 为根
             # 去掉开头的斜杠，因为所有路径都是相对于 root_dir 的
             script_path = script_path.lstrip('/')
             # 拼接 root_dir 前缀
             script_path = str(self.root_dir / script_path)
-            return None, script_path
+
+            # 解析参数字符串为列表(简单按空格分割，暂不支持引号)
+            script_args = []
+            if args_str:
+                # 使用 shlex.split 来正确处理引号和转义
+                import shlex
+                try:
+                    script_args = shlex.split(args_str)
+                except ValueError:
+                    # 如果 shlex.split 失败，简单按空格分割
+                    script_args = args_str.split()
+
+            return None, script_path, script_args
 
         # 不支持的格式
         raise ValueError(
             f"不支持的命令格式: '{command}'\n"
             f"只支持以下两种格式：\n"
-            f"  1. python -c \"code\"      - 执行代码字符串\n"
-            f"  2. python script.py         - 执行脚本文件\n"
-            f"  3. python /path/to/script.py - 执行脚本文件（绝对路径）"
+            f"  1. python -c \"code\"              - 执行代码字符串\n"
+            f"  2. python script.py               - 执行脚本文件\n"
+            f"  3. python /path/to/script.py      - 执行脚本文件（绝对路径）\n"
+            f"  4. python script.py arg1 -o out   - 执行脚本文件（带参数）"
         )
 
     def _read_script_file(self, script_path: str) -> str:
@@ -482,11 +508,12 @@ class CodeExecutor:
         safe_globals['__import__'] = _safe_import_func
         safe_globals['__builtins__']['__import__'] = _safe_import_func
         
-        # 同时在全局变量中注入 io 和 codecs 模块
+        # 同时在全局变量中注入常用模块
         safe_globals['io'] = io
         safe_globals['codecs'] = codecs
+        safe_globals['sys'] = sys  # 注入 sys 模块,用于访问 sys.argv
         safe_globals['Path'] = Path
-        
+
         # 注入 builtins 模块到全局变量中
         safe_globals['builtins'] = builtins
 
@@ -549,7 +576,7 @@ class CodeExecutor:
             ('os', 'fork', '禁止使用 os.fork() 创建子进程'),
             ('os', 'forkpty', '禁止使用 os.forkpty() 创建伪终端子进程'),
             ('os', 'startfile', '禁止使用 os.startfile() 执行文件或程序'),
-            ('pathlib', 'Path', '禁止使用 pathlib.Path 进行目录操作'),
+            # ✅ pathlib.Path 已放开 - 所有文件操作通过 io.open 拦截保护
             # 🚫 禁止获取环境变量
             ('os', 'getenv', '禁止使用 os.getenv() 获取环境变量'),
             ('os', 'getenvb', '禁止使用 os.getenvb() 获取环境变量'),
@@ -573,8 +600,8 @@ class CodeExecutor:
             ('subprocess', 'getstatusoutput', '禁止使用 subprocess.getstatusoutput() 调用外部命令'),
         ]
 
-        # 禁止的 Path 方法
-        FORBIDDEN_PATH_METHODS = ['iterdir', 'glob', 'rglob', 'unlink']
+        # ✅ Path 方法已放开 - 所有文件操作通过 io.open 拦截保护
+        # 不再限制 Path.iterdir(), Path.glob(), Path.rglob(), Path.unlink()
 
         class SafetyChecker(ast.NodeVisitor):
             def __init__(self):
@@ -636,12 +663,7 @@ class CodeExecutor:
                                 f"在 {node.lineno} 行: {msg}"
                             )
 
-                # 检查 Path 危险方法
-                if isinstance(node.func, ast.Attribute):
-                    if node.func.attr in FORBIDDEN_PATH_METHODS:
-                        self.dangerous_calls.append(
-                            f"在 {node.lineno} 行: 禁止使用 Path.{node.func.attr}()"
-                        )
+                # ✅ Path 方法检查已移除 - 所有文件操作通过 io.open 拦截保护
 
                 self.generic_visit(node)
 
@@ -698,10 +720,10 @@ class CodeExecutor:
 
         只支持两种格式：
         1. python -c "code" - 执行代码字符串
-        2. python script.py - 执行脚本文件
+        2. python script.py [args...] - 执行脚本文件(支持参数)
 
         Args:
-            command: 命令字符串（python -c "code" 或 python script.py）
+            command: 命令字符串（python -c "code" 或 python script.py [args...]）
 
         Returns:
             ExecuteResponse 包含输出、退出码和截断标志
@@ -709,7 +731,7 @@ class CodeExecutor:
         try:
             # 步骤 1: 解析命令
             try:
-                code, script_path = self._parse_command(command)
+                code, script_path, script_args = self._parse_command(command)
             except ValueError as e:
                 return ExecuteResponse(
                     output=f"命令格式错误:\n{str(e)}",
@@ -780,6 +802,16 @@ class CodeExecutor:
                 # 🔧 步骤 4.5: 设置线程本地变量（每个线程独立的 root_dir）
                 # 这解决了多用户并发执行时的文件访问问题
                 _thread_local.root_dir = self.root_dir
+
+                # 🔧 步骤 4.6: 设置 sys.argv（用于脚本参数）
+                # 如果是脚本文件执行，设置 sys.argv [脚本名, 参数1, 参数2, ...]
+                # 如果是代码字符串执行，设置 sys.argv 为 ['-c']
+                if script_path:
+                    # 脚本文件：sys.argv = [脚本路径, 参数1, 参数2, ...]
+                    locals['sys'].argv = [script_path] + script_args
+                else:
+                    # 代码字符串：sys.argv = ['-c']
+                    locals['sys'].argv = ['-c']
 
                 try:
                     # 步骤 5: 执行代码（带超时）

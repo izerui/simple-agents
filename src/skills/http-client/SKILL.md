@@ -13,18 +13,18 @@ Universal HTTP client for making web requests with Python scripts.
 
 Make a GET request:
 ```bash
-python scripts/http_request.py GET https://api.example.com/users
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/users
 ```
 
 Make a POST request with JSON:
 ```bash
-python scripts/http_request.py POST https://api.example.com/users \
+python /skills/http-client/scripts/http_request.py POST https://api.example.com/users \
   -j '{"name": "John", "email": "john@example.com"}'
 ```
 
 Upload a file:
 ```bash
-python scripts/upload_file.py https://api.example.com/upload /path/to/file.pdf
+python /skills/http-client/scripts/upload_file.py https://api.example.com/upload /path/to/file.pdf
 ```
 
 ## Scripts
@@ -35,7 +35,7 @@ General-purpose HTTP client supporting all methods and features.
 
 **Usage:**
 ```bash
-python scripts/http_request.py METHOD URL [OPTIONS]
+python /skills/http-client/scripts/http_request.py METHOD URL [OPTIONS]
 ```
 
 **Methods:** GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS
@@ -61,7 +61,7 @@ Convenience script for multipart file uploads via POST.
 
 **Usage:**
 ```bash
-python scripts/upload_file.py URL FILE [OPTIONS]
+python /skills/http-client/scripts/upload_file.py URL FILE [OPTIONS]
 ```
 
 **Options:**
@@ -79,35 +79,35 @@ python scripts/upload_file.py URL FILE [OPTIONS]
 
 **Bearer token:**
 ```bash
-python scripts/http_request.py GET https://api.example.com/protected -b "token"
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/protected -b "token"
 ```
 
 **Basic auth:**
 ```bash
-python scripts/http_request.py GET https://api.example.com/protected --basic user pass
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/protected --basic user pass
 ```
 
 **API key in header:**
 ```bash
-python scripts/http_request.py GET https://api.example.com/data -H "X-API-Key: key123"
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/data -H "X-API-Key: key123"
 ```
 
 ### Data Submission
 
 **JSON body:**
 ```bash
-python scripts/http_request.py POST https://api.example.com/data \
+python /skills/http-client/scripts/http_request.py POST https://api.example.com/data \
   -j '{"key": "value", "number": 123}'
 ```
 
 **JSON from file:**
 ```bash
-python scripts/http_request.py POST https://api.example.com/data -j @data.json
+python /skills/http-client/scripts/http_request.py POST https://api.example.com/data -j @data.json
 ```
 
 **Form data:**
 ```bash
-python scripts/http_request.py POST https://api.example.com/form \
+python /skills/http-client/scripts/http_request.py POST https://api.example.com/form \
   -d "name=John" -d "email=john@example.com"
 ```
 
@@ -115,20 +115,20 @@ python scripts/http_request.py POST https://api.example.com/form \
 
 **Single file:**
 ```bash
-python scripts/http_request.py POST https://api.example.com/upload \
+python /skills/http-client/scripts/http_request.py POST https://api.example.com/upload \
   -f "file=/path/to/document.pdf"
 ```
 
 **Multiple files:**
 ```bash
-python scripts/http_request.py POST https://api.example.com/upload \
+python /skills/http-client/scripts/http_request.py POST https://api.example.com/upload \
   -f "file1=/path/to/doc1.pdf" \
   -f "file2=/path/to/doc2.pdf"
 ```
 
 **File with metadata:**
 ```bash
-python scripts/http_request.py POST https://api.example.com/upload \
+python /skills/http-client/scripts/http_request.py POST https://api.example.com/upload \
   -f "file=/path/to/file.pdf" \
   -d "title=My Document" \
   -d "category=reports"
@@ -136,7 +136,7 @@ python scripts/http_request.py POST https://api.example.com/upload \
 
 **Using upload_file.py:**
 ```bash
-python scripts/upload_file.py https://api.example.com/upload /path/to/file.pdf \
+python /skills/http-client/scripts/upload_file.py https://api.example.com/upload /path/to/file.pdf \
   -d "title=My Document"
 ```
 
@@ -144,53 +144,53 @@ python scripts/upload_file.py https://api.example.com/upload /path/to/file.pdf \
 
 ```bash
 # Create
-python scripts/http_request.py POST https://api.example.com/users \
+python /skills/http-client/scripts/http_request.py POST https://api.example.com/users \
   -j '{"name": "John", "email": "john@example.com"}'
 
 # Read
-python scripts/http_request.py GET https://api.example.com/users/123
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/users/123
 
 # Update
-python scripts/http_request.py PUT https://api.example.com/users/123 \
+python /skills/http-client/scripts/http_request.py PUT https://api.example.com/users/123 \
   -j '{"name": "Jane"}'
 
 # Delete
-python scripts/http_request.py DELETE https://api.example.com/users/123
+python /skills/http-client/scripts/http_request.py DELETE https://api.example.com/users/123
 ```
 
 ### Advanced Features
 
 **Query parameters:**
 ```bash
-python scripts/http_request.py GET https://api.example.com/items \
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/items \
   -q "page=1" -q "limit=10" -q "sort=name"
 ```
 
 **Cookies:**
 ```bash
-python scripts/http_request.py GET https://api.example.com/profile \
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/profile \
   -c "session_id=abc123" -c "user_pref=dark"
 ```
 
 **Proxy:**
 ```bash
-python scripts/http_request.py GET https://api.example.com/data \
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/data \
   --proxy http://proxy.example.com:8080
 ```
 
 **Custom timeout:**
 ```bash
-python scripts/http_request.py GET https://api.example.com/slow -t 120
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/slow -t 120
 ```
 
 **Disable SSL (testing only):**
 ```bash
-python scripts/http_request.py GET https://self-signed.badssl.com/ --no-ssl-verify
+python /skills/http-client/scripts/http_request.py GET https://self-signed.badssl.com/ --no-ssl-verify
 ```
 
 **Save response:**
 ```bash
-python scripts/http_request.py GET https://api.example.com/data -o response.json
+python /skills/http-client/scripts/http_request.py GET https://api.example.com/data -o response.json
 ```
 
 ## Response Handling
