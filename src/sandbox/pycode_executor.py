@@ -290,13 +290,111 @@ def _get_safe_import():
         
         # 先调用原始的 import
         module = original_import(name, *args, **kwargs)
-        
-        # 如果导入的是 os 模块，替换 os.open
+
+        # 如果导入的是 os 模块，替换 os.open 和 os.path
         if name == 'os' and hasattr(module, 'open'):
             # 只在沙箱执行环境中替换（检查是否有 root_dir）
             if hasattr(_thread_local, 'root_dir') and _thread_local.root_dir is not None:
                 module.open = _safe_os_open_func
-        
+
+                # 🔒 创建智能的 os.path 包装器
+                # 使用动态代理,只在沙箱执行时使用沙箱路径
+                import os as original_os
+
+                # 创建一个智能的 os.path 包装类
+                class SafePathProxy:
+                    """os.path 的智能代理,根据上下文选择使用沙箱路径或原始路径"""
+
+                    def __getattr__(self, name):
+                        """动态代理到原始 os.path 或沙箱版本"""
+                        # 获取原始方法
+                        original_func = getattr(original_os.path, name)
+
+                        # 定义需要沙箱路径的方法
+                        sandbox_methods = {
+                            'exists', 'isfile', 'isdir', 'getsize', 'getmtime', 'abspath', 'realpath'
+                        }
+
+                        # 如果不是需要沙箱拦截的方法,直接返回原始方法
+                        if name not in sandbox_methods:
+                            return original_func
+
+                        # 创建沙箱版本的包装函数
+                        def _sandbox_wrapper(*args, **kwargs):
+                            # 检查是否在沙箱环境中
+                            root_dir = getattr(_thread_local, 'root_dir', None)
+                            if root_dir is None:
+                                # 不在沙箱环境,使用原始方法
+                                return original_func(*args, **kwargs)
+
+                            # 在沙箱环境中,使用沙箱路径
+                            if name == 'exists':
+                                path = args[0] if args else kwargs.get('path', '')
+                                path_str = str(path).lstrip('/')
+                                full_path = root_dir / path_str
+                                resolved_path = full_path.resolve()
+                                try:
+                                    resolved_path.relative_to(root_dir)
+                                except ValueError:
+                                    return False
+                                return resolved_path.exists()
+
+                            elif name == 'isfile':
+                                path = args[0] if args else kwargs.get('path', '')
+                                path_str = str(path).lstrip('/')
+                                full_path = root_dir / path_str
+                                resolved_path = full_path.resolve()
+                                try:
+                                    resolved_path.relative_to(root_dir)
+                                except ValueError:
+                                    return False
+                                return resolved_path.is_file()
+
+                            elif name == 'isdir':
+                                path = args[0] if args else kwargs.get('path', '')
+                                path_str = str(path).lstrip('/')
+                                full_path = root_dir / path_str
+                                resolved_path = full_path.resolve()
+                                try:
+                                    resolved_path.relative_to(root_dir)
+                                except ValueError:
+                                    return False
+                                return resolved_path.is_dir()
+
+                            elif name in ('getsize', 'getmtime'):
+                                path = args[0] if args else kwargs.get('path', '')
+                                path_str = str(path).lstrip('/')
+                                full_path = root_dir / path_str
+                                resolved_path = full_path.resolve()
+                                try:
+                                    resolved_path.relative_to(root_dir)
+                                except ValueError:
+                                    raise OSError(f"Path outside sandbox: {path}")
+
+                                if name == 'getsize':
+                                    return resolved_path.stat().st_size
+                                else:
+                                    return resolved_path.stat().st_mtime
+
+                            elif name in ('abspath', 'realpath'):
+                                path = args[0] if args else kwargs.get('path', '')
+                                path_str = str(path).lstrip('/')
+                                full_path = root_dir / path_str
+                                resolved_path = full_path.resolve()
+                                try:
+                                    resolved_path.relative_to(root_dir)
+                                except ValueError:
+                                    pass
+                                return str(resolved_path)
+
+                            # 其他情况使用原始方法
+                            return original_func(*args, **kwargs)
+
+                        return _sandbox_wrapper
+
+                # 替换 os.path
+                module.path = SafePathProxy()
+
         return module
     
     return safe_import
@@ -600,8 +698,26 @@ class CodeExecutor:
             ('subprocess', 'getstatusoutput', '禁止使用 subprocess.getstatusoutput() 调用外部命令'),
         ]
 
-        # ✅ Path 方法已放开 - 所有文件操作通过 io.open 拦截保护
-        # 不再限制 Path.iterdir(), Path.glob(), Path.rglob(), Path.unlink()
+        # 🚫 禁止的 Path 危险方法
+        # 这些方法直接调用系统底层接口,不经过 open() 拦截
+        # 安全的文件 I/O 方法 (read_text, write_text, open, exists 等) 通过 io.open 保护
+        FORBIDDEN_PATH_METHODS = [
+            'iterdir',   # 列出目录内容
+            'glob',      # 通配符匹配
+            'rglob',     # 递归通配符匹配
+            'unlink',    # 删除文件
+            'rmdir',     # 删除空目录
+            'mkdir',     # 创建目录
+            'rename',    # 重命名文件
+            'replace',   # 替换文件
+            'touch',     # 创建文件
+            'chmod',     # 修改权限
+            'lstat',     # 获取符号链接状态
+            'symlink',   # 创建符号链接
+            'hardlink_to', # 创建硬链接
+            'link_to',   # 创建链接
+            'absolute',  # 绝对路径 (可能导致沙箱外访问)
+        ]
 
         class SafetyChecker(ast.NodeVisitor):
             def __init__(self):
@@ -663,7 +779,34 @@ class CodeExecutor:
                                 f"在 {node.lineno} 行: {msg}"
                             )
 
-                # ✅ Path 方法检查已移除 - 所有文件操作通过 io.open 拦截保护
+                # 🚫 检查 Path 危险方法调用
+                if isinstance(node.func, ast.Attribute):
+                    # 检查是否是 Path 对象的方法调用
+                    # 需要检查 node.func.value 是否是 Path 或 path-like 对象
+                    func_name = node.func.attr
+
+                    if func_name in FORBIDDEN_PATH_METHODS:
+                        # 尝试确定是否是 Path 对象
+                        is_path_call = False
+
+                        # 情况1: Path().method()
+                        if isinstance(node.func.value, ast.Call):
+                            if isinstance(node.func.value.func, ast.Name):
+                                if node.func.value.func.id == 'Path':
+                                    is_path_call = True
+                            elif isinstance(node.func.value.func, ast.Attribute):
+                                if node.func.value.func.attr == 'Path':
+                                    is_path_call = True
+
+                        # 情况2: path_variable.method() (变量名包含 path)
+                        elif isinstance(node.func.value, ast.Name):
+                            if 'path' in node.func.value.id.lower():
+                                is_path_call = True
+
+                        if is_path_call:
+                            self.dangerous_calls.append(
+                                f"在 {node.lineno} 行: 禁止使用 Path.{func_name}() (可能绕过沙箱安全限制)"
+                            )
 
                 self.generic_visit(node)
 
