@@ -56,6 +56,17 @@ def convert_to_pdf(
         # Check response
         response.raise_for_status()
 
+        # Verify content type - reject HTML responses (likely login/error pages)
+        content_type = response.headers.get('Content-Type', '')
+        if 'text/html' in content_type.lower():
+            print(f"✗ Conversion failed: Received HTML instead of PDF", file=sys.stderr)
+            print(f"  This usually means the API redirected to a login page or error page.", file=sys.stderr)
+            # Print first 200 chars of response for debugging
+            preview = response.text[:200] if response.text else ''
+            if '<html' in preview.lower() or '<!doctype' in preview.lower():
+                print(f"  Response preview: {preview}", file=sys.stderr)
+            return False
+
         # Save PDF content
         with open(output_path, 'wb') as f:
             f.write(response.content)
