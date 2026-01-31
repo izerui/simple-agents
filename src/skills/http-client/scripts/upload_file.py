@@ -22,7 +22,7 @@ def upload_file(
     headers: dict = None,
     auth_bearer: str = None,
     auth_basic: tuple = None,
-    timeout: int = 30,
+    timeout: int = 300,  # 默认 5 分钟超时
     verify_ssl: bool = True,
     proxy: str = None
 ) -> dict:
@@ -92,7 +92,7 @@ def main():
     parser.add_argument('-b', '--bearer', help='Bearer token')
     parser.add_argument('--basic', nargs=2, metavar=('USERNAME', 'PASSWORD'),
                        help='Basic authentication')
-    parser.add_argument('-t', '--timeout', type=int, default=30)
+    parser.add_argument('-t', '--timeout', type=int, default=300, help='Request timeout (seconds, default: 5 minutes)')
     parser.add_argument('--no-ssl-verify', action='store_true')
     parser.add_argument('--proxy', help='Proxy URL')
     parser.add_argument('-v', '--verbose', action='store_true')

@@ -45,7 +45,8 @@ def convert_to_markdown(
         output_path = str(Path(file_path).with_suffix('.md'))
 
     # Calculate timeout (longer for AI features)
-    timeout = 120 if (guess_image or guess_formula) else 60
+    # 基础超时: 5分钟, AI功能: 10分钟
+    timeout = 600 if (guess_image or guess_formula) else 300
 
     ai_features = []
     if guess_image:
@@ -68,7 +69,8 @@ def convert_to_markdown(
                 f"{api_base_url}/api/to-markdown",
                 files=files,
                 data=data,
-                timeout=timeout
+                timeout=timeout,
+                verify=False  # 跳过 SSL 证书验证(沙箱环境证书路径问题)
             )
 
         # Check response

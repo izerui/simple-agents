@@ -49,7 +49,8 @@ def convert_to_pdf(
             response = requests.post(
                 f"{api_base_url}/api/convert-download",
                 files=files,
-                timeout=60
+                timeout=300,  # 5分钟超时
+                verify=False  # 跳过 SSL 证书验证(沙箱环境证书路径问题)
             )
 
         # Check response

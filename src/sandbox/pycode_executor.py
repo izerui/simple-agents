@@ -227,14 +227,18 @@ def _get_safe_os_open():
         if needs_write or (flags & os.O_CREAT):
             # 确保父目录存在
             resolved_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # 使用原始的 os.open 打开文件
         return _original_os_open(str(resolved_path), flags, mode, *args, **kwargs)
-    
+
     return safe_os_open
 
 # 全局的 safe_os_open 函数
 _safe_os_open_func = _get_safe_os_open()
+
+# 🔒 保存真正的原始 os.path 模块 (在任何替换之前)
+import os as _original_os_module
+_original_os_path = _original_os_module.path
 
 def _get_safe_import():
     """创建安全的 __import__ 函数，拦截 os 模块的导入并替换 os.open"""
@@ -299,7 +303,7 @@ def _get_safe_import():
 
                 # 🔒 创建智能的 os.path 包装器
                 # 使用动态代理,只在沙箱执行时使用沙箱路径
-                import os as original_os
+                # 使用全局保存的原始 os.path,避免递归
 
                 # 创建一个智能的 os.path 包装类
                 class SafePathProxy:
@@ -307,8 +311,8 @@ def _get_safe_import():
 
                     def __getattr__(self, name):
                         """动态代理到原始 os.path 或沙箱版本"""
-                        # 获取原始方法
-                        original_func = getattr(original_os.path, name)
+                        # ⚠️ 使用全局保存的原始 os.path,避免递归
+                        original_func = getattr(_original_os_path, name)
 
                         # 定义需要沙箱路径的方法
                         sandbox_methods = {

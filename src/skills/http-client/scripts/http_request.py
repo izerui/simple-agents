@@ -21,7 +21,7 @@ class HTTPClient:
 
     def __init__(
         self,
-        timeout: int = 30,
+        timeout: int = 300,  # 默认 5 分钟超时
         verify_ssl: bool = True,
         proxy: Optional[str] = None,
         user_agent: str = "Mozilla/5.0 (compatible; HTTPClient/1.0)"
@@ -293,7 +293,7 @@ def main():
                        help='Add cookie (format: "key=value")')
 
     # Options
-    parser.add_argument('-t', '--timeout', type=int, default=30, help='Request timeout (seconds)')
+    parser.add_argument('-t', '--timeout', type=int, default=300, help='Request timeout (seconds, default: 5 minutes)')
     parser.add_argument('--no-ssl-verify', action='store_true', help='Disable SSL verification')
     parser.add_argument('--proxy', help='Proxy URL (e.g., http://proxy.example.com:8080)')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
