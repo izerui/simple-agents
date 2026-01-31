@@ -253,18 +253,8 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 或 `uv 
 - 尽量生成脚本文件来执行，并将执行脚本生成到 `scripts` 目录下
 - 执行脚本生成的文件路径在 `outputs` 目录下
 
-安全限制（禁止破坏环境的操作）：
 
-安全限制:
-- 禁止在 Python 代码中调用系统命令或执行危险操作
-- 切勿运行不会自行终止的命令
-- 禁止在脚本中调用 linux 系统命令
-- 文件操作仅限于系统临时目录及沙箱内文件，其他沙箱外的文件操作会统一限制在沙箱内
-
-# Python代码执行环境 - 禁止使用的功能
-
-## 🚫 禁止导入的模块
-
+禁止导入的模块：
 - `ctypes` 及其所有子模块
 - `importlib` 及其所有子模块
 - `pickle`
@@ -275,8 +265,7 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 或 `uv 
 - `signal`
 - `time`
 
-## 🚫 禁止的内置函数
-
+禁止的内置函数：
 - `eval()`
 - `exec()`
 - `compile()`
@@ -285,8 +274,7 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 或 `uv 
 - `memoryview()`
 - `buffer()`
 
-## 🚫 禁止的 os 模块调用
-
+禁止的 os 模块调用：
 **文件操作：**
 - `os.remove()`, `os.unlink()`
 - `os.rename()`, `os.replace()`
@@ -308,28 +296,28 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 或 `uv 
 - `os.environ`
 - `os.environ['KEY']`
 
-## 🚫 禁止的 subprocess 调用
-
+禁止的 subprocess 调用：
 - `subprocess.run()`, `subprocess.call()`, `subprocess.Popen()`
 - `subprocess.check_call()`, `subprocess.check_output()`
 - `subprocess.getoutput()`, `subprocess.getstatusoutput()`
 
-## 🚫 禁止的 pathlib 操作
-
+禁止的 pathlib 操作：
 - `Path.iterdir()`
 - `Path.glob()`, `Path.rglob()`
 - `Path.unlink()`
 - `pathlib.Path` 整体模块
 
-## 🚫 禁止的动态导入
-
+禁止的动态导入：
 - `__import__('ctypes')`
 - `importlib.import_module()`
 - `importlib.util.spec_from_file_location()`
 - `importlib.util.module_from_spec()`
 
-## 🔒 文件系统限制
-
+其他安全限制:
+- 禁止在 Python 代码中调用系统命令或执行危险操作
+- 切勿运行不会自行终止的命令
+- 禁止在脚本中调用 linux 系统命令
+- 文件操作仅限于系统临时目录及沙箱内文件，其他沙箱外的文件操作会统一限制在沙箱内
 - 不能访问沙箱目录 `root_dir` 外的文件
 - 不能使用 `../` 或 `..` 进行路径遍历
 - 不能通过符号链接访问沙箱外的文件
