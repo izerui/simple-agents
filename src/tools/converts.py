@@ -5,9 +5,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import requests
 from langchain_core.tools import tool
 
-from src.utils._docling import DOCLING_FAST_CONVERTER, DOCLING_IMAGE_CONVERTER, DOCLING_LLM_CONVERTER
 from src.utils._word_to_pdf import word_to_pdf
 from src.utils.util import get_backend_per_thread
 
@@ -27,7 +27,8 @@ def convert_to_markdown(
     启用公式识别的时机：当用户问题涉及数学公式、方程、不等式、符号、微积分、数学表达式、化学方程式、物理公式等内容时，应将 do_formula_enrichment 设为 True
 
     支持的文件格式：
-    - XLSX、PPTX、PNG、JPG、JPEG、GIF、BMP、AsciiDoc
+    - PDF、DOC、DOCX：使用本地工具转换（快速，保留布局）
+    - XLSX、PPTX、PNG、JPG、JPEG、GIF、BMP、AsciiDoc：使用远程 API 转换（支持 AI 图片识别和公式识别）
 
     Args:
         source_path: 要转换的文件路径
@@ -42,9 +43,8 @@ def convert_to_markdown(
         - error: 转换失败时的错误信息
 
     Notes:
-        - PDF 和 Word 文件使用专用转换工具，不支持图片提取和公式识别
-        - 其他格式使用 Docling 转换，支持图片提取和公式识别
-        - 图片提取到 {output_file} 同目录下的 'images' 子目录下
+        - PDF 和 Word 文件使用本地转换工具，不支持图片提取和公式识别参数
+        - 其他格式使用远程 API 转换，支持图片提取和公式识别
         - Markdown 文件使用与源文件相同的名称，但扩展名改为 .md
     """
     try:
@@ -56,7 +56,15 @@ def convert_to_markdown(
                 "source_path": source_path,
             }
 
-        source_pathlib = Path(source_path)
+        source_pathlib = backend._resolve_path(source_path)
+
+        # 检查源文件是否存在
+        if not source_pathlib.exists():
+            return {
+                "success": False,
+                "error": f"source file does not exist: {source_path}",
+                "source_path": source_path,
+            }
 
         # PDF 文件使用专用转换方法
         if source_pathlib.suffix.lower() == '.pdf':
@@ -66,50 +74,56 @@ def convert_to_markdown(
         if source_pathlib.suffix.lower() in ['.doc', '.docx']:
             return convert_word_to_markdown(source_path)
 
-        # 其他文件格式使用 Docling 转换
-        working_dir = str(backend._resolve_path('.'))
+        # 其他文件格式使用远程 API 转换
+        output_file = str(source_pathlib.with_suffix(".md"))
+        api_base_url = "https://dcca.hhstu.edu.cn/transfer"
 
-        # Determine output file path
-        output_file = str(Path(source_path).with_suffix(".md"))
+        # 计算超时时间（AI 功能需要更长时间）
+        timeout = 600 if (generate_picture_images or do_formula_enrichment) else 300
 
-        # Perform conversion
         try:
-            if generate_picture_images and do_formula_enrichment:
-                DOCLING_LLM_CONVERTER.convert(
-                    working_dir=working_dir,
-                    source_file=_trip(source_path),
-                    output_file=_trip(output_file)
+            # 使用远程 API 进行转换
+            with open(source_pathlib, 'rb') as f:
+                files = {'file': (source_pathlib.name, f, 'application/octet-stream')}
+                data = {
+                    'guess_image': 'false' if generate_picture_images else 'false',
+                    'guess_formula': 'false' if do_formula_enrichment else 'false'
+                }
+                response = requests.post(
+                    f"{api_base_url}/api/to-markdown",
+                    files=files,
+                    data=data,
+                    timeout=timeout,
+                    verify=False
                 )
-            elif generate_picture_images:
-                DOCLING_IMAGE_CONVERTER.convert(
-                    working_dir=working_dir,
-                    source_file=_trip(source_path),
-                    output_file=_trip(output_file),
-                )
-            elif do_formula_enrichment:
-                DOCLING_LLM_CONVERTER.convert(
-                    working_dir=working_dir,
-                    source_file=_trip(source_path),
-                    output_file=_trip(output_file),
-                )
-            else:
-                DOCLING_FAST_CONVERTER.convert(
-                    working_dir=working_dir,
-                    source_file=_trip(source_path),
-                    output_file=_trip(output_file)
-                )
+
+            response.raise_for_status()
+
+            # 检查内容类型，拒绝 HTML 响应
+            content_type = response.headers.get('Content-Type', '')
+            if 'text/html' in content_type.lower():
+                return {
+                    "success": False,
+                    "error": "API returned HTML instead of Markdown (possible authentication error)",
+                    "source_path": source_path,
+                }
+
+            # 保存 Markdown 内容
+            with open(output_file, 'wb') as f:
+                f.write(response.content)
+
+            return {
+                "success": True,
+                "source_path": source_path,
+                "output_file": output_file
+            }
+
         except Exception as e:
             return {
                 "success": False,
-                "error": f"file conversion error: {str(e)}",
+                "error": f"remote API conversion failed: {str(e)}",
                 "source_path": source_path,
             }
-
-        return {
-            "success": True,
-            "source_path": source_path,
-            "output_file": output_file
-        }
 
     except Exception as e:
         return {
