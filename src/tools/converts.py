@@ -18,13 +18,16 @@ def convert_to_markdown(
         generate_picture_images: bool = False,
         do_formula_enrichment: bool = False,
 ) -> dict[str, Any]:
-    """将 XLSX、PPTX、PNG、 JPG、 JPEG、 GIF、 BMP、 AsciiDoc 文件转换为 Markdown 格式以便研究。
+    """将各种文件格式转换为 Markdown 格式以便研究。
 
     该工具将文档转换为 Markdown 格式。根据用户的问题内容来决定是否启用特殊功能：
-    
+
     启用图片提取的时机：当用户问题涉及图片、图表、截图、图形、插图、示意图、流程图、截图中的文字、界面展示等视觉内容时，应将 generate_picture_images 设为 True
-    
+
     启用公式识别的时机：当用户问题涉及数学公式、方程、不等式、符号、微积分、数学表达式、化学方程式、物理公式等内容时，应将 do_formula_enrichment 设为 True
+
+    支持的文件格式：
+    - XLSX、PPTX、PNG、JPG、JPEG、GIF、BMP、AsciiDoc
 
     Args:
         source_path: 要转换的文件路径
@@ -39,8 +42,10 @@ def convert_to_markdown(
         - error: 转换失败时的错误信息
 
     Notes:
+        - PDF 和 Word 文件使用专用转换工具，不支持图片提取和公式识别
+        - 其他格式使用 Docling 转换，支持图片提取和公式识别
         - 图片提取到 {output_file} 同目录下的 'images' 子目录下
-        - Markdown 文件使用与 源文件 相同的名称，但扩展名改为 .md
+        - Markdown 文件使用与源文件相同的名称，但扩展名改为 .md
     """
     try:
         backend = get_backend_per_thread({})
@@ -51,19 +56,18 @@ def convert_to_markdown(
                 "source_path": source_path,
             }
 
-        working_dir = str(backend._resolve_path('.'))
-
-        # word文件转换成pdf再转换成md
         source_pathlib = Path(source_path)
+
+        # PDF 文件使用专用转换方法
+        if source_pathlib.suffix.lower() == '.pdf':
+            return convert_pdf_to_markdown(source_path)
+
+        # Word 文件使用专用转换方法
         if source_pathlib.suffix.lower() in ['.doc', '.docx']:
-            # Convert Word to PDF first
-            pdf_path = str(source_pathlib.with_suffix('.pdf'))
-            try:
-                word_to_pdf(working_dir, _trip(source_path), _trip(pdf_path))
-                # Update source_path to use the converted PDF
-                source_path = pdf_path
-            except Exception as e:
-                pass
+            return convert_word_to_markdown(source_path)
+
+        # 其他文件格式使用 Docling 转换
+        working_dir = str(backend._resolve_path('.'))
 
         # Determine output file path
         output_file = str(Path(source_path).with_suffix(".md"))
@@ -110,7 +114,7 @@ def convert_to_markdown(
     except Exception as e:
         return {
             "success": False,
-            "error": f"PDF conversion error: {str(e)}",
+            "error": f"conversion error: {str(e)}",
             "source_path": source_path,
         }
 
