@@ -191,8 +191,9 @@ def convert_word_to_markdown(
                 "source_path": source_path,
             }
 
-        # 再调用 convert_pdf_to_markdown
-        return convert_pdf_to_markdown(pdf_path)
+        # 再调用 convert_pdf_to_markdown，传递相对路径（source_path 改后缀名）
+        pdf_relative_path = source_path.rsplit('.', 1)[0] + '.pdf'
+        return convert_pdf_to_markdown(pdf_relative_path)
 
     except Exception as e:
         return {
