@@ -116,6 +116,75 @@ def convert_to_markdown(
 
 
 @tool(parse_docstring=True)
+def convert_word_to_markdown(
+        source_path: str,
+) -> dict[str, Any]:
+    """将 Word 文件（DOC/DOCX）转换为 Markdown 格式。
+
+    该工具先将 Word 文件转换为 PDF，然后将 PDF 转换为 Markdown 格式，
+    保留了原始文档的布局格式。转换后会生成与源文件同名但扩展名为 .md 的文件。
+
+    Args:
+        source_path: 要转换的 Word 文件路径（.doc 或 .docx）
+
+    Returns:
+        包含以下内容的字典：
+        - success: 转换是否成功
+        - source_path: 源 Word 文件的路径
+        - output_file: 生成的 Markdown 文件路径
+        - error: 转换失败时的错误信息
+
+    Notes:
+        - 先将 Word 转换为 PDF，再转换为 Markdown
+        - 如果目标 Markdown 文件已存在，则直接使用现有文件
+        - Markdown 文件使用与源文件相同的名称，但扩展名改为 .md
+    """
+    try:
+        backend = get_backend_per_thread({})
+
+        # 解析路径
+        source_pathlib = backend._resolve_path(source_path)
+        working_dir = str(backend._resolve_path('.'))
+
+        # 检查是否为 Word 文件
+        if source_pathlib.suffix.lower() not in ['.doc', '.docx']:
+            return {
+                "success": False,
+                "error": f"source file is not a Word document: {source_path}",
+                "source_path": source_path,
+            }
+
+        # 检查源文件是否存在
+        if not source_pathlib.exists():
+            return {
+                "success": False,
+                "error": f"source file does not exist: {source_path}",
+                "source_path": source_path,
+            }
+
+        # 先转换为 PDF
+        pdf_path = str(source_pathlib.with_suffix('.pdf'))
+        try:
+            word_to_pdf(working_dir, _trip(source_path), _trip(pdf_path))
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Word to PDF conversion failed: {str(e)}",
+                "source_path": source_path,
+            }
+
+        # 再调用 convert_pdf_to_markdown
+        return convert_pdf_to_markdown(pdf_path)
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Word to Markdown conversion error: {str(e)}",
+            "source_path": source_path,
+        }
+
+
+@tool(parse_docstring=True)
 def convert_pdf_to_markdown(
         source_path: str,
 ) -> dict[str, Any]:
