@@ -180,8 +180,8 @@ def convert_word_to_markdown(
                 "source_path": source_path,
             }
 
-        # 先转换为 PDF
-        pdf_path = str(source_pathlib.with_suffix('.pdf'))
+        # 先转换为 PDF（使用 source_path 改后缀名）
+        pdf_path = source_path.rsplit('.', 1)[0] + '.pdf'
         try:
             word_to_pdf(working_dir, _trip(source_path), _trip(pdf_path))
         except Exception as e:
@@ -191,9 +191,8 @@ def convert_word_to_markdown(
                 "source_path": source_path,
             }
 
-        # 再调用 convert_pdf_to_markdown，传递相对路径（source_path 改后缀名）
-        pdf_relative_path = source_path.rsplit('.', 1)[0] + '.pdf'
-        return convert_pdf_to_markdown(pdf_relative_path)
+        # 再调用 convert_pdf_to_markdown，传递相对路径
+        return convert_pdf_to_markdown(pdf_path)
 
     except Exception as e:
         return {
