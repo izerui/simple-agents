@@ -142,6 +142,8 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             # 判断沙箱内 /skills 目录是否存在
             skills_pathlib = self.root_dir / 'skills'
             if not skills_pathlib.exists():
+                # 确保父目录存在
+                skills_pathlib.parent.mkdir(parents=True, exist_ok=True)
                 project_root = Path(__file__).parent.parent.parent
                 src_skills_path = project_root / 'src' / 'skills'
                 # 复制src_skills_path 目录到沙箱内
