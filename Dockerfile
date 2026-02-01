@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     libxi6 \
     libxrandr2 \
+    poppler-data \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 

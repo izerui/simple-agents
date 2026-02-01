@@ -12,23 +12,24 @@ load_dotenv(dotenv_path=project_root / '.env')
 
 if __name__ == "__main__":
 
-    from src.utils._docling import DOCLING_LLM_CONVERTER
+    from src.utils._docling import DOCLING_LLM_CONVERTER, DOCLING_FAST_CONVERTER, DOCLING_IMAGE_CONVERTER
 
     # 替换为你的 PDF 文件路径
     working_dir = "/Users/liuyuhua/PycharmProjects/simple-agents/files"
-    pdf_file = "朝天府.pdf"
-    output_file = "朝天府-docling222.md"
+    pdf_file = "7历年考研真题-向量.pdf"
+    output_file = "7历年考研真题-向量-docling.md"
 
     try:
         # 示例 3: 启用高级功能（较慢）
         print("\n" + "=" * 60)
         print("示例 3: 启用图片")
         print("=" * 60)
-        result3 = DOCLING_LLM_CONVERTER.convert(
+        result3 = DOCLING_IMAGE_CONVERTER.convert(
             working_dir=working_dir,
             source_file=pdf_file,
             output_file=output_file,
         )
+        print(result3)
         print(f"\n转换结果长度: {len(result3)} 字符")
 
         # 示例 4: 调试模式

@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import os
+import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -7,11 +10,18 @@ from typing import Optional, Union
 
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse, FileInfo
-from src.sandbox.pycode_executor import CodeExecutor
 from src.sandbox.dependency_executor import DependencyExecutor
-import re
-import platform
-import os
+from src.sandbox.pycode_executor import CodeExecutor
+
+# 无法直接读取需要转换的文件类型 PDF、DOCX、XLSX、PPTX、
+CONVERT_FILE_TYPES = [
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.ppt',
+    '.pptx',
+]
+
 
 def copytree_hardlink(src, dst):
     """跨平台硬链接复制"""
@@ -38,6 +48,7 @@ def copytree_hardlink(src, dst):
     if not success:
         print("⚠️ 硬链接方法失败，使用普通复制 skills ")
         shutil.copytree(src, dst)
+
 
 class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
     """
@@ -117,7 +128,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             ExecuteResponse 包含输出、退出码和截断标志
         """
         command = command.strip()
-        
+
         # 判断是否是 uv pip 命令
         if re.match(r'^uv\s+pip\s+', command, re.IGNORECASE):
             # 使用依赖安装执行器
@@ -138,3 +149,19 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
                 # subprocess.run(['cp', '-al', str(src_skills_path), str(skills_pathlib)], check=True)
                 copytree_hardlink(str(src_skills_path), str(skills_pathlib))
         return super().ls_info(path)
+
+    def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
+        # 如果是pdf文件
+        if file_path.lower().endswith('.pdf'):
+            # 判断同名md文件是否存在
+            _file_path = self._resolve_path(file_path)
+            _markdown_path = _file_path.with_suffix(".md")
+            if not _markdown_path.exists():
+                # pdftotext -layout input.pdf output.txt
+                try:
+                    subprocess.run(['pdftotext', '-layout', str(_file_path), str(_markdown_path)], check=True)
+                except Exception as e:
+                    print(f"pdftotext pdf文件: {file_path} 失败: {e}")
+            if _markdown_path.exists():
+                return super().read(str(Path(file_path).with_suffix('.md')), offset, limit)
+        return super().read(file_path, offset, limit)
