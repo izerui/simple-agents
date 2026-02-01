@@ -191,8 +191,8 @@ def convert_word_to_markdown(
                 "source_path": source_path,
             }
 
-        # 再调用 convert_pdf_to_markdown，传递相对路径
-        return convert_pdf_to_markdown(pdf_path)
+        # 再调用 PDF 转 Markdown 的内部实现
+        return _convert_pdf_to_markdown_impl(pdf_path)
 
     except Exception as e:
         return {
@@ -202,29 +202,8 @@ def convert_word_to_markdown(
         }
 
 
-@tool(parse_docstring=True)
-def convert_pdf_to_markdown(
-        source_path: str,
-) -> dict[str, Any]:
-    """将 PDF 文件转换为 Markdown 格式。
-
-    保留了原始文档的布局格式。转换后会生成与源文件同名但扩展名为 .md 的文件。
-
-    Args:
-        source_path: 要转换的 PDF 文件路径
-
-    Returns:
-        包含以下内容的字典：
-        - success: 转换是否成功
-        - source_path: 源 PDF 文件的路径
-        - output_file: 生成的 Markdown 文件路径
-        - error: 转换失败时的错误信息
-
-    Notes:
-        - 使用 -layout 参数保留原始布局
-        - 如果目标 Markdown 文件已存在，则直接使用现有文件
-        - Markdown 文件使用与源文件相同的名称，但扩展名改为 .md
-    """
+def _convert_pdf_to_markdown_impl(source_path: str) -> dict[str, Any]:
+    """PDF 转 Markdown 的内部实现函数（不被 @tool 装饰）"""
     try:
         backend = get_backend_per_thread({})
 
@@ -284,6 +263,32 @@ def convert_pdf_to_markdown(
             "error": f"PDF to Markdown conversion error: {str(e)}",
             "source_path": source_path,
         }
+
+
+@tool(parse_docstring=True)
+def convert_pdf_to_markdown(
+        source_path: str,
+) -> dict[str, Any]:
+    """将 PDF 文件转换为 Markdown 格式。
+
+    保留了原始文档的布局格式。转换后会生成与源文件同名但扩展名为 .md 的文件。
+
+    Args:
+        source_path: 要转换的 PDF 文件路径
+
+    Returns:
+        包含以下内容的字典：
+        - success: 转换是否成功
+        - source_path: 源 PDF 文件的路径
+        - output_file: 生成的 Markdown 文件路径
+        - error: 转换失败时的错误信息
+
+    Notes:
+        - 使用 -layout 参数保留原始布局
+        - 如果目标 Markdown 文件已存在，则直接使用现有文件
+        - Markdown 文件使用与源文件相同的名称，但扩展名改为 .md
+    """
+    return _convert_pdf_to_markdown_impl(source_path)
 
 
 def _trip(path):
