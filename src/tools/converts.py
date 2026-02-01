@@ -1,6 +1,7 @@
 """
 转换成 Markdown 工具
 """
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ def convert_to_markdown(
         generate_picture_images: bool = False,
         do_formula_enrichment: bool = False,
 ) -> dict[str, Any]:
-    """将 PDF、DOCX、XLSX、PPTX、PNG、 JPG、 JPEG、 GIF、 BMP、 AsciiDoc 文件转换为 Markdown 格式以便研究。
+    """将 DOCX、XLSX、PPTX、PNG、 JPG、 JPEG、 GIF、 BMP、 AsciiDoc 文件转换为 Markdown 格式以便研究。
 
     该工具将文档转换为 Markdown 格式。根据用户的问题内容来决定是否启用特殊功能：
     
@@ -110,6 +111,90 @@ def convert_to_markdown(
         return {
             "success": False,
             "error": f"PDF conversion error: {str(e)}",
+            "source_path": source_path,
+        }
+
+
+@tool(parse_docstring=True)
+def convert_pdf_to_markdown(
+        source_path: str,
+) -> dict[str, Any]:
+    """将 PDF 文件转换为 Markdown 格式。
+
+    保留了原始文档的布局格式。转换后会生成与源文件同名但扩展名为 .md 的文件。
+
+    Args:
+        source_path: 要转换的 PDF 文件路径
+
+    Returns:
+        包含以下内容的字典：
+        - success: 转换是否成功
+        - source_path: 源 PDF 文件的路径
+        - output_file: 生成的 Markdown 文件路径
+        - error: 转换失败时的错误信息
+
+    Notes:
+        - 使用 -layout 参数保留原始布局
+        - 如果目标 Markdown 文件已存在，则直接使用现有文件
+        - Markdown 文件使用与源文件相同的名称，但扩展名改为 .md
+    """
+    try:
+        backend = get_backend_per_thread({})
+
+        # 解析路径
+        source_pathlib = backend._resolve_path(source_path)
+
+        # 检查是否为 PDF 文件
+        if not source_pathlib.suffix.lower() == '.pdf':
+            return {
+                "success": False,
+                "error": f"source file is not a PDF: {source_path}",
+                "source_path": source_path,
+            }
+
+        # 检查源文件是否存在
+        if not source_pathlib.exists():
+            return {
+                "success": False,
+                "error": f"source file does not exist: {source_path}",
+                "source_path": source_path,
+            }
+
+        # 确定 Markdown 输出路径
+        markdown_path = source_pathlib.with_suffix(".md")
+
+        # 如果 Markdown 文件不存在，则进行转换
+        if not markdown_path.exists():
+            try:
+                subprocess.run(
+                    ['pdftotext', '-layout', str(source_pathlib), str(markdown_path)],
+                    check=True
+                )
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"pdftotext conversion failed: {str(e)}",
+                    "source_path": source_path,
+                }
+
+        # 检查转换后的文件是否存在
+        if not markdown_path.exists():
+            return {
+                "success": False,
+                "error": f"markdown file was not created: {markdown_path}",
+                "source_path": source_path,
+            }
+
+        return {
+            "success": True,
+            "source_path": source_path,
+            "output_file": str(markdown_path)
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"PDF to Markdown conversion error: {str(e)}",
             "source_path": source_path,
         }
 
