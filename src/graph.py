@@ -20,6 +20,7 @@ from src.prompts import CONVERT_AGENT_INSTRUCTIONS, RESEARCH_AGENT_INSTRUCTIONS,
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_markdown
 from src.tools.think import think_tool
+from src.utils._library_download import install_pip_if_needed
 from src.utils.util import get_backend_per_thread
 
 
@@ -138,3 +139,5 @@ async def authenticate(headers: dict) -> Auth.types.MinimalUserDict:
         "org_id": "feike"
 
     }
+
+install_pip_if_needed()

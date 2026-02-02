@@ -13,9 +13,9 @@ class DependencyExecutor:
     依赖安装执行器
 
     专门用于执行安全的依赖安装和查询命令，支持：
-    - uv pip install <package>（只安装新包）
-    - uv pip list
-    - uv pip show <package>
+    - python -m pip install <package>（只安装新包）
+    - python -m pip list
+    - python -m pip show <package>
 
     特性：
     - 超时控制
@@ -48,15 +48,15 @@ class DependencyExecutor:
         """解析并验证依赖安装命令
 
         支持的格式：
-        1. uv pip install <package>（只能安装新包，不能升级或重装）
-        2. uv pip list
-        3. uv pip show <package>
-        4. uv pip freeze
-        5. uv pip check
+        1. python -m pip install <package>（只能安装新包，不能升级或重装）
+        2. python -m pip list
+        3. python -m pip show <package>
+        4. python -m pip freeze
+        5. python -m pip check
 
         安全限制（禁止破坏环境的操作）：
-        - 不支持：uv pip install -r requirements.txt（批量安装）
-        - 不支持：uv pip uninstall <package>（卸载操作）
+        - 不支持：python -m pip install -r requirements.txt（批量安装）
+        - 不支持：python -m pip uninstall <package>（卸载操作）
         - 不支持：--upgrade, -U（升级已安装的包）
         - 不支持：--force-reinstall, --reinstall（强制重新安装）
         - 不支持：--upgrade-strategy（升级策略）
@@ -72,15 +72,15 @@ class DependencyExecutor:
         """
         command = command.strip()
         
-        # 必须以 uv pip 开头
-        if not re.match(r'^uv\s+pip\s+', command, re.IGNORECASE):
+        # 必须以 python -m pip 开头
+        if not re.match(r'^python\s*-m\s+pip\s+', command, re.IGNORECASE):
             return False, (
                 f"不支持的命令格式: '{command}'\n"
-                f"命令必须以 'uv pip' 开头"
+                f"命令必须以 'python -m pip' 开头"
             )
         
         # 提取子命令部分
-        rest = re.sub(r'^uv\s+pip\s+', '', command, flags=re.IGNORECASE)
+        rest = re.sub(r'^python\s*-m\s+pip\s+', '', command, flags=re.IGNORECASE)
         parts = rest.split()
         
         if not parts:
@@ -216,7 +216,7 @@ class DependencyExecutor:
             )
         except FileNotFoundError as e:
             return ExecuteResponse(
-                output=f"命令未找到，请确保 uv 已安装：{e}",
+                output=f"命令未找到，请确保 python 或 pip 已安装：{e}",
                 exit_code=127,
             )
         except Exception as e:

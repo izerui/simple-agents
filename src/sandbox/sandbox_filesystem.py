@@ -107,15 +107,15 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         """执行命令（统一入口）
 
         根据命令类型自动选择执行器：
-        1. uv pip 命令 -> 使用 DependencyExecutor（依赖安装和查询）
+        1. python -m pip 命令 -> 使用 DependencyExecutor（依赖安装和查询）
         2. python 命令 -> 使用 CodeExecutor（Python 代码执行）
 
         DependencyExecutor 支持的命令：
-        - uv pip install <package>（安装新包，不允许升级或重装）
-        - uv pip list
-        - uv pip show <package>
-        - uv pip freeze
-        - uv pip check
+        - python -m pip install <package>（安装新包，不允许升级或重装）
+        - python -m pip list
+        - python -m pip show <package>
+        - python -m pip freeze
+        - python -m pip check
 
         CodeExecutor 支持的命令：
         - python -c "code" - 执行代码字符串
@@ -129,8 +129,8 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         """
         command = command.strip()
 
-        # 判断是否是 uv pip 命令
-        if re.match(r'^uv\s+pip\s+', command, re.IGNORECASE):
+        # 判断是否是 python -m pip 命令
+        if re.match(r'^python\s*-m\s+pip\s+', command, re.IGNORECASE):
             # 使用依赖安装执行器
             return self._dependency_executor.execute(command)
         else:

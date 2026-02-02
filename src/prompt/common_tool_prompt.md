@@ -50,8 +50,8 @@
 - 脚本：`python script.py`
 
 **依赖管理**
-- `uv pip install <package>` - 安装包
-- `uv pip list/show/check` - 查询状态
+- `python -m pip install <package>` - 安装包
+- `python -m pip list/show/check` - 查询状态
 
 ### 使用建议
 - 脚本放 `scripts/`，输出放 `outputs/`
