@@ -13,10 +13,10 @@ Create and manipulate PowerPoint presentations with slides, shapes, charts, tabl
 
 ```bash
 # Install
-pip install python-pptx
+python -m pip install python-pptx
 
 # With image support
-pip install python-pptx Pillow
+python -m pip install python-pptx Pillow
 ```
 
 ## Basic Usage
