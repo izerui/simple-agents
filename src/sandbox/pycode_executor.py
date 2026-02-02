@@ -52,7 +52,22 @@ _builtins_open_patched = False
 
 from deepagents.backends.protocol import ExecuteResponse
 
+# 🔧 定义系统路径白名单
+# 某些标准库（如 mimetypes）需要访问这些系统文件，某些库（如 openpyxl、pandas、tempfile）需要使用系统临时目录
+# 这样可以避免在 safe_open 和 safe_os_open 中调用 tempfile.gettempdir() 导致死循环
+# (因为 tempfile.gettempdir() 内部会调用 os.open，而 os.open 已经被替换)
 
+# 🔧 定义基础系统路径白名单
+_allowed_system_paths = [
+    Path('/etc/apache2/mime.types'),  # mimetypes 模块需要
+    Path('/etc/mime.types'),           # 某些系统的 mime.types 文件
+    Path('/private/etc/apache2/mime.types'),  # macOS 上 /etc 的实际路径
+    Path('/private/etc/mime.types'),           # macOS 上 /etc 的实际路径
+    Path(tempfile.gettempdir()).resolve(),  # 添加系统临时目录
+]
+
+# 🔧 预先解析所有存在的白名单路径为绝对路径
+_allowed_system_paths_resolved = [path.resolve() for path in _allowed_system_paths if path.exists()]
 
 
 class OutputCapture:
@@ -109,22 +124,18 @@ def _get_safe_open():
             # 不是 backend.execute() 调用，回退到原始行为
             return _original_builtins_open(filename, mode, *args, **kwargs)
         
-        # 🔧 特殊处理：允许访问系统临时目录
-        # 某些库（如 openpyxl、pandas、tempfile）需要使用系统临时目录
-        import tempfile
-        temp_dir = Path(tempfile.gettempdir()).resolve()
-        
-        # 解析原始路径（处理符号链接和相对路径）
+        # 🔧 特殊处理：允许访问系统白名单路径
+        # 某些标准库（如 mimetypes）需要访问系统文件，某些库（如 openpyxl、pandas、tempfile）需要使用系统临时目录
+        # 使用模块级别预先缓存的路径列表，避免死循环
         resolved_original_path = Path(filename).resolve()
-        
-        # 检查是否是系统临时目录下的文件
-        try:
-            resolved_original_path.relative_to(temp_dir)
-            # 是系统临时目录，允许直接访问
-            return _original_builtins_open(filename, mode, *args, **kwargs)
-        except ValueError:
-            # 不是系统临时目录，继续处理
-            pass
+        for allowed_path in _allowed_system_paths_resolved:
+            try:
+                resolved_original_path.relative_to(allowed_path)
+                # 是白名单路径，允许直接访问
+                return _original_builtins_open(filename, mode, *args, **kwargs)
+            except ValueError:
+                # 不是这个白名单路径，继续检查下一个
+                continue
         
         # 处理路径：去掉开头的斜杠，然后添加 root_dir
         path_str = str(filename).lstrip('/')
@@ -188,21 +199,18 @@ def _get_safe_os_open():
         if root_dir is None:
             return _original_os_open(filename, flags, mode, *args, **kwargs)
         
-        # 🔧 特殊处理：允许访问系统临时目录
-        import tempfile
-        temp_dir = Path(tempfile.gettempdir()).resolve()
-        
-        # 解析原始路径（处理符号链接和相对路径）
+        # 🔧 特殊处理：允许访问系统白名单路径
+        # 某些标准库（如 mimetypes）需要访问系统文件，某些库（如 openpyxl、pandas、tempfile）需要使用系统临时目录
+        # 使用模块级别预先缓存的路径列表，避免死循环
         resolved_original_path = Path(filename).resolve()
-        
-        # 检查是否是系统临时目录下的文件
-        try:
-            resolved_original_path.relative_to(temp_dir)
-            # 是系统临时目录，允许直接访问
-            return _original_os_open(filename, flags, mode, *args, **kwargs)
-        except ValueError:
-            # 不是系统临时目录，继续处理
-            pass
+        for allowed_path in _allowed_system_paths_resolved:
+            try:
+                resolved_original_path.relative_to(allowed_path)
+                # 是白名单路径，允许直接访问
+                return _original_os_open(filename, flags, mode, *args, **kwargs)
+            except ValueError:
+                # 不是这个白名单路径，继续检查下一个
+                continue
         
         # 处理路径：去掉开头的斜杠，然后添加 root_dir
         path_str = str(filename).lstrip('/')
@@ -269,13 +277,6 @@ def _get_safe_import():
             raise ImportError(
                 f"安全错误：禁止导入 '{name}' 模块\n"
                 f"原因：反序列化模块可以执行任意代码，存在严重安全风险"
-            )
-        
-        # 🚫 禁止导入 time 模块（防止长时间阻塞）
-        if name == 'time':
-            raise ImportError(
-                f"安全错误：禁止导入 'time' 模块\n"
-                f"原因：time.sleep() 可能导致长时间阻塞，影响系统性能"
             )
         
         # 🚫 禁止导入多进程/多线程模块（防止绕过沙箱）
@@ -498,11 +499,29 @@ class CodeExecutor:
         if match_script:
             script_path = match_script.group(1).strip()
             args_str = match_script.group(2).strip() if match_script.group(2) else ''
-            # 🎯 所有脚本路径都以 root_dir 为根
-            # 去掉开头的斜杠，因为所有路径都是相对于 root_dir 的
-            script_path = script_path.lstrip('/')
-            # 拼接 root_dir 前缀
-            script_path = str(self.root_dir / script_path)
+            
+            # 🎯 检测并处理绝对路径和相对路径
+            from pathlib import Path as StdPath
+            std_path = StdPath(script_path)
+            
+            if std_path.is_absolute():
+                # 绝对路径：直接使用，但需要安全检查
+                # 将路径转换为 Path 对象并解析
+                abs_path = std_path.resolve()
+                try:
+                    # 检查绝对路径是否在 root_dir 内
+                    abs_path.relative_to(self.root_dir)
+                    # 在 root_dir 内，使用解析后的绝对路径
+                    script_path = str(abs_path)
+                except ValueError:
+                    # 不在 root_dir 内，仍然使用原路径
+                    # 后续会在 _read_script_file 中拒绝访问
+                    script_path = str(script_path)
+            else:
+                # 相对路径：去掉开头的斜杠，然后拼接到 root_dir
+                script_path = script_path.lstrip('/')
+                # 拼接 root_dir 前缀
+                script_path = str(self.root_dir / script_path)
 
             # 解析参数字符串为列表(简单按空格分割，暂不支持引号)
             script_args = []
