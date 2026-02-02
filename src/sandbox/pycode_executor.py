@@ -150,9 +150,7 @@ def _get_safe_open():
             resolved_path.relative_to(root_dir)
         except ValueError:
             # 路径不在 root_dir 内，拒绝访问
-            raise PermissionError(
-                f"安全错误：禁止访问 root_dir 外的文件\n请求路径: {filename}\n解析路径: {resolved_path}\n允许目录: {root_dir}\n注意：路径遍历（..）和符号链接已被阻止"
-            )
+            raise PermissionError(f"安全错误：禁止访问 root_dir 外的文件")
         
         # 🔧 对于写入操作，自动创建父目录
         # 支持的写入模式: 'w', 'a', 'x', 'w+', 'a+', 'x+', 'wb', 'ab', 'xb'
@@ -223,9 +221,7 @@ def _get_safe_os_open():
             resolved_path.relative_to(root_dir)
         except ValueError:
             # 路径不在 root_dir 内，拒绝访问
-            raise PermissionError(
-                f"安全错误：禁止访问 root_dir 外的文件\n请求路径: {filename}\n解析路径: {resolved_path}\n允许目录: {root_dir}"
-            )
+            raise PermissionError(f"安全错误：禁止访问 root_dir 外的文件")
         
         # 🔧 对于写入操作，自动创建父目录
         # os.O_WRONLY、os.O_RDWR、os.O_CREAT 等标志表示写入
@@ -260,38 +256,23 @@ def _get_safe_import():
         """安全的 import 函数"""
         # 🚫 禁止导入 ctypes 模块（防止绕过安全限制调用系统库）
         if name == 'ctypes' or name.startswith('ctypes.'):
-            raise ImportError(
-                f"安全错误：禁止导入 '{name}' 模块\n"
-                f"原因：ctypes 可以绕过 Python 安全限制直接调用底层系统库"
-            )
-        
+            raise ImportError(f"安全错误：禁止导入 '{name}' 模块")
+
         # 🚫 禁止导入 importlib 模块（防止动态导入被禁用的模块）
         if name == 'importlib' or name.startswith('importlib.'):
-            raise ImportError(
-                f"安全错误：禁止导入 '{name}' 模块\n"
-                f"原因：importlib 可以动态导入被禁用的危险模块"
-            )
-        
+            raise ImportError(f"安全错误：禁止导入 '{name}' 模块")
+
         # 🚫 禁止导入反序列化模块（防止执行任意代码）
         if name in ['pickle', 'marshal', 'shelve']:
-            raise ImportError(
-                f"安全错误：禁止导入 '{name}' 模块\n"
-                f"原因：反序列化模块可以执行任意代码，存在严重安全风险"
-            )
-        
+            raise ImportError(f"安全错误：禁止导入 '{name}' 模块")
+
         # 🚫 禁止导入多进程/多线程模块（防止绕过沙箱）
         if name in ['threading', 'multiprocessing']:
-            raise ImportError(
-                f"安全错误：禁止导入 '{name}' 模块\n"
-                f"原因：多进程/多线程模块可能绕过沙箱安全限制"
-            )
-        
+            raise ImportError(f"安全错误：禁止导入 '{name}' 模块")
+
         # 🚫 禁止导入 signal 模块（防止干扰系统）
         if name == 'signal':
-            raise ImportError(
-                f"安全错误：禁止导入 'signal' 模块\n"
-                f"原因：signal 模块可能干扰系统正常运行"
-            )
+            raise ImportError(f"安全错误：禁止导入 'signal' 模块")
         
         # 先调用原始的 import
         module = original_import(name, *args, **kwargs)
@@ -824,16 +805,6 @@ class CodeExecutor:
             if checker.dangerous_calls:
                 error_msg = "安全错误：代码包含禁止的操作\n"
                 error_msg += "\n".join(checker.dangerous_calls)
-                error_msg += "\n\n原因：为了保护系统安全，禁止以下危险操作："
-                error_msg += "\n  - 删除、移动、重命名文件"
-                error_msg += "\n  - 修改文件权限"
-                error_msg += "\n  - 列出目录内容"
-                error_msg += "\n  - 遍历目录"
-                error_msg += "\n  - 调用外部命令"
-                error_msg += "\n  - 访问或修改环境变量"
-                error_msg += "\n  - 导入 ctypes 或动态导入模块"
-                error_msg += "\n  - 使用反序列化模块"
-                error_msg += "\n  - 导入时间、线程、进程或信号模块"
                 raise ValueError(error_msg)
         except SyntaxError as e:
             raise SyntaxError(f"代码语法错误：{str(e)}")
