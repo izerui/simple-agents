@@ -262,18 +262,15 @@ def _get_safe_import():
         if name == 'importlib' or name.startswith('importlib.'):
             raise ImportError(f"安全错误：禁止导入 '{name}' 模块")
 
-        # 🚫 禁止导入反序列化模块（防止执行任意代码）
-        if name in ['pickle', 'marshal', 'shelve']:
+        # 🚫 禁止反序列化库（扩展列表）
+        UNSAFE_DESER = ['pickle', 'marshal', 'shelve', 'dill', 'yaml', 'jsonpickle']
+        if name in UNSAFE_DESER or any(name.startswith(x + '.') for x in UNSAFE_DESER):
+            raise ImportError(f"安全错误：禁止导入反序列化库 '{name}'")
+
+        # 🚫 禁止多进程/多线程
+        if name in ['threading', 'multiprocessing', 'signal']:
             raise ImportError(f"安全错误：禁止导入 '{name}' 模块")
 
-        # 🚫 禁止导入多进程/多线程模块（防止绕过沙箱）
-        if name in ['threading', 'multiprocessing']:
-            raise ImportError(f"安全错误：禁止导入 '{name}' 模块")
-
-        # 🚫 禁止导入 signal 模块（防止干扰系统）
-        if name == 'signal':
-            raise ImportError(f"安全错误：禁止导入 'signal' 模块")
-        
         # 先调用原始的 import
         module = original_import(name, *args, **kwargs)
 
@@ -380,6 +377,10 @@ def _get_safe_import():
 
                 # 替换 os.path
                 module.path = SafePathProxy()
+
+        # 🔒 防止 ctypes 通过 sys.modules 缓存
+        if 'ctypes' in sys.modules:
+            del sys.modules['ctypes']
 
         return module
     

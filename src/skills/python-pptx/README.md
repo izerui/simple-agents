@@ -9,6 +9,28 @@ Create and manipulate PowerPoint presentations with slides, shapes, charts, tabl
 **Version**: 1.0.0
 **Category**: office-docs
 
+## ⚠️ Important: Use Custom Template
+
+**CRITICAL**: This skill provides a custom default template at `/skills/python-pptx/default.pptx` (in sandbox). Always use this template instead of the python-pptx library's built-in default.
+
+### Why Not Use Library Default?
+
+```python
+# ❌ WRONG - Uses library's generic template
+prs = Presentation()
+
+# ✅ CORRECT - Uses our professional template
+prs = Presentation("/skills/python-pptx/default.pptx")
+```
+
+**Benefits of custom template**:
+- Professional layouts and styling
+- Consistent 16:9 widescreen format
+- Better slide master options
+- Brand-ready customization
+
+See [SKILL.md](SKILL.md) for detailed template usage guidelines.
+
 ## Quick Start
 
 ```bash
@@ -27,8 +49,8 @@ from pptx.util import Inches, Pt
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 
-# Create presentation
-prs = Presentation()
+# Create presentation using custom template
+prs = Presentation("/skills/python-pptx/default.pptx")
 
 # Title slide
 slide = prs.slides.add_slide(prs.slide_layouts[0])
@@ -94,13 +116,38 @@ slide.shapes.add_chart(
 
 ### Template Replacement
 ```python
-for shape in slide.shapes:
-    if shape.has_text_frame:
-        for para in shape.text_frame.paragraphs:
-            for run in para.runs:
-                if '{{name}}' in run.text:
-                    run.text = run.text.replace('{{name}}', 'Value')
+# Load custom template (sandbox path)
+prs = Presentation("/skills/python-pptx/default.pptx")
+
+for slide in prs.slides:
+    for shape in slide.shapes:
+        if shape.has_text_frame:
+            for para in shape.text_frame.paragraphs:
+                for run in para.runs:
+                    if '{{name}}' in run.text:
+                        run.text = run.text.replace('{{name}}', 'Value')
 ```
+
+## Template Location
+
+The custom default template is located at:
+```
+/skills/python-pptx/default.pptx
+```
+
+**In the sandbox environment**, this path is mapped to the skill directory automatically.
+
+### Sandbox Path Usage
+
+```python
+# In sandbox - use absolute path
+prs = Presentation("/skills/python-pptx/default.pptx")
+
+# This maps to the project's skill directory:
+# <project>/src/skills/python-pptx/default.pptx
+```
+
+**Important**: The sandbox environment automatically mounts skill directories at `/skills/`, so you can always use this consistent path regardless of where your code runs within the sandbox.
 
 ## Files
 

@@ -38,7 +38,68 @@ Python-pptx is a Python library for creating and updating PowerPoint (.pptx) pre
 - **Master slide customization** for branding consistency
 - **Template-based generation** for consistent presentations
 - **Placeholder management** for dynamic content insertion
-- **default.pptx** is in `skills/python-pptx/default.pptx`
+- **Custom default template** located at `/skills/python-pptx/default.pptx`
+
+## Important: Use Custom Template, Not Library Default
+
+**CRITICAL**: Always use the custom template provided in this skill directory (`/skills/python-pptx/default.pptx`) instead of the python-pptx library's built-in default template.
+
+### Why Use Our Custom Template?
+
+The python-pptx library's default template (created when calling `Presentation()` with no arguments) has several limitations:
+
+1. **Limited slide layouts** - Only basic layouts with minimal customization
+2. **No branding** - Generic styling that doesn't match professional standards
+3. **Inconsistent formatting** - May vary across different library versions
+4. **Limited master slides** - Fewer options for consistent theming
+
+### How to Use the Custom Template
+
+```python
+from pptx import Presentation
+from pathlib import Path
+
+# Get the correct template path relative to project root
+template_path = "/skills/python-pptx/default.pptx"
+
+# Always use template path
+prs = Presentation(str(template_path))
+
+# WRONG - Do NOT use this (uses library's default template):
+# prs = Presentation()  # ❌ Avoid!
+```
+
+### Template Benefits
+
+Our custom `default.pptx` template provides:
+
+- **Professional layouts** - Pre-configured slide masters for common use cases
+- **Consistent styling** - Professional fonts, colors, and spacing
+- **Branding ready** - Easy to customize with your organization's branding
+- **16:9 widescreen format** - Modern aspect ratio (13.333" × 7.5")
+- **Multiple layout options** - Title, content, blank, and section header layouts
+
+### Template Path Reference
+
+When using this skill in the sandbox environment, use the sandbox-specific path:
+
+```python
+from pptx import Presentation
+
+# In sandbox environment - use this path:
+template_path = "/skills/python-pptx/default.pptx"
+prs = Presentation(template_path)
+
+# WRONG - Do NOT use this (uses library's default template):
+# prs = Presentation()  # ❌ Avoid!
+```
+
+**Important Notes**:
+- In the sandbox environment, the template is located at `/skills/python-pptx/default.pptx`
+- This is an absolute path within the sandbox filesystem
+- Always verify the template file exists before creating presentations
+- The sandbox automatically maps skill directories to `/skills/` path
+
 
 ## When to Use This Skill
 
@@ -107,6 +168,7 @@ from pptx.enum.shapes import MSO_SHAPE
 def create_basic_presentation(output_path: str) -> None:
     """Create a basic presentation with various slide types."""
     # Create presentation
+    # Use custom template from skill directory
     template_path = "/skills/python-pptx/default.pptx"
     prs = Presentation(template_path)
 
@@ -270,6 +332,7 @@ from pptx.oxml.ns import nsmap
 
 def create_formatted_presentation(output_path: str) -> None:
     """Create presentation with advanced text formatting."""
+    # Use custom template from skill directory
     template_path = "/skills/python-pptx/default.pptx"
     prs = Presentation(template_path)
 
@@ -427,6 +490,7 @@ from pptx.dml.color import RgbColor
 
 def create_chart_presentation(output_path: str) -> None:
     """Create presentation with various chart types."""
+    # Use custom template from skill directory
     template_path = "/skills/python-pptx/default.pptx"
     prs = Presentation(template_path)
 
@@ -654,6 +718,7 @@ def create_table_slide(
 
 def create_table_presentation(output_path: str) -> None:
     """Create presentation with various table examples."""
+    # Use custom template from skill directory
     template_path = "/skills/python-pptx/default.pptx"
     prs = Presentation(template_path)
 
@@ -774,6 +839,7 @@ def create_arrow_connector(
 
 def create_shape_presentation(output_path: str) -> None:
     """Create presentation with shapes and connectors."""
+    # Use custom template from skill directory
     template_path = "/skills/python-pptx/default.pptx"
     prs = Presentation(template_path)
 
@@ -1000,6 +1066,7 @@ def generate_from_template(
 
 def create_monthly_report_template(output_path: str) -> None:
     """Create a template for monthly reports."""
+    # Use custom template from skill directory
     template_path = "/skills/python-pptx/default.pptx"
     prs = Presentation(template_path)
 
@@ -1138,6 +1205,7 @@ def generate_database_presentation(
 ) -> None:
     """Generate presentation from database data."""
     conn = sqlite3.connect(db_path)
+    # Use custom template from skill directory
     template_path = "/skills/python-pptx/default.pptx"
     prs = Presentation(template_path)
 
@@ -1260,6 +1328,7 @@ def create_dataframe_presentation(
     output_path: str
 ) -> None:
     """Create presentation from multiple DataFrames."""
+    # Use custom template from skill directory
     template_path = "/skills/python-pptx/default.pptx"
     prs = Presentation(template_path)
 
