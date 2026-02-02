@@ -1032,6 +1032,10 @@ class CodeExecutor:
             # 步骤 6: 获取输出
             output = output_capture.get_output()
 
+            # 🔧 调试信息：如果完全没有输出，添加提示
+            if not output or output.strip() == "":
+                output = "[代码执行完成，但没有任何输出]\n提示：如果脚本使用了 print() 但没有看到输出，可能是:\n1. 输出被重定向到了文件而非 stdout\n2. 脚本在执行过程中遇到了静默错误\n3. 脚本仍在后台运行（如果超时机制未生效）"
+
             # 步骤 7: 检查输出长度并截断
             truncated = False
             if len(output) > self.max_output_length:
