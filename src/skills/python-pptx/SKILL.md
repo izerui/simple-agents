@@ -69,8 +69,8 @@ Python-pptx is a Python library for creating and updating PowerPoint (.pptx) pre
 # Basic installation
 pip install python-pptx
 
-# Using uv (recommended)
-uv pip install python-pptx
+# Using python -m pip (recommended)
+python -m pip install python-pptx
 
 # With image support
 pip install python-pptx Pillow
