@@ -969,7 +969,7 @@ class CodeExecutor:
                 except MemoryError:
                     exit_code = -1
                     return ExecuteResponse(
-                        output=f"错误: 内存使用超过限制 ({self.max_memory_mb} MB)",
+                        output="错误: 内存使用超过限制",
                         exit_code=exit_code,
                         truncated=False
                     )
