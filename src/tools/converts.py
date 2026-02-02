@@ -27,8 +27,8 @@ def convert_to_markdown(
     启用公式识别的时机：当用户问题涉及数学公式、方程、不等式、符号、微积分、数学表达式、化学方程式、物理公式等内容时，应将 do_formula_enrichment 设为 True
 
     支持的文件格式：
-    - PDF、DOC、DOCX：使用本地工具转换（快速，保留布局）
-    - XLSX、PPTX、PNG、JPG、JPEG、GIF、BMP、AsciiDoc：使用远程 API 转换（支持 AI 图片识别和公式识别）
+    - PDF、DOC、DOCX、XLSX、PPTX、PNG、JPG、JPEG、GIF、BMP、AsciiDoc
+    - 所有格式都支持图片提取和公式识别功能
 
     Args:
         source_path: 要转换的文件路径
@@ -68,62 +68,26 @@ def convert_to_markdown(
 
         # PDF 文件使用专用转换方法
         if source_pathlib.suffix.lower() == '.pdf':
-            return convert_pdf_to_markdown(source_path)
+            return _convert_pdf_to_markdown(
+                source_path=source_path,
+                generate_picture_images=generate_picture_images,
+                do_formula_enrichment=do_formula_enrichment,
+            )
 
         # Word 文件使用专用转换方法
         if source_pathlib.suffix.lower() in ['.doc', '.docx']:
-            return convert_word_to_markdown(source_path)
+            return _convert_word_to_markdown(
+                source_path=source_path,
+                generate_picture_images=generate_picture_images,
+                do_formula_enrichment=do_formula_enrichment,
+            )
 
         # 其他文件格式使用远程 API 转换
-        output_file = str(source_pathlib.with_suffix(".md"))
-        api_base_url = "https://dcca.hhstu.edu.cn/transfer"
-
-        # 计算超时时间（AI 功能需要更长时间）
-        timeout = 600 if (generate_picture_images or do_formula_enrichment) else 300
-
-        try:
-            # 使用远程 API 进行转换
-            with open(source_pathlib, 'rb') as f:
-                files = {'file': (source_pathlib.name, f, 'application/octet-stream')}
-                data = {
-                    'guess_image': 'false' if generate_picture_images else 'false',
-                    'guess_formula': 'false' if do_formula_enrichment else 'false'
-                }
-                response = requests.post(
-                    f"{api_base_url}/api/to-markdown",
-                    files=files,
-                    data=data,
-                    timeout=timeout,
-                    verify=False
-                )
-
-            response.raise_for_status()
-
-            # 检查内容类型，拒绝 HTML 响应
-            content_type = response.headers.get('Content-Type', '')
-            if 'text/html' in content_type.lower():
-                return {
-                    "success": False,
-                    "error": "API returned HTML instead of Markdown (possible authentication error)",
-                    "source_path": source_path,
-                }
-
-            # 保存 Markdown 内容
-            with open(output_file, 'wb') as f:
-                f.write(response.content)
-
-            return {
-                "success": True,
-                "source_path": source_path,
-                "output_file": output_file
-            }
-
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"remote API conversion failed: {str(e)}",
-                "source_path": source_path,
-            }
+        return _convert_via_remote_api(
+            source_path=source_path,
+            generate_picture_images=generate_picture_images,
+            do_formula_enrichment=do_formula_enrichment,
+        )
 
     except Exception as e:
         return {
@@ -133,9 +97,10 @@ def convert_to_markdown(
         }
 
 
-@tool(parse_docstring=True)
-def convert_word_to_markdown(
+def _convert_word_to_markdown(
         source_path: str,
+        generate_picture_images: bool = False,
+        do_formula_enrichment: bool = False,
 ) -> dict[str, Any]:
     """将 Word 文件（DOC/DOCX）转换为 Markdown 格式。
 
@@ -144,6 +109,8 @@ def convert_word_to_markdown(
 
     Args:
         source_path: 要转换的 Word 文件路径（.doc 或 .docx）
+        generate_picture_images: 是否识别并提取图片（根据用户问题是否涉及视觉内容决定）
+        do_formula_enrichment: 是否识别公式（根据用户问题是否涉及数学公式决定）
 
     Returns:
         包含以下内容的字典：
@@ -192,7 +159,11 @@ def convert_word_to_markdown(
             }
 
         # 再调用 PDF 转 Markdown 的内部实现
-        return _convert_pdf_to_markdown_impl(pdf_path)
+        return _convert_pdf_to_markdown(
+            pdf_path,
+            generate_picture_images=generate_picture_images,
+            do_formula_enrichment=do_formula_enrichment,
+        )
 
     except Exception as e:
         return {
@@ -202,7 +173,86 @@ def convert_word_to_markdown(
         }
 
 
-def _convert_pdf_to_markdown_impl(source_path: str) -> dict[str, Any]:
+def _trip(path):
+    """
+    去除路径开头的 / 或 ./ 或 ../
+    """
+    if path is None:
+        return path
+    return path.lstrip("/").lstrip("./").lstrip("../")
+
+
+def _convert_via_remote_api(
+        source_path: str,
+        generate_picture_images: bool = False,
+        do_formula_enrichment: bool = False,
+) -> dict[str, Any]:
+    """使用远程 API 将文件转换为 Markdown 格式。
+
+    Args:
+        source_path: 源文件路径
+        generate_picture_images: 是否识别并提取图片
+        do_formula_enrichment: 是否识别公式
+
+    Returns:
+        包含转换结果的字典
+    """
+    backend = get_backend_per_thread({})
+    source_pathlib = backend._resolve_path(source_path)
+    output_file = str(source_pathlib.with_suffix(".md"))
+    api_base_url = "https://dcca.hhstu.edu.cn/transfer"
+
+    # 计算超时时间（AI 功能需要更长时间）
+    timeout = 1800 if (generate_picture_images or do_formula_enrichment) else 300
+
+    try:
+        # 使用远程 API 进行转换
+        with open(source_pathlib, 'rb') as f:
+            files = {'file': (source_pathlib.name, f, 'application/octet-stream')}
+            data = {
+                'guess_image': 'true' if generate_picture_images else 'false',
+                'guess_formula': 'true' if do_formula_enrichment else 'false'
+            }
+            response = requests.post(
+                f"{api_base_url}/api/to-markdown",
+                files=files,
+                data=data,
+                timeout=timeout,
+                verify=False
+            )
+
+        response.raise_for_status()
+
+        # 检查内容类型，拒绝 HTML 响应
+        content_type = response.headers.get('Content-Type', '')
+        if 'text/html' in content_type.lower():
+            return {
+                "success": False,
+                "error": "API returned HTML instead of Markdown (possible authentication error)",
+                "source_path": source_path,
+            }
+
+        # 保存 Markdown 内容
+        with open(output_file, 'wb') as f:
+            f.write(response.content)
+
+        return {
+            "success": True,
+            "source_path": source_path,
+            "output_file": output_file
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"remote API conversion failed: {str(e)}",
+            "source_path": source_path,
+        }
+
+
+def _convert_pdf_to_markdown(source_path: str,
+                             generate_picture_images: bool = False,
+                             do_formula_enrichment: bool = False, ) -> dict[str, Any]:
     """PDF 转 Markdown 的内部实现函数（不被 @tool 装饰）"""
     try:
         backend = get_backend_per_thread({})
@@ -225,6 +275,14 @@ def _convert_pdf_to_markdown_impl(source_path: str) -> dict[str, Any]:
                 "error": f"source file does not exist: {source_path}",
                 "source_path": source_path,
             }
+
+        # 如果需要图片提取或公式识别，使用远程 API 转换
+        if generate_picture_images or do_formula_enrichment:
+            return _convert_via_remote_api(
+                source_path=source_path,
+                generate_picture_images=generate_picture_images,
+                do_formula_enrichment=do_formula_enrichment,
+            )
 
         # 确定 Markdown 输出路径
         markdown_path = source_pathlib.with_suffix(".md")
@@ -263,38 +321,3 @@ def _convert_pdf_to_markdown_impl(source_path: str) -> dict[str, Any]:
             "error": f"PDF to Markdown conversion error: {str(e)}",
             "source_path": source_path,
         }
-
-
-@tool(parse_docstring=True)
-def convert_pdf_to_markdown(
-        source_path: str,
-) -> dict[str, Any]:
-    """将 PDF 文件转换为 Markdown 格式。
-
-    保留了原始文档的布局格式。转换后会生成与源文件同名但扩展名为 .md 的文件。
-
-    Args:
-        source_path: 要转换的 PDF 文件路径
-
-    Returns:
-        包含以下内容的字典：
-        - success: 转换是否成功
-        - source_path: 源 PDF 文件的路径
-        - output_file: 生成的 Markdown 文件路径
-        - error: 转换失败时的错误信息
-
-    Notes:
-        - 使用 -layout 参数保留原始布局
-        - 如果目标 Markdown 文件已存在，则直接使用现有文件
-        - Markdown 文件使用与源文件相同的名称，但扩展名改为 .md
-    """
-    return _convert_pdf_to_markdown_impl(source_path)
-
-
-def _trip(path):
-    """
-    去除路径开头的 / 或 ./ 或 ../
-    """
-    if path is None:
-        return path
-    return path.lstrip("/").lstrip("./").lstrip("../")

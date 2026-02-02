@@ -17,7 +17,7 @@ from langgraph_sdk import Auth
 from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
 from src.prompts import CONVERT_AGENT_INSTRUCTIONS, RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
-from src.tools.converts import convert_to_markdown, convert_pdf_to_markdown, convert_word_to_markdown
+from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_markdown
 from src.tools.think import think_tool
 from src.utils.util import get_backend_per_thread
@@ -55,7 +55,7 @@ convert_agent = SubAgent(
     name="文件转换子代理",
     description="用于将用户的源文件 PDF, DOCX, XLSX, PPTX, AsciiDoc 文件转换为 Markdown 格式以便研究，每次仅限一个文件。",
     system_prompt=CONVERT_AGENT_INSTRUCTIONS,
-    tools=[convert_pdf_to_markdown, convert_word_to_markdown, convert_to_markdown],
+    tools=[convert_to_markdown],
     middleware=[
         tool_limiter,
         # create_duplicate_call_prevention(get_backend_per_thread),

@@ -57,12 +57,12 @@ from deepagents.backends.protocol import ExecuteResponse
 # 这样可以避免在 safe_open 和 safe_os_open 中调用 tempfile.gettempdir() 导致死循环
 # (因为 tempfile.gettempdir() 内部会调用 os.open，而 os.open 已经被替换)
 
-# 🔧 定义基础系统路径白名单
 _allowed_system_paths = [
     Path('/etc/apache2/mime.types'),  # mimetypes 模块需要
     Path('/etc/mime.types'),           # 某些系统的 mime.types 文件
     Path('/private/etc/apache2/mime.types'),  # macOS 上 /etc 的实际路径
     Path('/private/etc/mime.types'),           # macOS 上 /etc 的实际路径
+    Path('/var/folders'),  # macOS 临时目录父目录
     Path(tempfile.gettempdir()).resolve(),  # 添加系统临时目录
 ]
 
@@ -500,28 +500,11 @@ class CodeExecutor:
             script_path = match_script.group(1).strip()
             args_str = match_script.group(2).strip() if match_script.group(2) else ''
             
-            # 🎯 检测并处理绝对路径和相对路径
-            from pathlib import Path as StdPath
-            std_path = StdPath(script_path)
-            
-            if std_path.is_absolute():
-                # 绝对路径：直接使用，但需要安全检查
-                # 将路径转换为 Path 对象并解析
-                abs_path = std_path.resolve()
-                try:
-                    # 检查绝对路径是否在 root_dir 内
-                    abs_path.relative_to(self.root_dir)
-                    # 在 root_dir 内，使用解析后的绝对路径
-                    script_path = str(abs_path)
-                except ValueError:
-                    # 不在 root_dir 内，仍然使用原路径
-                    # 后续会在 _read_script_file 中拒绝访问
-                    script_path = str(script_path)
-            else:
-                # 相对路径：去掉开头的斜杠，然后拼接到 root_dir
-                script_path = script_path.lstrip('/')
-                # 拼接 root_dir 前缀
-                script_path = str(self.root_dir / script_path)
+            # 🎯 统一处理：所有路径都先去掉开头的斜杠，然后拼接到 root_dir
+            # 这样 /scripts/a.py 和 scripts/a.py 都会被当作相对于 root_dir 的路径
+            script_path = script_path.lstrip('/')
+            # 拼接 root_dir 前缀
+            script_path = str(self.root_dir / script_path)
 
             # 解析参数字符串为列表(简单按空格分割，暂不支持引号)
             script_args = []
