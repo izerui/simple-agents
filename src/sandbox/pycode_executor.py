@@ -690,21 +690,26 @@ class CodeExecutor:
         # 这些方法直接调用系统底层接口,不经过 open() 拦截
         # 安全的文件 I/O 方法 (read_text, write_text, open, exists 等) 通过 io.open 保护
         FORBIDDEN_PATH_METHODS = [
-            'iterdir',   # 列出目录内容
-            'glob',      # 通配符匹配
-            'rglob',     # 递归通配符匹配
-            'unlink',    # 删除文件
-            'rmdir',     # 删除空目录
-            'mkdir',     # 创建目录
-            'rename',    # 重命名文件
-            'replace',   # 替换文件
-            'touch',     # 创建文件
-            'chmod',     # 修改权限
-            'lstat',     # 获取符号链接状态
-            'symlink',   # 创建符号链接
-            'hardlink_to', # 创建硬链接
-            'link_to',   # 创建链接
-            'absolute',  # 绝对路径 (可能导致沙箱外访问)
+            'iterdir',      # 列出目录内容
+            'glob',         # 通配符匹配
+            'rglob',        # 递归通配符匹配
+            'unlink',       # 删除文件
+            'rmdir',        # 删除空目录
+            'mkdir',        # 创建目录
+            'rename',       # 重命名文件
+            'replace',      # 替换文件
+            'touch',        # 创建文件
+            'chmod',        # 修改权限
+            'stat',         # 获取文件状态（可能泄露沙箱外文件信息）
+            'lstat',        # 获取符号链接状态（不解析链接）
+            'readlink',     # 读取符号链接目标（可能探测沙箱外路径）
+            'symlink',      # 创建符号链接
+            'hardlink_to',  # 创建硬链接
+            'link_to',      # 创建链接
+            'absolute',     # 绝对路径（可能导致沙箱外访问）
+            'cwd',          # 获取系统当前工作目录（泄露系统信息，而非沙箱路径）
+            'home',         # 获取用户主目录（泄露系统信息，可能指向沙箱外敏感目录）
+            'expanduser',   # 展开用户路径（可能指向沙箱外敏感目录）
         ]
 
         class SafetyChecker(ast.NodeVisitor):
