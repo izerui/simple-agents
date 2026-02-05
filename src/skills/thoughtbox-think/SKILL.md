@@ -1,9 +1,9 @@
 ---
-name: think
+name: thoughtbox-think
 description: Cognitive enhancement toolkit combining non-linear reasoning, mental models, and literate programming. Use for complex analysis, system design, debugging, deep learning, and research workflows.
 ---
 
-# Think Skill
+# thoughtbox-think Skill
 
 Orchestrate three MCP tools for structured reasoning.
 
