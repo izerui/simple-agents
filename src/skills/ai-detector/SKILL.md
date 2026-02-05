@@ -144,25 +144,26 @@ AI技术发展很快。有时候快得让人惊讶——
 ### 基础检测命令
 
 所有检测功能整合在 `ai_detector_all.py` 中：
+可以直接调用
 
 ```bash
 # 1. 快速检查摘要（AI率最高发区）
-python scripts/ai_detector_all.py abstract "摘要内容"
+python /skills/ai-detector/scripts/ai_detector_all.py abstract "摘要内容"
 
 # 2. 综合检测完整论文（推荐）
-python scripts/ai_detector_all.py comprehensive 论文.txt
+python /skills/ai-detector/scripts/ai_detector_all.py comprehensive 论文.txt
 
 # 3. AI词汇密度检测
-python scripts/ai_detector_all.py vocabulary 论文.txt
+python /skills/ai-detector/scripts/ai_detector_all.py vocabulary 论文.txt
 
 # 4. 句式突发性检测
-python scripts/ai_detector_all.py burstiness 论文.txt
+python /skills/ai-detector/scripts/ai_detector_all.py burstiness 论文.txt
 
 # 5. 改写攻击检测
-python scripts/ai_detector_all.py paraphrasing 论文.txt
+python /skills/ai-detector/scripts/ai_detector_all.py paraphrasing 论文.txt
 
 # 6. 批量检测各章节
-python scripts/ai_detector_all.py batch 章节*.txt -o report.json
+python /skills/ai-detector/scripts/ai_detector_all.py batch 章节*.txt -o report.json
 ```
 
 ### 学校标准工具对比

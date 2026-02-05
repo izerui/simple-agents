@@ -36,7 +36,7 @@
 
 ```bash
 # 基础位置
-python scripts/ai_detector_all.py <检测类型> <文件或文本>
+python /skills/ai-detector/scripts/ai_detector_all.py <检测类型> <文件或文本>
 ```
 
 ### 1. AI词汇密度检测
@@ -44,7 +44,7 @@ python scripts/ai_detector_all.py <检测类型> <文件或文本>
 **功能**：快速筛查，统计AI高频词汇
 
 ```bash
-python scripts/ai_detector_all.py vocabulary 论文.txt
+python /skills/ai-detector/scripts/ai_detector_all.py vocabulary 论文.txt
 ```
 
 **输出示例**：
@@ -86,7 +86,7 @@ AI词汇密度: 50.0 个/1000字
 **功能**：检测句子长度变化，识别公式化写作
 
 ```bash
-python scripts/ai_detector_all.py burstiness 论文.txt
+python /skills/ai-detector/scripts/ai_detector_all.py burstiness 论文.txt
 ```
 
 **输出示例**：
@@ -131,7 +131,7 @@ python scripts/ai_detector_all.py burstiness 论文.txt
 **功能**：检测是否使用改写工具（如Quillbot）
 
 ```bash
-python scripts/ai_detector_all.py paraphrasing 论文.txt
+python /skills/ai-detector/scripts/ai_detector_all.py paraphrasing 论文.txt
 ```
 
 **基于研究**：Parrot和DIPPER改写攻击检测
@@ -197,10 +197,10 @@ python scripts/ai_detector_all.py paraphrasing 论文.txt
 
 ```bash
 # 直接输入摘要文本
-python scripts/ai_detector_all.py abstract "本文采用问卷调查方式对大学生网络使用行为进行了调查..."
+python /skills/ai-detector/scripts/ai_detector_all.py abstract "本文采用问卷调查方式对大学生网络使用行为进行了调查..."
 
 # 或从文件读取
-python scripts/ai_detector_all.py abstract -f 摘要.txt
+python /skills/ai-detector/scripts/ai_detector_all.py abstract -f 摘要.txt
 ```
 
 **输出示例**：
@@ -235,7 +235,7 @@ AI概率评估: 60%
 **功能**：整合5种检测方法的全面分析
 
 ```bash
-python scripts/ai_detector_all.py comprehensive 论文.txt
+python /skills/ai-detector/scripts/ai_detector_all.py comprehensive 论文.txt
 ```
 
 **检测维度**：
@@ -309,13 +309,13 @@ AI词汇密度:
 
 ```bash
 # 检测多个文件
-python scripts/ai_detector_all.py batch 章节1.txt 章节2.txt 章节3.txt
+python /skills/ai-detector/scripts/ai_detector_all.py batch 章节1.txt 章节2.txt 章节3.txt
 
 # 检测整个目录
-python scripts/ai_detector_all.py batch 论文章节/*.txt
+python /skills/ai-detector/scripts/ai_detector_all.py batch 论文章节/*.txt
 
 # 输出JSON报告
-python scripts/ai_detector_all.py batch *.txt -o report.json
+python /skills/ai-detector/scripts/ai_detector_all.py batch *.txt -o report.json
 ```
 
 **输出示例**：
@@ -442,7 +442,7 @@ class ChineseAIDetector:
         }
 ```
 
-完整示例见：`scripts/example_api_usage.py`
+完整示例见：`/skills/ai-detector/scripts/example_api_usage.py`
 
 ---
 
@@ -452,16 +452,16 @@ class ChineseAIDetector:
 
 ```bash
 # 1. 快速检查摘要（AI率最高发区）
-python scripts/ai_detector_all.py abstract "摘要内容"
+python /skills/ai-detector/scripts/ai_detector_all.py abstract "摘要内容"
 
 # 2. 综合检测完整论文
-python scripts/ai_detector_all.py comprehensive 论文.txt
+python /skills/ai-detector/scripts/ai_detector_all.py comprehensive 论文.txt
 
 # 3. 批量检测各章节，定位问题
-python scripts/ai_detector_all.py batch 章节*.txt -o report.json
+python /skills/ai-detector/scripts/ai_detector_all.py batch 章节*.txt -o report.json
 
 # 4. 对高风险章节专项检测
-python scripts/ai_detector_all.py paraphrasing 高风险章节.txt
+python /skills/ai-detector/scripts/ai_detector_all.py paraphrasing 高风险章节.txt
 ```
 
 ---
