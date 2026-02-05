@@ -393,7 +393,7 @@ _safe_import_func = _get_safe_import()
 
 
 
-
+# 注意参考python黑客技术： https://hacktricks.xsx.tw/generic-methodologies-and-resources/python/bypass-python-sandboxes
 class CodeExecutor:
     """
     安全沙箱后端（只支持标准执行格式）
