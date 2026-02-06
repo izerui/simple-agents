@@ -54,9 +54,30 @@ class PaperDetectionReport:
         lines.append(f"- 总文字复制比：{self.detection_results.get('total_similarity', 'N/A')}")
         lines.append(f"- 去除引用文献复制比：{self.detection_results.get('similarity_without_citations', 'N/A')}")
         lines.append(f"- 去除本人已发表文献复制比：{self.detection_results.get('similarity_without_self', 'N/A')}")
+        if 'max_single_similarity_ratio' in self.detection_results:
+            lines.append(f"- 单篇最大文字复制比：{self.detection_results.get('max_single_similarity_ratio', 'N/A')}")
         if 'aigc_rate' in self.detection_results:
             lines.append(f"- AIGC总体生成率：{self.detection_results.get('aigc_rate', 'N/A')}")
+        if 'copy_part_percentage' in self.detection_results:
+            lines.append(f"- 文字复制部分：{self.detection_results.get('copy_part_percentage', 'N/A')}")
+            lines.append(f"- 无问题部分：{self.detection_results.get('no_problem_percentage', 'N/A')}")
         lines.append("")
+
+        # 字数统计详情
+        if 'duplicate_words' in self.detection_results:
+            lines.append("## 字数统计")
+            lines.append(f"- 总字数：{self.detection_results.get('total_words', 'N/A')}")
+            lines.append(f"- 总段落数：{self.detection_results.get('total_segments', 'N/A')}")
+            lines.append(f"- 重复字数：{self.detection_results.get('duplicate_words', 'N/A')}")
+            lines.append(f"- 疑似段落数：{self.detection_results.get('suspected_segment_count', 'N/A')}")
+            if 'max_single_duplicate_words' in self.detection_results:
+                lines.append(f"- 单篇最大重复字数：{self.detection_results.get('max_single_duplicate_words', 'N/A')} ({self.detection_results.get('max_single_duplicate_location', 'N/A')})")
+            lines.append(f"- 前部重合字数：{self.detection_results.get('front_overlap_words', 'N/A')}")
+            if self.detection_results.get('suspected_segment_count', 0) > 0:
+                lines.append(f"- 疑似段落最大重合字数：{self.detection_results.get('suspected_max_overlap_words', 'N/A')}")
+                lines.append(f"- 疑似段落最小重合字数：{self.detection_results.get('suspected_min_overlap_words', 'N/A')}")
+            lines.append("")
+
         lines.append("## 相似度分布")
         lines.append("| 相似度区间 | 段落数 | 字数 |")
         lines.append("|-----------|--------|------|")
@@ -67,6 +88,18 @@ class PaperDetectionReport:
             lines.append(f"| {range_name} | {data['count']} | {data['words']} |")
 
         lines.append("")
+
+        # 剽窃类型检测
+        if 'plagiarism_analysis' in self.detection_results:
+            plagiarism = self.detection_results['plagiarism_analysis']
+            if plagiarism.get('total_plagiarism_cases', 0) > 0:
+                lines.append("## 剽窃类型检测")
+                lines.append(f"- 疑似剽窃观点：{len(plagiarism.get('suspected_idea_plagiarism', []))} 处")
+                lines.append(f"- 疑似剽窃文字表述：{len(plagiarism.get('suspected_text_plagiarism', []))} 处")
+                lines.append(f"- 疑似整体剽窃：{len(plagiarism.get('suspected_overall_plagiarism', []))} 处")
+                lines.append(f"- 过度引用：{plagiarism.get('over_citation_count', 0)} 处")
+                lines.append("")
+
         lines.append("---")
         lines.append("*本报告由AI辅助生成，检测结果仅供参考，不代表最终学术评定。*")
 
@@ -93,9 +126,30 @@ class PaperDetectionReport:
         lines.append(f"- 总文字复制比：{self.detection_results.get('total_similarity', 'N/A')}")
         lines.append(f"- 去除引用文献复制比：{self.detection_results.get('similarity_without_citations', 'N/A')}")
         lines.append(f"- 去除本人已发表文献复制比：{self.detection_results.get('similarity_without_self', 'N/A')}")
+        if 'max_single_similarity_ratio' in self.detection_results:
+            lines.append(f"- 单篇最大文字复制比：{self.detection_results.get('max_single_similarity_ratio', 'N/A')}")
         if 'aigc_rate' in self.detection_results:
             lines.append(f"- AIGC总体生成率：{self.detection_results.get('aigc_rate', 'N/A')}")
+        if 'copy_part_percentage' in self.detection_results:
+            lines.append(f"- 文字复制部分：{self.detection_results.get('copy_part_percentage', 'N/A')}")
+            lines.append(f"- 无问题部分：{self.detection_results.get('no_problem_percentage', 'N/A')}")
         lines.append("")
+
+        # 字数统计详情
+        if 'duplicate_words' in self.detection_results:
+            lines.append("## 字数统计")
+            lines.append(f"- 总字数：{self.detection_results.get('total_words', 'N/A')}")
+            lines.append(f"- 总段落数：{self.detection_results.get('total_segments', 'N/A')}")
+            lines.append(f"- 重复字数：{self.detection_results.get('duplicate_words', 'N/A')}")
+            lines.append(f"- 疑似段落数：{self.detection_results.get('suspected_segment_count', 'N/A')}")
+            if 'max_single_duplicate_words' in self.detection_results:
+                lines.append(f"- 单篇最大重复字数：{self.detection_results.get('max_single_duplicate_words', 'N/A')} ({self.detection_results.get('max_single_duplicate_location', 'N/A')})")
+            lines.append(f"- 前部重合字数：{self.detection_results.get('front_overlap_words', 'N/A')}")
+            if self.detection_results.get('suspected_segment_count', 0) > 0:
+                lines.append(f"- 疑似段落最大重合字数：{self.detection_results.get('suspected_max_overlap_words', 'N/A')}")
+                lines.append(f"- 疑似段落最小重合字数：{self.detection_results.get('suspected_min_overlap_words', 'N/A')}")
+            lines.append("")
+
         lines.append("## 相似度分布")
         lines.append("| 相似度区间 | 段落数 | 字数 |")
         lines.append("|-----------|--------|------|")
@@ -106,6 +160,55 @@ class PaperDetectionReport:
             lines.append(f"| {range_name} | {data['count']} | {data['words']} |")
 
         lines.append("")
+
+        # 剽窃类型检测
+        if 'plagiarism_analysis' in self.detection_results:
+            plagiarism = self.detection_results['plagiarism_analysis']
+            if plagiarism.get('total_plagiarism_cases', 0) > 0 or plagiarism.get('over_citation_count', 0) > 0:
+                lines.append("## 剽窃类型检测")
+                lines.append(f"- 疑似剽窃观点：{len(plagiarism.get('suspected_idea_plagiarism', []))} 处")
+                lines.append(f"- 疑似剽窃文字表述：{len(plagiarism.get('suspected_text_plagiarism', []))} 处")
+                lines.append(f"- 疑似整体剽窃：{len(plagiarism.get('suspected_overall_plagiarism', []))} 处")
+                lines.append(f"- 过度引用：{plagiarism.get('over_citation_count', 0)} 处")
+                lines.append("")
+
+                # 详细列表
+                if plagiarism.get('suspected_idea_plagiarism'):
+                    lines.append("### 疑似剽窃观点详情")
+                    for i, item in enumerate(plagiarism['suspected_idea_plagiarism'], 1):
+                        lines.append(f"\n#### 案例 {i}")
+                        lines.append(f"- **位置**: {item.get('location', '未知')}")
+                        lines.append(f"- **描述**: {item.get('description', '')}")
+                        lines.append(f"- **置信度**: {item.get('confidence', 'N/A')}")
+                        lines.append(f"- **内容**: {item.get('content', '')[:100]}...")
+                    lines.append("")
+
+                if plagiarism.get('over_citation_segments'):
+                    lines.append("### 过度引用详情")
+                    for i, item in enumerate(plagiarism['over_citation_segments'], 1):
+                        lines.append(f"\n#### 片段 {i}")
+                        lines.append(f"- **位置**: {item.get('location', '未知')}")
+                        lines.append(f"- **引用数量**: {item.get('citation_count', 0)}")
+                        lines.append(f"- **内容**: {item.get('content', '')[:100]}...")
+                    lines.append("")
+
+        # 相似内容检测（表格、公式）
+        if 'similar_objects' in self.detection_results:
+            similar_objects = self.detection_results['similar_objects']
+            if similar_objects.get('table_count', 0) > 0 or similar_objects.get('formula_count', 0) > 0:
+                lines.append("## 相似内容检测")
+                lines.append(f"- 表格数量：{similar_objects.get('table_count', 0)}")
+                lines.append(f"- 公式数量：{similar_objects.get('formula_count', 0)}")
+                if similar_objects.get('similar_tables'):
+                    lines.append(f"- 疑似相似表格：{len(similar_objects['similar_tables'])} 项")
+                    for item in similar_objects['similar_tables']:
+                        lines.append(f"  - {item.get('issue', '')} (重复 {item.get('count', 0)} 次)")
+                if similar_objects.get('similar_formulas'):
+                    lines.append(f"- 疑似相似公式：{len(similar_objects['similar_formulas'])} 项")
+                    for item in similar_objects['similar_formulas']:
+                        lines.append(f"  - {item.get('issue', '')} (重复 {item.get('count', 0)} 次)")
+                lines.append("")
+
         lines.append("## 相似片段详情")
 
         similar_segments = self.detection_results.get('similar_segments', [])

@@ -1,10 +1,6 @@
 ---
 name: ai-detector
 description: 本科毕业论文AI率检测助手。基于困惑度、突发性分析等AI文本检测技术原理，帮助识别论文中的AI生成模式，提供降AI率修改建议。当分析毕业论文AI率、识别AI写作特征、提供降AI率建议时使用。包含改写攻击检测、水印检测技术、对抗攻击识别等前沿研究。
-allowed-tools:
-  - Read
-  - Write
-  - Edit
 ---
 
 # 本科毕业论文AI率检测助手
