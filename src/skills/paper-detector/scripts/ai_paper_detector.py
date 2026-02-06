@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Paper Detector - AI驱动的论文相似度和AIGC检测
 
@@ -66,9 +67,17 @@ class AIPaperDetector:
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
+
+            # 改进字数统计：更接近知网的统计方式
+            # 知网统计的是"字符数"（包括汉字、标点、数字、英文字母等）
+            # 不包括空格和换行符
+            content_for_count = content.replace(' ', '').replace('\n', '').replace('\r', '').replace('\t', '')
+            word_count = len(content_for_count)
+
             return {
                 "content": content,
-                "word_count": len(content),
+                "word_count": word_count,  # 使用改进的字数统计
+                "char_count": word_count,  # 添加字符数字段
                 "title": "",
                 "author": "",
                 "paragraph_count": len([p for p in content.split('\n') if p.strip()])
@@ -78,9 +87,15 @@ class AIPaperDetector:
             try:
                 with open(path, 'r') as f:
                     content = f.read()
+
+                # 同样使用改进的字数统计
+                content_for_count = content.replace(' ', '').replace('\n', '').replace('\r', '').replace('\t', '')
+                word_count = len(content_for_count)
+
                 return {
                     "content": content,
-                    "word_count": len(content),
+                    "word_count": word_count,  # 使用改进的字数统计
+                    "char_count": word_count,  # 添加字符数字段
                     "title": "",
                     "author": "",
                     "paragraph_count": len([p for p in content.split('\n') if p.strip()])
@@ -274,9 +289,10 @@ class AIPaperDetector:
 
     def _estimate_similarity(self, text: str) -> float:
         """
-        估算文本相似度（基于启发式方法）
+        估算文本相似度（基于启发式方法，优化后更接近知网检测）
 
         从0%基准开始，只对检测到的问题特征累积计分
+        大幅降低各项评分权重，使其更接近真实查重结果
 
         Args:
             text: 文本内容
@@ -286,7 +302,8 @@ class AIPaperDetector:
         """
         score = 0.0  # 从0%开始，纯净基准
 
-        # 检查过度使用常见学术短语（仅当过度使用时计分）
+        # 检查过度使用常见学术短语（仅当异常过度使用时计分）
+        # 降低权重：从3%降到0.5%，阈值从5提高到8
         common_phrases = [
             "综上所述", "因此", "然而", "此外", "另外",
             "研究表明", "根据", "可以看出", "由此可见",
@@ -294,29 +311,51 @@ class AIPaperDetector:
         ]
 
         phrase_count = sum(1 for phrase in common_phrases if phrase in text)
-        # 只有超过正常使用频率才计分（正常3-5个）
-        if phrase_count > 5:
-            score += (phrase_count - 5) * 3
+        # 只有超过正常使用频率才计分（正常5-8个）
+        if phrase_count > 8:
+            score += (phrase_count - 8) * 0.5  # 大幅降低权重
 
         # 检查数字和统计数据的异常密度（可能复制数据）
+        # 降低权重：从8%降到2%，阈值从0.10提高到0.15
         digit_ratio = sum(c.isdigit() for c in text) / len(text) if text else 0
-        if digit_ratio > 0.10:  # 超过10%认为是异常
-            score += 8
+        if digit_ratio > 0.15:  # 超过15%认为是异常（原10%）
+            score += 2  # 权重大幅降低（原8%）
 
         # 检查引用标记（引用未标注才会增加相似度）
+        # 降低权重：从1.5%降到0.3%
         citation_count = text.count('[')
-        # 每个引用+1.5%，但引用过多也要惩罚
         if citation_count > 0:
-            score += citation_count * 1.5
-        # 引用密度过高（每100字超过5个引用）
-        if len(text) > 0 and citation_count / len(text) * 100 > 5:
-            score += 10
+            score += citation_count * 0.3  # 大幅降低权重（原1.5%）
+        # 引用密度过高（每100字超过8个引用）
+        # 降低权重：从10%降到3%，阈值从5提高到8
+        if len(text) > 0 and citation_count / len(text) * 100 > 8:
+            score += 3  # 权重降低（原10%）
 
         # 检查专业术语密度（仅过度密集时计分）
+        # 降低权重：从2%降到0.5%，阈值从4提高到7
         technical_words = ['数据', '分析', '方法', '模型', '算法', '实验', '结果']
         tech_count = sum(1 for word in technical_words if word in text)
-        if tech_count > 4:  # 超过4个才认为过度使用
-            score += (tech_count - 4) * 2
+        if tech_count > 7:  # 超过7个才认为过度使用（原4个）
+            score += (tech_count - 7) * 0.5  # 权重大幅降低（原2%）
+
+        # 新增：检查句式重复度（只有完全相同的长句才计分）
+        sentences = [s.strip() for s in text.split('。') if s.strip()]
+        if sentences:
+            # 检查是否有高度相似的长句
+            sentence_set = set(sentences)
+            if len(sentence_set) < len(sentences) * 0.8:  # 重复率超过20%
+                score += 1  # 仅轻微惩罚
+
+        # 新增：检查连续重复的词汇模式（可能的复制粘贴）
+        # 使用滑动窗口检查是否有连续的3个词重复出现
+        words = text.split()
+        if len(words) > 10:
+            for i in range(len(words) - 5):
+                phrase = ' '.join(words[i:i+5])
+                # 如果这个5词短语在文本中出现超过2次
+                if text.count(phrase) > 2:
+                    score += 0.5
+                    break  # 只计一次
 
         return min(score, 100.0)  # 最高不超过100%
 
@@ -413,9 +452,10 @@ class AIPaperDetector:
 
     def _estimate_aigc_probability(self, text: str) -> float:
         """
-        估算AIGC生成概率
+        估算AIGC生成概率（优化后，减少误判）
 
         从0%基准开始，只对检测到的问题特征累积计分
+        大幅降低各项评分权重，减少对正常学术写作的误判
 
         Returns:
             AIGC生成概率 (0-100)
@@ -423,19 +463,21 @@ class AIPaperDetector:
         probability = 0.0  # 从0%开始，纯净基准
 
         # 检查句式规整度（仅当异常规整时计分）
+        # 降低权重：从20%/10%降到8%/4%，阈值从30/50提高到20/40
         sentences = [s.strip() for s in text.split('。') if s.strip()]
         if sentences:
             sentence_lengths = [len(s) for s in sentences]
             avg_length = sum(sentence_lengths) / len(sentence_lengths)
             length_variance = sum((l - avg_length) ** 2 for l in sentence_lengths) / len(sentence_lengths)
 
-            # 句式过于规整（方差<30）可能是由AI生成
-            if length_variance < 30:
-                probability += 20
-            elif length_variance < 50:
-                probability += 10
+            # 句式过于规整（方差<20）可能是由AI生成（阈值从30提高到20）
+            if length_variance < 20:
+                probability += 8  # 权重降低（原20%）
+            elif length_variance < 40:  # 阈值从50提高到40
+                probability += 4  # 权重降低（原10%）
 
         # 检查AI常见表达（仅当出现时计分）
+        # 降低权重：从8%降到2%
         ai_phrases = [
             "在当今社会", "随着科技的发展", "众所周知",
             "值得注意的是", "需要指出的是", "总的来说",
@@ -443,24 +485,42 @@ class AIPaperDetector:
         ]
 
         ai_phrase_count = sum(1 for phrase in ai_phrases if phrase in text)
-        probability += ai_phrase_count * 8  # 每个AI常见短语+8%
+        probability += ai_phrase_count * 2  # 权重大幅降低（原8%）
 
         # 检查内容深度（仅当缺乏具体内容时计分）
+        # 降低权重：从15%降到5%，增加更多豁免条件
         if len(text) > 200:
             # 分析是否有具体数据和细节
             has_specifics = (
                 re.search(r'\d+%', text) or
                 re.search(r'\d+\s*[个项人次]', text) or
-                '例如' in text or '比如' in text
+                re.search(r'\d+\.\d+', text) or  # 小数也算具体数据
+                '例如' in text or '比如' in text or
+                '如图' in text or '如表' in text or  # 图表引用也算具体
+                '实验' in text or '测试' in text  # 提到实验也算具体
             )
             if not has_specifics:
-                probability += 15
+                probability += 5  # 权重降低（原15%）
 
         # 检查过度使用的情感色彩词
+        # 降低权重：从5%降到1.5%，阈值从1提高到2
         emotional_words = ['非常重要', '十分关键', '极其重要', '意义重大', '尤为']
         emotion_count = sum(1 for word in emotional_words if word in text)
-        if emotion_count > 1:  # 超过1个才认为过度使用
-            probability += (emotion_count - 1) * 5
+        if emotion_count > 2:  # 超过2个才认为过度使用（原1个）
+            probability += (emotion_count - 2) * 1.5  # 权重降低（原5%）
+
+        # 新增：检查逻辑连接词的使用（过度使用连接词是AI特征）
+        # 但仅当密度异常高时才计分
+        logic_connectors = ['因此', '所以', '然而', '此外', '另外', '再者']
+        connector_count = sum(1 for conn in logic_connectors if conn in text)
+        # 每100字超过3个连接词才算异常（原没有阈值）
+        if len(text) > 0 and connector_count / len(text) * 100 > 3:
+            probability += 3  # 轻微惩罚
+
+        # 新增：检查是否有个性化表达（有则降低AIGC概率）
+        personal_markers = ['我认为', '笔者认为', '本研究', '我们的发现', '我们发现']
+        if any(marker in text for marker in personal_markers):
+            probability = max(0, probability - 5)  # 降低5个百分点
 
         return min(probability, 100.0)
 
