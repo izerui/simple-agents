@@ -417,14 +417,10 @@ class PaperDetector:
         # 识别风险因素
         risk_factors = self._identify_aigc_factors(segment)
 
-        # 生成建议
-        suggestions = self._generate_aigc_suggestions(probability)
-
         return {
             "aigc_probability": probability,
             "risk_level": risk_level,
-            "risk_factors": risk_factors,
-            "suggestions": suggestions
+            "risk_factors": risk_factors
         }
 
     def _identify_aigc_factors(self, text: str) -> List[str]:
@@ -711,8 +707,7 @@ class PaperDetector:
         aigc_analysis = {
             "total_rate": f"{avg_aigc:.1f}%",
             "risk_level": self._get_overall_risk_level(avg_aigc),
-            "high_risk_segments": aigc_results,
-            "suggestions": self._generate_overall_suggestions(avg_aigc)
+            "high_risk_segments": aigc_results
         }
 
         print(f"     相似度检测完成: {len(similar_segments)} 个相似片段")
