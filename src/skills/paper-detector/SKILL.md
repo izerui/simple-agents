@@ -18,6 +18,9 @@ description: 专业的学术论文检测工具，采用混合检测架构（规�
 python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md
 ```
 
+注意:
+paper.md 路径为相对沙箱路径,一般不需带前缀`/`
+
 **检测架构**：
 - **规则检测（脚本）**：快速预处理，提供基础数据
 - **Claude AI深度分析（技能）**：语义理解，以AI结果为准

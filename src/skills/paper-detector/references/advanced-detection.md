@@ -607,10 +607,6 @@ TV(P, Q) = 0.5 × Σ |P(x) - Q(x)|
 - "On the Detectability of Large Language Model Watermarks" (2023)
 - "Defending Against Machine-Generated Paraphrasing Attacks" (2024)
 
-**技术文档**：
-- [英文研究资源](english-research-resources.md)
-- [中文降AI率策略](chinese-resources.md)
-
 ---
 
 返回主技能文档：[SKILL.md](../SKILL.md)
