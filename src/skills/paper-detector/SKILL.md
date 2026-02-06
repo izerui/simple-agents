@@ -12,52 +12,19 @@ description: 专业的学术论文检测工具，采用混合检测架构（规�
 
 ## 快速开始
 
-### 检测架构
-
-**混合检测模式**：
-```
-规则检测（脚本预处理）→ Claude AI深度分析 → 以AI结果为准
-     ↓                        ↓                  ↓
-  快速扫描              Claude语义理解      专业准确
-  基础数据              深度分析            最终结果
-```
-
-### 一键检测（推荐）⭐
+### 一键检测⭐
 
 ```bash
-# 执行检测（脚本预处理 + Claude AI深度分析）
 python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md
 ```
 
+**检测架构**：
+- **规则检测（脚本）**：快速预处理，提供基础数据
+- **Claude AI深度分析（技能）**：语义理解，以AI结果为准
+
 **输出文件**：
-- `detection_result_*.json` - 检测结果（JSON格式，包含Claude AI分析标记）
+- `detection_result_*.json` - 检测结果（JSON格式）
 - `reports/论文名_检测报告.md` - 检测报告
-
-### Python API
-
-```python
-import sys
-sys.path.insert(0, '/skills/paper-detector/scripts')
-from one_click_detect_standalone import PaperDetector, ReportGenerator
-
-# 创建检测器（自动启用Claude AI深度分析）
-detector = PaperDetector()
-
-# 执行检测（脚本预处理 + Claude AI深度分析）
-result = detector.analyze_paper("paper.md")
-
-# 生成报告
-report_gen = ReportGenerator(
-    result['paper_info'],
-    result['detection_results']
-)
-
-# 生成检测报告
-report = report_gen.generate_report()
-
-# 保存报告
-report_gen.save_report(report, "检测报告.md")
-```
 
 ## 核心功能
 
@@ -153,105 +120,22 @@ report_gen.save_report(report, "检测报告.md")
 - ✅ **可追溯性**：每个步骤都有完整的执行日志
 - ✅ **错误处理**：任何步骤失败都会中断流程
 
-## 使用场景
+## 检测项覆盖
 
-### 场景1：论文预检
+### 29个核心检测项
 
-提交论文前进行自查：
+- **知网指标（4）**：总文字复制比、去除引用文献复制比、去除本人已发表文献复制比、单篇最大文字复制比
+- **维普指标（3）**：引用率、复写率、自写率
+- **字数统计（8）**：总字数、总段落数、重复字数、疑似段落数、单篇最大重复字数及位置、前部重合字数、疑似段落最大/最小重合字数
+- **百分比划分（2）**：文字复制部分、无问题部分
+- **剽窃类型（4）**：疑似剽窃观点、疑似剽窃文字表述、疑似整体剽窃、过度引用
+- **相似内容（2）**：相似表格、相似公式
+- **AIGC检测（2）**：总体生成率、各章节生成率
+- **增强AI检测（3）**：AI词汇密度、句式突发性、改写攻击
 
-```python
-result = detector.analyze_paper("thesis.md")
+## 输出结果
 
-# 检查是否符合要求
-similarity = float(result['detection_results']['total_similarity'].rstrip('%'))
-aigc = float(result['detection_results']['aigc_rate'].rstrip('%'))
-
-if similarity > 30:
-    print("⚠️ 相似度过高！需要修改。")
-if aigc > 10:
-    print("⚠️ AIGC内容过高！需要修改。")
-```
-
-### 场景2：论文质量分析
-
-多维度分析论文质量：
-
-```python
-# 分析剽窃类型
-plagiarism = result['detection_results']['plagiarism_analysis']
-
-print(f"观点剽窃: {len(plagiarism['suspected_idea_plagiarism'])} 处")
-print(f"文字表述剽窃: {len(plagiarism['suspected_text_plagiarism'])} 处")
-print(f"整体剽窃: {len(plagiarism['suspected_overall_plagiarism'])} 处")
-print(f"过度引用: {plagiarism['over_citation_count']} 处")
-```
-
-### 场景3：增强AI分析
-
-进行更深入的AI内容分析：
-
-```python
-result = detector.analyze_paper("paper.md", enhanced_ai=True)
-
-# 访问增强AI结果
-enhanced = result['detection_results']['enhanced_ai_results']
-
-print(f"AI词汇密度: {enhanced['vocabulary']['density_per_1000']} 个/1000字")
-print(f"句式突发性CV: {enhanced['burstiness']['cv']}")
-print(f"改写攻击风险: {enhanced['paraphrasing']['risk_level']}")
-print(f"综合风险: {enhanced['comprehensive']['overall_risk']}")
-```
-
-### 场景4：批量处理
-
-批量处理多个论文文件：
-
-```bash
-# 使用脚本批量处理
-for file in papers/*.md; do
-    python3 scripts/one_click_detect_standalone.py "$file"
-done
-```
-
-## 输出示例
-
-### 控制台输出
-
-```
-======================================================================
-🔍 论文检测流程启动
-======================================================================
-⚠️  强制模式：将执行所有 12 个检测步骤
-📁 文件路径: paper.md
-🤖 增强AI检测: 关闭
-
-📍 步骤 1/12: 文档读取与预处理
-----------------------------------------------------------------------
-  📖 读取文档内容...
-  ✅ 成功读取文档
-     - 字数: 41593
-     - 段落数: 156
-
-...
-
-======================================================================
-✅ 检测流程全部完成
-======================================================================
-
-论文信息:
-  题目: 未知
-  作者: 未知
-  字数: 41593
-
-检测结果:
-  总文字复制比: 5.2%
-  去除引用文献复制比: 4.8%
-  去除本人已发表文献复制比: 5.2%
-  单篇最大文字复制比: 1.2%
-  AIGC总体生成率: 8.5%
-```
-
-### 检测结果结构
+### JSON结果结构
 
 ```json
 {
@@ -263,32 +147,23 @@ done
   },
   "detection_results": {
     "total_similarity": "5.2%",
-    "similarity_without_citations": "4.8%",
-    "similarity_without_self": "5.2%",
-    "max_single_similarity_ratio": "1.2%",
-    "citation_rate": "12.5%",
-    "copy_rate": "3.8%",
-    "original_rate": "83.7%",
-    "total_words": 41593,
-    "duplicate_words": 2163,
-    "suspected_segment_count": 8,
     "aigc_rate": "8.5%",
-    "distribution": {
-      "≥50%": {"count": 0, "words": 0},
-      "40%-50%": {"count": 1, "words": 150},
-      "30%-40%": {"count": 2, "words": 280},
-      "<30%": {"count": 153, "words": 41163}
-    }
-  },
-  "metadata": {
-    "detection_id": "PD20250207123456789",
-    "detection_time": "2025-02-07 14:30:25",
-    "workflow_mode": "enabled",
-    "workflow_steps_completed": 12,
-    "workflow_success_rate": "100.0%"
+    "similar_segments": [...],
+    "plagiarism_analysis": {...}
   }
 }
 ```
+
+### 报告内容
+
+- 基本信息
+- 检测结果汇总（知网指标、维普指标、AIGC指标）
+- 字数统计
+- 相似度分布
+- 剽窃类型检测
+- 相似片段详情
+- AIGC检测分析
+- 相似内容检测
 
 ## 参考标准
 
@@ -336,161 +211,7 @@ done
   - AIGC检测：语言特征（规则）+ 内容特征+ 结构特征（Claude AI）
 - **AI分析**：Claude AI深度分析由技能自动调用，无需额外配置
 
-## 常见问题
+## 参考文档
 
-### 问题：误报率较高
-
-**症状**：正常内容被标记为相似或AI生成
-
-**解决方案**：
-1. 确保引用使用[1]或(作者, 年份)格式标记
-2. 增加个人观点和分析
-3. 使用多样的句式结构
-4. 包含具体的数据和案例
-
-### 问题：工作流执行失败
-
-**症状**：检测在某一步骤停止
-
-**解决方案**：
-```python
-# 检查哪个步骤失败
-workflow_info = result.get("workflow_info", {})
-for step_result in workflow_info.get('steps_summary', []):
-    if not step_result['success']:
-        print(f"失败步骤: {step_result['step_name']}")
-        print(f"错误: {step_result['error']}")
-
-# 尝试使用传统模式（不推荐）
-result = detector.analyze_paper("paper.md", use_workflow=False)
-```
-
-### 问题：处理速度慢
-
-**症状**：大论文检测时间过长
-
-**解决方案**：
-1. 将大论文拆分为章节
-2. 如不需要可禁用增强AI检测
-3. 确保系统资源充足
-
-## 测试验证
-
-### 验证检测项
-
-```python
-# 验证所有核心检测项存在
-required_items = [
-    "total_similarity",
-    "similarity_without_citations",
-    "similarity_without_self",
-    "max_single_similarity_ratio",
-    "citation_rate",
-    "copy_rate",
-    "original_rate",
-    "aigc_rate"
-]
-
-detection_results = result["detection_results"]
-
-missing = [item for item in required_items if item not in detection_results]
-
-if missing:
-    print(f"❌ 缺少检测项: {missing}")
-else:
-    print("✅ 所有核心检测项都存在")
-```
-
-### 验证检测项
-
-```python
-# 验证所有核心检测项存在
-required_items = [
-    "total_similarity",
-    "similarity_without_citations",
-    "citation_rate",
-    "copy_rate",
-    "original_rate",
-    "total_words",
-    "duplicate_words",
-    "aigc_rate"
-]
-
-detection_results = result["detection_results"]
-
-missing = [item for item in required_items if item not in detection_results]
-
-if missing:
-    print(f"❌ 缺少检测项: {missing}")
-else:
-    print("✅ 所有核心检测项都存在")
-```
-
-## 高级主题
-
-### 自定义工作流
-
-```python
-# 直接导入独立脚本中的类
-import sys
-sys.path.insert(0, '/skills/paper-detector/scripts')
-from one_click_detect_standalone import PaperDetector
-
-# 创建检测器
-detector = PaperDetector()
-
-# 执行检测
-result = detector.analyze_paper("paper.md")
-```
-
-**参考文档**：
-- `references/detection_workflow.md` - 工作流规范
-- `references/detection_methods.md` - 检测方法原理
-
-## 文档资源
-
-### 核心文档
-
-- **检测流程规范**：`references/detection_workflow.md` - 12个强制步骤详细说明 + 29个核心检测项清单
-- **检测方法与原理**：`references/detection_methods.md` - 检测算法、判定标准、技术原理
-
-### 进阶文档
-
-- **前沿技术**：`references/advanced-detection.md` - 最新检测技术
-- **中文资源**：`references/chinese-resources.md` - 中文论文特点
-- **工具指南**：`references/tools-guide.md` - 检测工具对比
-
-## 版本历史
-
-### v3.0 - Claude AI深度分析版 (2025-02-07)
-
-**重大更新**：
-- ✅ **混合检测架构**：规则预处理 + Claude AI深度分析
-- ✅ **Claude AI语义理解**：调用Claude大模型进行专业分析
-- ✅ **以AI结果为准**：Claude AI分析结果覆盖规则检测结果
-- ✅ **技能内置调用**：无需配置API密钥，自动调用Claude分析
-- ✅ 强制工作流模式，12个强制步骤
-- ✅ 完全覆盖29个核心检测项
-
-### v2.0 - 工作流版
-
-**功能**：
-- 强制工作流模式，12个强制步骤
-- 完全覆盖29个核心检测项
-- 增强AI检测（增加3项）
-- 完整的步骤日志和错误处理
-
-### v1.0 - 传统版
-
-**功能**：
-- 基础相似度和AIGC检测
-- 剽窃类型检测
-- 报告生成
-- 保留向后兼容性
-
-## 技术支持
-
-如有问题、疑问或贡献意向：
-- 查看 `references/` 目录中的文档
-- 阅读 `references/detection_workflow.md` 了解详细工作流信息
-- 阅读 `references/detection_methods.md` 了解检测方法原理
+- **检测流程规范**：`references/detection_workflow.md` - 12个强制步骤详细说明 + 29个核心检测项
+- **高级检测技术**：`references/advanced-detection.md` - 最新检测技术研究

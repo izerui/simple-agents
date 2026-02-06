@@ -769,6 +769,5 @@
 
 ### C. 相关文档
 
-- **检测方法与原理**：`references/detection_methods.md` - 检测算法、判定标准、技术原理
 - **技能说明文档**：`SKILL.md` - 技能使用指南和快速开始
 - **高级检测技术**：`references/advanced-detection.md` - 最新检测技术研究

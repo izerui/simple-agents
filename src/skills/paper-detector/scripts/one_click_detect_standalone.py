@@ -1127,17 +1127,16 @@ def main():
     print("📚 论文检测 - 规则预处理 + Claude AI深度分析")
     print("=" * 70)
     print()
-    print("检测模式：")
-    print("  1. 规则检测（脚本）：快速预处理，提供基础数据")
-    print("  2. Claude AI深度分析（技能）：语义理解，以AI结果为准")
-    print()
 
     # 检查参数
     if len(sys.argv) < 2:
-        print("用法: python3 one_click_detect_standalone.py <论文文件路径>")
+        print("❌ 错误: 缺少论文文件路径")
+        print()
+        print("用法: python3 scripts/one_click_detect_standalone.py <论文文件>")
         print()
         print("示例:")
-        print("  python3 one_click_detect_standalone.py paper.md")
+        print("  python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md")
+        print("  python3 /skills/paper-detector/scripts/one_click_detect_standalone.py pager.md")
         sys.exit(1)
 
     paper_file = sys.argv[1]
@@ -1148,6 +1147,10 @@ def main():
         sys.exit(1)
 
     print(f"📄 论文文件: {paper_file}")
+    print()
+    print("检测模式：")
+    print("  • 规则检测（脚本）：快速预处理，提供基础数据")
+    print("  • Claude AI深度分析（技能）：语义理解，以AI结果为准")
     print()
 
     try:
