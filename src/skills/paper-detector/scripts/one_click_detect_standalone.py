@@ -1,21 +1,31 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Paper Detector - 一键论文检测（完全独立版本）
+Paper Detector - 论文检测（混合架构：规则预处理 + AI深度分析）
 
-这是一个完全独立的脚本，包含所有检测和报告生成功能，
-无需依赖其他模块文件。
+检测架构：
+1. 规则检测：快速预处理，提供基础数据
+2. AI深度分析：语义理解，以AI结果为准
 """
 
 import sys
 import re
 import json
-import hashlib
+import os
 import random
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 from enum import Enum
+
+# 尝试导入AI模型依赖
+try:
+    import anthropic
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+    print("⚠️  警告: 未安装 anthropic 库，AI深度分析功能不可用")
+    print("   安装命令: pip install anthropic")
 
 
 # ============================================================================
@@ -29,6 +39,11 @@ SIMILARITY_THRESHOLDS = {
     'medium': 40,
     'low': 30
 }
+
+# AI分析配置
+AI_MODEL = "claude-3-5-sonnet-20241022"  # 使用Claude 3.5 Sonnet
+MAX_TOKENS = 4096
+TEMPERATURE = 0.3  # 较低温度保证结果稳定
 
 
 # ============================================================================
@@ -51,17 +66,243 @@ class DetectionStep(Enum):
     REPORT_GENERATION = "step12_report_generation"
 
 
+class DetectionMode(Enum):
+    """检测模式"""
+    RULES_ONLY = "rules_only"  # 仅规则检测（快速）
+    AI_DEEP = "ai_deep"  # AI深度分析（准确，以AI结果为准）
+    HYBRID = "hybrid"  # 混合模式：规则预处理 + AI深度分析
+
+
+# ============================================================================
+# AI分析器类
+# ============================================================================
+
+class AIAnalyzer:
+    """AI深度分析器"""
+
+    def __init__(self, api_key: str = None):
+        if not AI_AVAILABLE:
+            raise RuntimeError("anthropic 库未安装，无法使用AI分析功能")
+
+        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        if not self.api_key:
+            raise ValueError("未设置 ANTHROPIC_API_KEY 环境变量")
+
+        self.client = anthropic.Anthropic(api_key=self.api_key)
+
+    def analyze_similarity(self, text: str, context: str = "") -> Dict:
+        """
+        AI深度相似度分析
+
+        分析文本与已有文献的相似度，包括：
+        - 文字相似度
+        - 语义相似度
+        - 论点结构相似度
+        - 数据/案例相似度
+        """
+        prompt = f"""你是一个专业的论文查重分析专家，类似知网、维普的检测系统。
+
+请分析以下文本片段的相似度情况：
+
+**待分析文本**：
+```
+{text[:2000]}
+```
+
+**上下文**（如有）：
+{context[:500]}
+
+**分析要求**：
+1. 从0%基准开始分析（完全原创=0%）
+2. 只对确实存在相似特征的部分累积计分
+3. 综合考虑以下维度：
+   - 文字表述相似度（直接复制、简单改写）
+   - 语义逻辑相似度（论点结构、论证逻辑）
+   - 数据案例相似度（数据、图表、案例）
+   - 引用规范程度（正确引用、过度引用）
+
+**输出JSON格式**：
+```json
+{{
+    "similarity_score": 相似度百分比(0-100),
+    "confidence": "high/medium/low",
+    "analysis": {{
+        "text_similarity": 文字相似度(0-100),
+        "semantic_similarity": 语义相似度(0-100),
+        "structure_similarity": 结构相似度(0-100),
+        "citation_quality": "excellent/good/fair/poor"
+    }},
+    "risk_factors": ["风险因素1", "风险因素2"],
+    "source_types": ["可能来源类型1", "可能来源类型2"],
+    "detailed_analysis": "详细分析说明"
+}}
+```
+
+请以JSON格式输出分析结果："""
+
+        try:
+            response = self.client.messages.create(
+                model=AI_MODEL,
+                max_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            result_text = response.content[0].text
+            # 提取JSON部分
+            json_match = re.search(r'\{[\s\S]*\}', result_text)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                return {"error": "AI返回格式错误", "raw_response": result_text}
+
+        except Exception as e:
+            return {"error": f"AI分析失败: {str(e)}"}
+
+    def analyze_aigc(self, text: str, context: str = "") -> Dict:
+        """
+        AI生成内容深度分析
+
+        检测文本是否由AI生成，包括：
+        - 写作风格分析
+        - 逻辑结构分析
+        - 语言特征分析
+        """
+        prompt = f"""你是一个专业的AI生成内容检测专家。
+
+请分析以下文本片段的AI生成可能性：
+
+**待分析文本**：
+```
+{text[:2000]}
+```
+
+**上下文**（如有）：
+{context[:500]}
+
+**分析要求**：
+1. 从0%基准开始（完全人工撰写=0%）
+2. 只对确实存在AI特征的部分累积计分
+3. 综合分析以下维度：
+   - 语言特征（句式规整度、词汇丰富度）
+   - 内容特征（个人观点、具体案例、数据支撑）
+   - 结构特征（逻辑连接、段落组织）
+   - 写作风格（公式化、模板化程度）
+
+**输出JSON格式**：
+```json
+{{
+    "aigc_probability": AI生成概率(0-100),
+    "confidence": "high/medium/low",
+    "analysis": {{
+        "language_regularity": 语言规整度(0-100),
+        "content_depth": 内容深度(0-100),
+        "structure_rigor": 结构严谨度(0-100),
+        "style_consistency": 风格一致性(0-100)
+    }},
+    "risk_factors": ["AI特征1", "AI特征2"],
+    "human_indicators": ["人类特征1", "人类特征2"],
+    "detailed_analysis": "详细分析说明"
+}}
+```
+
+请以JSON格式输出分析结果："""
+
+        try:
+            response = self.client.messages.create(
+                model=AI_MODEL,
+                max_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            result_text = response.content[0].text
+            json_match = re.search(r'\{[\s\S]*\}', result_text)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                return {"error": "AI返回格式错误", "raw_response": result_text}
+
+        except Exception as e:
+            return {"error": f"AI分析失败: {str(e)}"}
+
+    def analyze_plagiarism_type(self, text: str, similarity_score: float) -> Dict:
+        """
+        剽窃类型AI分析
+        """
+        prompt = f"""你是一个专业的学术不端检测专家。
+
+请分析以下文本的剽窃类型：
+
+**待分析文本**：
+```
+{text[:2000]}
+```
+
+**相似度**: {similarity_score}%
+
+**剽窃类型定义**：
+1. 观点剽窃：论点结构、论证逻辑相似
+2. 文字表述剽窃：文字高度相似，缺乏原创改写
+3. 整体剽窃：大段内容高度相似
+4. 过度引用：引用密度过高
+
+**输出JSON格式**：
+```json
+{{
+    "plagiarism_type": "观点剽窃/文字表述剽窃/整体剽窃/过度引用/无",
+    "confidence": "high/medium/low",
+    "evidence": ["证据1", "证据2"],
+    "detailed_analysis": "详细分析说明"
+}}
+```
+
+请以JSON格式输出分析结果："""
+
+        try:
+            response = self.client.messages.create(
+                model=AI_MODEL,
+                max_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            result_text = response.content[0].text
+            json_match = re.search(r'\{[\s\S]*\}', result_text)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                return {"error": "AI返回格式错误", "raw_response": result_text}
+
+        except Exception as e:
+            return {"error": f"AI分析失败: {str(e)}"}
+
+
 # ============================================================================
 # 核心检测类
 # ============================================================================
 
 class PaperDetector:
-    """论文检测器 - 完整实现"""
+    """论文检测器 - 混合架构：规则预处理 + AI深度分析"""
 
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, mode: DetectionMode = DetectionMode.HYBRID):
         self.api_key = api_key
+        self.mode = mode
         self.detection_id = self._generate_detection_id()
         self.detection_time = datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+
+        # 初始化AI分析器
+        if mode in [DetectionMode.AI_DEEP, DetectionMode.HYBRID]:
+            try:
+                self.ai_analyzer = AIAnalyzer(api_key)
+                self.ai_enabled = True
+            except Exception as e:
+                print(f"⚠️  AI分析器初始化失败: {e}")
+                print("   将使用规则检测模式")
+                self.ai_enabled = False
+                self.mode = DetectionMode.RULES_ONLY
+        else:
+            self.ai_enabled = False
 
     def _generate_detection_id(self) -> str:
         """生成检测编号"""
@@ -281,7 +522,7 @@ class PaperDetector:
 
         return min(score, 100.0)
 
-    def analyze_similarity(self, segment: str) -> Dict:
+    def _analyze_similarity_rules(self, segment: str) -> Dict:
         """分析文本片段的相似度"""
         return {
             "similarity_score": self._estimate_similarity(segment),
@@ -398,7 +639,7 @@ class PaperDetector:
 
         return min(probability, 100.0)
 
-    def detect_aigc(self, segment: str) -> Dict:
+    def _detect_aigc_rules(self, segment: str) -> Dict:
         """检测AIGC内容"""
         probability = self._estimate_aigc_probability(segment)
 
@@ -611,17 +852,53 @@ class PaperDetector:
         print("  🔬 分析相似度...")
         print("  🤖 检测AIGC...")
 
+        # 检测模式提示
+        if self.ai_enabled:
+            print(f"     检测模式: {self.mode.value} (AI深度分析已启用)")
+        else:
+            print("     检测模式: 规则检测 (AI分析未启用)")
+
         for i, segment in enumerate(segments):
             segment_content = segment["content"]
             word_count = segment["word_count"]
 
-            # 相似度分析
-            sim_result = self.analyze_similarity(segment_content)
-            similarity_score = sim_result["similarity_score"]
+            # 相似度分析：根据模式选择分析方法
+            if self.ai_enabled and self.mode in [DetectionMode.AI_DEEP, DetectionMode.HYBRID]:
+                # AI深度分析（以AI结果为准）
+                sim_result = self.ai_analyzer.analyze_similarity(segment_content)
 
-            # AIGC检测
-            aigc_result = self.detect_aigc(segment_content)
-            aigc_score = aigc_result["aigc_probability"]
+                if "error" in sim_result:
+                    print(f"     ⚠️  片段{i+1} AI分析失败，使用规则检测: {sim_result['error']}")
+                    sim_result = self._analyze_similarity_rules(segment_content)
+
+                similarity_score = sim_result.get("similarity_score", 0)
+                # AI分析的置信度标记
+                sim_result["ai_analyzed"] = True
+                sim_result["confidence"] = sim_result.get("confidence", "medium")
+            else:
+                # 规则检测
+                sim_result = self._analyze_similarity_rules(segment_content)
+                similarity_score = sim_result["similarity_score"]
+                sim_result["ai_analyzed"] = False
+
+            # AIGC检测：根据模式选择分析方法
+            if self.ai_enabled and self.mode in [DetectionMode.AI_DEEP, DetectionMode.HYBRID]:
+                # AI深度分析（以AI结果为准）
+                aigc_result = self.ai_analyzer.analyze_aigc(segment_content)
+
+                if "error" in aigc_result:
+                    print(f"     ⚠️  片段{i+1} AI分析失败，使用规则检测: {aigc_result['error']}")
+                    aigc_result = self._detect_aigc_rules(segment_content)
+
+                aigc_score = aigc_result.get("aigc_probability", 0)
+                # AI分析的置信度标记
+                aigc_result["ai_analyzed"] = True
+                aigc_result["confidence"] = aigc_result.get("confidence", "medium")
+            else:
+                # 规则检测
+                aigc_result = self._detect_aigc_rules(segment_content)
+                aigc_score = aigc_result["aigc_probability"]
+                aigc_result["ai_analyzed"] = False
 
             # 统计
             total_words += word_count

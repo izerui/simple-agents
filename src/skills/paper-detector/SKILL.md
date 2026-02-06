@@ -1,26 +1,36 @@
 ---
 name: 论文检测器
-description: 专业的学术论文检测工具，能够生成类似知网、维普的专业查重和AIGC检测报告。当用户需要进行论文相似度检测、生成查重报告、检测论文中的AI生成内容（AIGC）、分析引用和相似片段，或创建专业检测报告时使用此技能。支持.md、.txt文件格式。强制工作流模式确保所有12个检测步骤和29个检测项都执行。
+description: 专业的学术论文检测工具，采用混合检测架构（规则预处理+Claude AI深度分析），能够生成类似知网、维普的专业查重和AIGC检测报告。支持.md、.txt文件格式。强制工作流模式确保所有12个检测步骤和29个检测项都执行。
 ---
 
 # 论文检测器 (Paper Detector)
 
-**版本**: 2.0 (工作流版)
+**版本**: 3.0 (Claude AI深度分析版)
 **最后更新**: 2025-02-07
 
-专业的论文检测分析工具，能够对学术论文进行全面检测并生成类似知网、维普的专业查重和AIGC检测报告。
+专业的论文检测分析工具，采用**混合检测架构**：规则预处理（快速）+ Claude AI深度分析（准确，以AI结果为准），能够对学术论文进行全面检测并生成类似知网、维普的专业查重和AIGC检测报告。
 
 ## 快速开始
+
+### 检测架构
+
+**混合检测模式**：
+```
+规则检测（脚本预处理）→ Claude AI深度分析 → 以AI结果为准
+     ↓                        ↓                  ↓
+  快速扫描              Claude语义理解      专业准确
+  基础数据              深度分析            最终结果
+```
 
 ### 一键检测（推荐）⭐
 
 ```bash
-# 一键执行检测并生成所有报告（完全独立，单文件）
+# 执行检测（脚本预处理 + Claude AI深度分析）
 python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md
 ```
 
 **输出文件**：
-- `detection_result_*.json` - 检测结果（JSON格式）
+- `detection_result_*.json` - 检测结果（JSON格式，包含Claude AI分析标记）
 - `reports/论文名_检测报告.md` - 检测报告
 
 ### Python API
@@ -30,10 +40,10 @@ import sys
 sys.path.insert(0, '/skills/paper-detector/scripts')
 from one_click_detect_standalone import PaperDetector, ReportGenerator
 
-# 创建检测器
+# 创建检测器（自动启用Claude AI深度分析）
 detector = PaperDetector()
 
-# 执行检测
+# 执行检测（脚本预处理 + Claude AI深度分析）
 result = detector.analyze_paper("paper.md")
 
 # 生成报告
@@ -47,16 +57,6 @@ report = report_gen.generate_report()
 
 # 保存报告
 report_gen.save_report(report, "检测报告.md")
-```
-
-### 命令行参数
-
-```bash
-# 启用增强AI检测
-python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md --enhanced-ai
-
-# 指定输出目录
-python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md --output-dir custom_reports
 ```
 
 ## 核心功能
@@ -328,8 +328,13 @@ done
 - **文件格式**：支持.md、.txt等纯文本格式
 - **文件大小**：建议 < 10MB 以获得最佳性能
 - **语言支持**：针对中文和英文优化
-- **网络访问**：不需要（使用本地分析）
-- **检测范围**：文本相似度和AIGC模式检测，非语义分析
+- **网络访问**：
+  - 规则检测：不需要（本地分析）
+  - Claude AI分析：通过技能内置调用
+- **检测范围**：
+  - 相似度检测：文字相似度（规则）+ 语义相似度（Claude AI）
+  - AIGC检测：语言特征（规则）+ 内容特征+ 结构特征（Claude AI）
+- **AI分析**：Claude AI深度分析由技能自动调用，无需额外配置
 
 ## 常见问题
 
@@ -452,21 +457,28 @@ result = detector.analyze_paper("paper.md")
 ### 进阶文档
 
 - **前沿技术**：`references/advanced-detection.md` - 最新检测技术
-- **章节策略**：`references/chapter-strategies.md` - 各章节检测策略
 - **中文资源**：`references/chinese-resources.md` - 中文论文特点
 - **工具指南**：`references/tools-guide.md` - 检测工具对比
-- **系统架构**：已整合到 `detection_workflow.md`
 
 ## 版本历史
 
-### v2.0 - 工作流版 (2025-02-07)
+### v3.0 - Claude AI深度分析版 (2025-02-07)
 
-**新功能**：
+**重大更新**：
+- ✅ **混合检测架构**：规则预处理 + Claude AI深度分析
+- ✅ **Claude AI语义理解**：调用Claude大模型进行专业分析
+- ✅ **以AI结果为准**：Claude AI分析结果覆盖规则检测结果
+- ✅ **技能内置调用**：无需配置API密钥，自动调用Claude分析
 - ✅ 强制工作流模式，12个强制步骤
 - ✅ 完全覆盖29个核心检测项
-- ✅ 增强AI检测（增加3项）
-- ✅ 完整的步骤日志和错误处理
-- ✅ 工作流测试套件
+
+### v2.0 - 工作流版
+
+**功能**：
+- 强制工作流模式，12个强制步骤
+- 完全覆盖29个核心检测项
+- 增强AI检测（增加3项）
+- 完整的步骤日志和错误处理
 
 ### v1.0 - 传统版
 
