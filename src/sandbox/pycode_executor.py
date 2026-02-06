@@ -933,19 +933,23 @@ class CodeExecutor:
                 # 如果是脚本文件执行，设置 sys.argv [脚本名, 参数1, 参数2, ...]
                 # 如果是代码字符串执行，设置 sys.argv 为 ['-c']
                 if script_path:
-                    # 🎯 转换命令行参数中的路径（支持沙箱路径自动映射）
-                    # 对于以 / 开头的参数，去掉开头的 / 并映射到 root_dir
+                    # 🎯 移除各种路径前缀：//, /, ./, ../, ../../../ 等
                     converted_args = []
                     for arg in script_args:
-                        if arg.startswith('/') and not arg.startswith('//'):
-                            # 去掉开头的斜杠，映射到沙箱内路径
-                            sandbox_arg = str(self.root_dir / arg.lstrip('/'))
-                            converted_args.append(sandbox_arg)
-                        else:
-                            # 不是绝对路径，保持原样
-                            converted_args.append(arg)
+                        cleaned_arg = arg
 
-                    # 脚本文件：sys.argv = [脚本路径, 转换后的参数1, 转换后的参数2, ...]
+                        # 移除所有连续的 ../
+                        while cleaned_arg.startswith('../'):
+                            cleaned_arg = cleaned_arg[3:]
+
+                        # 移除其他路径前缀
+                        for prefix in ['//', './', '/']:
+                            if cleaned_arg.startswith(prefix):
+                                cleaned_arg = cleaned_arg[len(prefix):]
+                                break  # 只移除第一个匹配的前缀
+
+                        converted_args.append(cleaned_arg)
+
                     locals['sys'].argv = [script_path] + converted_args
                 else:
                     # 代码字符串：sys.argv = ['-c']

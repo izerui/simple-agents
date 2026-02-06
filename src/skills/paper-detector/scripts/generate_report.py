@@ -3,6 +3,11 @@
 Paper Detector - 生成论文检测报告
 
 根据分析结果生成格式化的检测报告
+
+核心指标说明：
+- 文字复制部分 = (重复字数 / 总字数) × 100%
+- 无问题部分 = 100% - 文字复制部分
+- 这两个指标基于实际重复字数统计，而非加权平均相似度
 """
 
 import sys
@@ -51,16 +56,31 @@ class PaperDetectionReport:
         lines.append("")
         lines.append("## 检测结果汇总")
         lines.append(f"- 原文总字数：{self.paper_info.get('word_count', 0)}字")
+        lines.append("")
+
+        # 知网核心指标
+        lines.append("**知网指标**")
         lines.append(f"- 总文字复制比：{self.detection_results.get('total_similarity', 'N/A')}")
         lines.append(f"- 去除引用文献复制比：{self.detection_results.get('similarity_without_citations', 'N/A')}")
         lines.append(f"- 去除本人已发表文献复制比：{self.detection_results.get('similarity_without_self', 'N/A')}")
         if 'max_single_similarity_ratio' in self.detection_results:
             lines.append(f"- 单篇最大文字复制比：{self.detection_results.get('max_single_similarity_ratio', 'N/A')}")
+        lines.append("")
+
+        # 维普核心指标
+        if 'citation_rate' in self.detection_results:
+            lines.append("**维普指标**")
+            lines.append(f"- 引用率：{self.detection_results.get('citation_rate', 'N/A')}（正确引用内容占比）")
+            lines.append(f"- 复写率：{self.detection_results.get('copy_rate', 'N/A')}（相似度≥50%内容占比）")
+            lines.append(f"- 自写率：{self.detection_results.get('original_rate', 'N/A')}（相似度<30%原创内容占比）")
+            lines.append("")
+
         if 'aigc_rate' in self.detection_results:
             lines.append(f"- AIGC总体生成率：{self.detection_results.get('aigc_rate', 'N/A')}")
+
         if 'copy_part_percentage' in self.detection_results:
-            lines.append(f"- 文字复制部分：{self.detection_results.get('copy_part_percentage', 'N/A')}")
-            lines.append(f"- 无问题部分：{self.detection_results.get('no_problem_percentage', 'N/A')}")
+            lines.append(f"- 文字复制部分：{self.detection_results.get('copy_part_percentage', 'N/A')}（基于重复字数计算）")
+            lines.append(f"- 无问题部分：{self.detection_results.get('no_problem_percentage', 'N/A')}（100% - 文字复制部分）")
         lines.append("")
 
         # 字数统计详情
@@ -123,16 +143,31 @@ class PaperDetectionReport:
         lines.append("")
         lines.append("## 检测结果汇总")
         lines.append(f"- 原文总字数：{self.paper_info.get('word_count', 0)}字")
+        lines.append("")
+
+        # 知网核心指标
+        lines.append("**知网指标**")
         lines.append(f"- 总文字复制比：{self.detection_results.get('total_similarity', 'N/A')}")
         lines.append(f"- 去除引用文献复制比：{self.detection_results.get('similarity_without_citations', 'N/A')}")
         lines.append(f"- 去除本人已发表文献复制比：{self.detection_results.get('similarity_without_self', 'N/A')}")
         if 'max_single_similarity_ratio' in self.detection_results:
             lines.append(f"- 单篇最大文字复制比：{self.detection_results.get('max_single_similarity_ratio', 'N/A')}")
+        lines.append("")
+
+        # 维普核心指标
+        if 'citation_rate' in self.detection_results:
+            lines.append("**维普指标**")
+            lines.append(f"- 引用率：{self.detection_results.get('citation_rate', 'N/A')}（正确引用内容占比）")
+            lines.append(f"- 复写率：{self.detection_results.get('copy_rate', 'N/A')}（相似度≥50%内容占比）")
+            lines.append(f"- 自写率：{self.detection_results.get('original_rate', 'N/A')}（相似度<30%原创内容占比）")
+            lines.append("")
+
         if 'aigc_rate' in self.detection_results:
             lines.append(f"- AIGC总体生成率：{self.detection_results.get('aigc_rate', 'N/A')}")
+
         if 'copy_part_percentage' in self.detection_results:
-            lines.append(f"- 文字复制部分：{self.detection_results.get('copy_part_percentage', 'N/A')}")
-            lines.append(f"- 无问题部分：{self.detection_results.get('no_problem_percentage', 'N/A')}")
+            lines.append(f"- 文字复制部分：{self.detection_results.get('copy_part_percentage', 'N/A')}（基于重复字数计算）")
+            lines.append(f"- 无问题部分：{self.detection_results.get('no_problem_percentage', 'N/A')}（100% - 文字复制部分）")
         lines.append("")
 
         # 字数统计详情

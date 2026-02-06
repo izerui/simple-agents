@@ -276,15 +276,17 @@ class AIPaperDetector:
         """
         估算文本相似度（基于启发式方法）
 
+        从0%基准开始，只对检测到的问题特征累积计分
+
         Args:
             text: 文本内容
 
         Returns:
             相似度百分比 (0-100)
         """
-        score = 20.0  # 基础分数
+        score = 0.0  # 从0%开始，纯净基准
 
-        # 检查常见学术短语
+        # 检查过度使用常见学术短语（仅当过度使用时计分）
         common_phrases = [
             "综上所述", "因此", "然而", "此外", "另外",
             "研究表明", "根据", "可以看出", "由此可见",
@@ -292,23 +294,31 @@ class AIPaperDetector:
         ]
 
         phrase_count = sum(1 for phrase in common_phrases if phrase in text)
-        score += phrase_count * 2
+        # 只有超过正常使用频率才计分（正常3-5个）
+        if phrase_count > 5:
+            score += (phrase_count - 5) * 3
 
-        # 检查数字和统计数据的密度
+        # 检查数字和统计数据的异常密度（可能复制数据）
         digit_ratio = sum(c.isdigit() for c in text) / len(text) if text else 0
-        if digit_ratio > 0.05:
-            score += 5
+        if digit_ratio > 0.10:  # 超过10%认为是异常
+            score += 8
 
-        # 检查引用标记
-        if '[' in text and ']' in text:
-            score += 3
+        # 检查引用标记（引用未标注才会增加相似度）
+        citation_count = text.count('[')
+        # 每个引用+1.5%，但引用过多也要惩罚
+        if citation_count > 0:
+            score += citation_count * 1.5
+        # 引用密度过高（每100字超过5个引用）
+        if len(text) > 0 and citation_count / len(text) * 100 > 5:
+            score += 10
 
-        # 检查专业术语密度（简化版）
+        # 检查专业术语密度（仅过度密集时计分）
         technical_words = ['数据', '分析', '方法', '模型', '算法', '实验', '结果']
         tech_count = sum(1 for word in technical_words if word in text)
-        score += tech_count * 1.5
+        if tech_count > 4:  # 超过4个才认为过度使用
+            score += (tech_count - 4) * 2
 
-        return min(score, 95.0)  # 最高不超过95%
+        return min(score, 100.0)  # 最高不超过100%
 
     def _identify_potential_sources(self, text: str) -> List[str]:
         """识别潜在来源类型"""
@@ -402,31 +412,40 @@ class AIPaperDetector:
         return detection
 
     def _estimate_aigc_probability(self, text: str) -> float:
-        """估算AIGC生成概率"""
-        probability = 10.0  # 基础概率
+        """
+        估算AIGC生成概率
 
-        # 检查句式规整度
+        从0%基准开始，只对检测到的问题特征累积计分
+
+        Returns:
+            AIGC生成概率 (0-100)
+        """
+        probability = 0.0  # 从0%开始，纯净基准
+
+        # 检查句式规整度（仅当异常规整时计分）
         sentences = [s.strip() for s in text.split('。') if s.strip()]
         if sentences:
             sentence_lengths = [len(s) for s in sentences]
             avg_length = sum(sentence_lengths) / len(sentence_lengths)
             length_variance = sum((l - avg_length) ** 2 for l in sentence_lengths) / len(sentence_lengths)
 
-            # 句式过于规整（方差小）可能是由AI生成
-            if length_variance < 50:
-                probability += 15
+            # 句式过于规整（方差<30）可能是由AI生成
+            if length_variance < 30:
+                probability += 20
+            elif length_variance < 50:
+                probability += 10
 
-        # 检查AI常见表达
+        # 检查AI常见表达（仅当出现时计分）
         ai_phrases = [
             "在当今社会", "随着科技的发展", "众所周知",
             "值得注意的是", "需要指出的是", "总的来说",
-            "首先...其次...最后", "一方面...另一方面"
+            "首先...其次...最后", "一方面...另一方"
         ]
 
         ai_phrase_count = sum(1 for phrase in ai_phrases if phrase in text)
-        probability += ai_phrase_count * 5
+        probability += ai_phrase_count * 8  # 每个AI常见短语+8%
 
-        # 检查内容深度
+        # 检查内容深度（仅当缺乏具体内容时计分）
         if len(text) > 200:
             # 分析是否有具体数据和细节
             has_specifics = (
@@ -435,14 +454,15 @@ class AIPaperDetector:
                 '例如' in text or '比如' in text
             )
             if not has_specifics:
-                probability += 10
+                probability += 15
 
-        # 检查情感色彩
-        emotional_words = ['非常重要', '十分关键', '极其重要', '意义重大']
+        # 检查过度使用的情感色彩词
+        emotional_words = ['非常重要', '十分关键', '极其重要', '意义重大', '尤为']
         emotion_count = sum(1 for word in emotional_words if word in text)
-        probability += emotion_count * 3
+        if emotion_count > 1:  # 超过1个才认为过度使用
+            probability += (emotion_count - 1) * 5
 
-        return min(probability, 95.0)
+        return min(probability, 100.0)
 
     def _identify_aigc_factors(self, text: str) -> List[str]:
         """识别AIGC风险因素"""
@@ -549,6 +569,11 @@ class AIPaperDetector:
         total_words = 0
         duplicate_words = 0  # 重复字数
 
+        # 维普特色指标：引用率、复写率、自写率
+        cited_words = 0  # 正确引用的字数
+        copied_words = 0  # 直接复制/复写的字数（相似度≥50%）
+        original_words = 0  # 自写/原创的字数（相似度<30%）
+
         # 用于计算单篇最大重复字数
         max_single_duplicate = 0
         max_single_duplicate_location = ""
@@ -586,6 +611,21 @@ class AIPaperDetector:
             total_words += word_count
             total_similarity_score += similarity_score * word_count
             total_aigc_score += aigc_score * word_count
+
+            # 维普指标统计
+            # 引用率：有引用标记的内容
+            if '[' in segment_content and ']' in segment_content:
+                # 估算引用字数（简单处理：整个段落按比例）
+                cited_ratio = min(segment_content.count('[') / max(1, word_count / 50), 0.5)  # 最多50%
+                cited_words += int(word_count * cited_ratio)
+
+            # 复写率：相似度≥50%的内容（知网标准）
+            if similarity_score >= 50:
+                copied_words += int(word_count * similarity_score / 100)
+
+            # 自写率：相似度<30%的内容
+            elif similarity_score < 30:
+                original_words += word_count
 
             # 计算重复字数
             if similarity_score >= 30:
@@ -678,9 +718,14 @@ class AIPaperDetector:
         # 计算单篇最大文字复制比
         max_single_similarity_ratio = (max_single_duplicate / total_words * 100) if total_words > 0 else 0
 
-        # 计算文字复制部分和无问题部分百分比
-        copy_part_percentage = avg_similarity
-        no_problem_percentage = 100 - avg_similarity
+        # 计算文字复制部分和无问题部分百分比（基于重复字数）
+        copy_part_percentage = (duplicate_words / total_words * 100) if total_words > 0 else 0
+        no_problem_percentage = 100 - copy_part_percentage
+
+        # 计算维普核心指标（引用率、复写率、自写率）
+        citation_rate = (cited_words / total_words * 100) if total_words > 0 else 0
+        copy_rate = (copied_words / total_words * 100) if total_words > 0 else 0
+        original_rate = (original_words / total_words * 100) if total_words > 0 else 0
 
         # 修正疑似段落最小重合字数（如果没有则设为0）
         if suspected_min_overlap == float('inf'):
@@ -695,11 +740,16 @@ class AIPaperDetector:
                 "format": doc_result.get("format", "unknown")
             },
             "detection_results": {
-                # 核心检测结果
+                # 核心检测结果（知网指标）
                 "total_similarity": f"{avg_similarity:.1f}%",
                 "similarity_without_citations": f"{similarity_without_citations:.1f}%",
                 "similarity_without_self": f"{similarity_without_self:.1f}%",
                 "max_single_similarity_ratio": f"{max_single_similarity_ratio:.1f}%",
+
+                # 维普核心指标
+                "citation_rate": f"{citation_rate:.1f}%",  # 引用率
+                "copy_rate": f"{copy_rate:.1f}%",  # 复写率
+                "original_rate": f"{original_rate:.1f}%",  # 自写率
 
                 # 字数统计
                 "duplicate_words": duplicate_words,
