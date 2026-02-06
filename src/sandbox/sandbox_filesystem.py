@@ -121,6 +121,17 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         - python -c "code" - 执行代码字符串
         - python script.py - 执行脚本文件
 
+        ⚠️ 重要说明：
+        针对文件和目录相关操作，请使用以下内置工具方法，不要使用 execute：
+        - ls          - 列出指定目录中的文件和子目录
+        - read_file   - 读取文件内容，支持分页读取
+        - write_file  - 将内容写入指定文件，覆盖现有内容
+        - edit_file   - 编辑文件，支持字符串替换操作
+        - glob        - 使用模式匹配查找文件（如 **/*.py）
+        - grep        - 在文件中搜索文本模式（支持正则表达式）
+
+        这些工具由 FilesystemMiddleware 自动注入，提供更安全、高效的文件操作方式。
+
         Args:
             command: 命令字符串
 
