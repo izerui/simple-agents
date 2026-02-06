@@ -15,11 +15,8 @@ description: 专业的学术论文检测工具，能够生成类似知网、维�
 ### 一键检测（推荐）⭐
 
 ```bash
-# 进入技能目录
-cd /skills/paper-detector
-
 # 一键执行检测并生成所有报告（完全独立，单文件）
-python3 scripts/one_click_detect_standalone.py paper.md
+python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md
 ```
 
 **输出文件**：
@@ -56,10 +53,10 @@ report_gen.save_report(report, "检测报告.md")
 
 ```bash
 # 启用增强AI检测
-python3 scripts/one_click_detect_standalone.py paper.md --enhanced-ai
+python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md --enhanced-ai
 
 # 指定输出目录
-python3 scripts/one_click_detect_standalone.py paper.md --output-dir custom_reports
+python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md --output-dir custom_reports
 ```
 
 ## 核心功能
@@ -441,16 +438,6 @@ result = detector.analyze_paper("paper.md")
 - `references/detection_workflow.md` - 工作流规范
 - `references/detection_methods.md` - 检测方法原理
 
-### 报告模板
-
-在 `assets/report_template.md` 中自定义报告模板
-
-### 与其他工具集成
-
-如需处理 .docx 或 .pdf 文件，建议先使用专门的文档转换工具将其转换为 .md 或 .txt 格式：
-
-转换后再使用本技能进行检测。
-
 ## 文档资源
 
 ### 核心文档
@@ -491,13 +478,3 @@ result = detector.analyze_paper("paper.md")
 - 查看 `references/` 目录中的文档
 - 阅读 `references/detection_workflow.md` 了解详细工作流信息
 - 阅读 `references/detection_methods.md` 了解检测方法原理
-
----
-
-**相关技能**：
-- `document-skills:docx` - 处理.docx文件
-- `document-skills:pdf` - 处理PDF文件
-
-**参考资源**：
-- [Claude Skills 最佳实践](https://claudecn.com/docs/agent-skills/best-practices/)
-- [Agent Skills 文档](https://claudecn.com/docs/agent-skills/)
