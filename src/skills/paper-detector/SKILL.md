@@ -15,11 +15,12 @@ description: 专业的学术论文检测工具，采用混合检测架构（规�
 ### 一键检测⭐
 
 ```bash
+# 沙箱根目录相对路径（推荐）
 python3 /skills/paper-detector/scripts/one_click_detect_standalone.py paper.md
-```
 
-注意:
-paper.md 路径为相对沙箱路径,一般不需带前缀`/`
+# 或绝对路径
+python3 /skills/paper-detector/scripts/one_click_detect_standalone.py /thesis1749191026007.md
+```
 
 **检测架构**：
 - **规则检测（脚本）**：快速预处理，提供基础数据

@@ -1099,8 +1099,11 @@ def main():
 
     paper_file = sys.argv[1]
 
-    # 验证文件存在
-    if not Path(paper_file).exists():
+    # 尝试读取文件，自动处理路径
+    try:
+        with open(paper_file, 'r', encoding='utf-8') as f:
+            test = f.read()
+    except FileNotFoundError:
         print(f"❌ 错误: 文件不存在: {paper_file}")
         sys.exit(1)
 
