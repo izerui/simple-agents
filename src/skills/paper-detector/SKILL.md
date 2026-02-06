@@ -1,6 +1,6 @@
 ---
 name: 论文检测器
-description: 专业的学术论文检测工具，能够生成类似知网、维普的专业查重和AIGC检测报告。当用户需要进行论文相似度检测、生成查重报告、检测论文中的AI生成内容（AIGC）、分析引用和相似片段，或创建专业检测报告时使用此技能。支持.md、.txt、.docx、.pdf文件格式。强制工作流模式确保所有12个检测步骤和29个检测项都执行。
+description: 专业的学术论文检测工具，能够生成类似知网、维普的专业查重和AIGC检测报告。当用户需要进行论文相似度检测、生成查重报告、检测论文中的AI生成内容（AIGC）、分析引用和相似片段，或创建专业检测报告时使用此技能。支持.md、.txt文件格式。强制工作流模式确保所有12个检测步骤和29个检测项都执行。
 ---
 
 # 论文检测器 (Paper Detector)
@@ -325,7 +325,7 @@ done
 
 ## 限制说明
 
-- **文件格式**：支持.md、.txt、.docx、.pdf（必须可读为文本）
+- **文件格式**：支持.md、.txt等纯文本格式
 - **文件大小**：建议 < 10MB 以获得最佳性能
 - **语言支持**：针对中文和英文优化
 - **网络访问**：不需要（使用本地分析）
@@ -448,20 +448,9 @@ result = detector.analyze_paper("paper.md")
 
 ### 与其他工具集成
 
-```python
-# 与文档处理集成
-from docx import Document
+如需处理 .docx 或 .pdf 文件，建议先使用专门的文档转换工具将其转换为 .md 或 .txt 格式：
 
-doc = Document("paper.docx")
-text = "\n".join([para.text for para in doc.paragraphs])
-
-# 保存为临时文件
-with open("temp.md", "w") as f:
-    f.write(text)
-
-# 执行检测
-result = detector.analyze_paper("temp.md")
-```
+转换后再使用本技能进行检测。
 
 ## 文档资源
 
