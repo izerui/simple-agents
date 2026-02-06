@@ -458,31 +458,6 @@ class PaperDetector:
 
         return factors
 
-    def _generate_aigc_suggestions(self, probability: float) -> List[str]:
-        """生成AIGC修改建议"""
-        if probability >= 50:
-            return [
-                "该段落很可能由AI生成，建议完全重写",
-                "增加个人观点和独特见解",
-                "补充具体的研究数据和案例",
-                "使用更具个性化的表达方式"
-            ]
-        elif probability >= 30:
-            return [
-                "该段落存在较高AI生成风险",
-                "建议增加具体的分析和讨论",
-                "补充个人研究发现",
-                "调整语言风格使其更加自然"
-            ]
-        elif probability >= 15:
-            return [
-                "该段落有一定AI生成特征",
-                "建议增加一些具体细节",
-                "适当调整句式结构"
-            ]
-        else:
-            return ["该段落AI生成风险较低，可保持原样"]
-
     def _detect_plagiarism_type(self, text: str, similarity_score: float) -> Dict:
         """检测剽窃类型"""
         if similarity_score < 30:
@@ -805,23 +780,6 @@ class PaperDetector:
             return "低风险"
         else:
             return "正常"
-
-    def _generate_overall_suggestions(self, avg_aigc: float) -> List[str]:
-        """生成整体修改建议"""
-        suggestions = [
-            "对高风险段落进行人工审核和修改",
-            "增加个人分析和观点，减少AI生成内容"
-        ]
-
-        if avg_aigc >= 30:
-            suggestions.extend([
-                "补充具体的案例和数据支撑",
-                "调整语言风格，使表达更加自然",
-                "增加研究过程中的具体描述"
-            ])
-
-        return suggestions
-
 
 # ============================================================================
 # 报告生成类
@@ -1228,33 +1186,6 @@ def main():
         print("📁 输出文件:")
         print(f"  1. 检测结果: {json_file}")
         print(f"  2. 检测报告: {report_file}")
-        print()
-
-        # 显示建议
-        print("💡 检测建议:")
-
-        similarity_str = detection_results.get('total_similarity', '0%').rstrip('%')
-        similarity = float(similarity_str) if similarity_str.replace('.', '').isdigit() else 0
-
-        aigc_str = detection_results.get('aigc_rate', '0%').rstrip('%')
-        aigc = float(aigc_str) if aigc_str.replace('.', '').isdigit() else 0
-
-        if similarity > 30:
-            print(f"  ⚠️  相似度较高({similarity:.1f}%)，建议重点修改高相似度段落")
-        elif similarity > 20:
-            print(f"  ✓ 相似度适中({similarity:.1f}%)，关注高相似度片段即可")
-        else:
-            print(f"  ✓ 相似度良好({similarity:.1f}%)，符合要求")
-
-        if aigc > 15:
-            print(f"  ⚠️  AIGC生成率较高({aigc:.1f}%)，建议修改高风险段落")
-        elif aigc > 5:
-            print(f"  ✓ AIGC生成率适中({aigc:.1f}%)，适当调整即可")
-        else:
-            print(f"  ✓ AIGC生成率良好({aigc:.1f}%)，主要为人工撰写")
-
-        print()
-        print("✨ 感谢使用论文检测工具！")
         print()
 
     except Exception as e:
