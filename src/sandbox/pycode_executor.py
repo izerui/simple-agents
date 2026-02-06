@@ -933,7 +933,8 @@ class CodeExecutor:
                 # 如果是脚本文件执行，设置 sys.argv [脚本名, 参数1, 参数2, ...]
                 # 如果是代码字符串执行，设置 sys.argv 为 ['-c']
                 if script_path:
-                    # 🎯 移除各种路径前缀：//, /, ./, ../, ../../../ 等
+                    # 脚本文件：sys.argv = [脚本路径, 参数1, 参数2, ...]
+                    # 清理参数中的路径前缀
                     converted_args = []
                     for arg in script_args:
                         cleaned_arg = arg
@@ -942,11 +943,13 @@ class CodeExecutor:
                         while cleaned_arg.startswith('../'):
                             cleaned_arg = cleaned_arg[3:]
 
-                        # 移除其他路径前缀
-                        for prefix in ['//', './', '/']:
-                            if cleaned_arg.startswith(prefix):
-                                cleaned_arg = cleaned_arg[len(prefix):]
-                                break  # 只移除第一个匹配的前缀
+                        # 移除 ./ 前缀
+                        if cleaned_arg.startswith('./'):
+                            cleaned_arg = cleaned_arg[2:]
+
+                        # 移除开头的 /
+                        if cleaned_arg.startswith('/'):
+                            cleaned_arg = cleaned_arg[1:]
 
                         converted_args.append(cleaned_arg)
 
