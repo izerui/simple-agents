@@ -836,19 +836,23 @@ class ReportGenerator:
         now = datetime.now()
         return f"PD{now.strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
 
-    def generate_simple_report(self) -> str:
-        """生成简洁版报告"""
+    def generate_report(self) -> str:
+        """生成统一检测报告"""
         lines = []
-        lines.append("# 论文检测报告（简洁版）")
+        lines.append("# 论文检测报告")
         lines.append("")
-        lines.append("## 基本信息")
+
+        # ========== 基本信息 ==========
+        lines.append("## 一、基本信息")
         lines.append(f"- 论文题目：《{self.paper_info.get('title', '未知')}》")
         lines.append(f"- 作者：{self.paper_info.get('author', '未知')}")
         lines.append(f"- 检测时间：{self.detection_time}")
         lines.append(f"- 检测编号：{self.detection_id}")
-        lines.append("")
-        lines.append("## 检测结果汇总")
         lines.append(f"- 原文总字数：{self.paper_info.get('word_count', 0)}字")
+        lines.append("")
+
+        # ========== 检测结果汇总 ==========
+        lines.append("## 二、检测结果汇总")
         lines.append("")
 
         # 知网核心指标
@@ -867,26 +871,33 @@ class ReportGenerator:
             lines.append(f"- 自写率：{self.detection_results.get('original_rate', 'N/A')}")
             lines.append("")
 
+        # AIGC指标
         if 'aigc_rate' in self.detection_results:
+            lines.append("**AIGC指标**")
             lines.append(f"- AIGC总体生成率：{self.detection_results.get('aigc_rate', 'N/A')}")
+            lines.append("")
 
+        # 百分比划分
         if 'copy_part_percentage' in self.detection_results:
+            lines.append("**文字复制占比**")
             lines.append(f"- 文字复制部分：{self.detection_results.get('copy_part_percentage', 'N/A')}")
             lines.append(f"- 无问题部分：{self.detection_results.get('no_problem_percentage', 'N/A')}")
-        lines.append("")
+            lines.append("")
 
-        # 字数统计详情
+        # ========== 字数统计 ==========
         if 'duplicate_words' in self.detection_results:
-            lines.append("## 字数统计")
+            lines.append("## 三、字数统计")
             lines.append(f"- 总字数：{self.detection_results.get('total_words', 'N/A')}")
             lines.append(f"- 总段落数：{self.detection_results.get('total_segments', 'N/A')}")
             lines.append(f"- 重复字数：{self.detection_results.get('duplicate_words', 'N/A')}")
             lines.append(f"- 疑似段落数：{self.detection_results.get('suspected_segment_count', 'N/A')}")
             if 'max_single_duplicate_words' in self.detection_results:
                 lines.append(f"- 单篇最大重复字数：{self.detection_results.get('max_single_duplicate_words', 'N/A')}")
+                lines.append(f"- 单篇最大重复位置：{self.detection_results.get('max_single_duplicate_location', 'N/A')}")
             lines.append("")
 
-        lines.append("## 相似度分布")
+        # ========== 相似度分布 ==========
+        lines.append("## 四、相似度分布")
         lines.append("| 相似度区间 | 段落数 | 字数 |")
         lines.append("|-----------|--------|------|")
 
@@ -897,23 +908,102 @@ class ReportGenerator:
 
         lines.append("")
 
-        # 剽窃类型检测
+        # ========== 剽窃类型检测 ==========
         if 'plagiarism_analysis' in self.detection_results:
             plagiarism = self.detection_results['plagiarism_analysis']
-            if plagiarism.get('total_plagiarism_cases', 0) > 0:
-                lines.append("## 剽窃类型检测")
-                lines.append(f"- 疑似剽窃观点：{len(plagiarism.get('suspected_idea_plagiarism', []))} 处")
-                lines.append(f"- 疑似剽窃文字表述：{len(plagiarism.get('suspected_text_plagiarism', []))} 处")
-                lines.append(f"- 疑似整体剽窃：{len(plagiarism.get('suspected_overall_plagiarism', []))} 处")
-                lines.append(f"- 过度引用：{plagiarism.get('over_citation_count', 0)} 处")
+            lines.append("## 五、剽窃类型检测")
+            lines.append(f"- 疑似剽窃观点：{len(plagiarism.get('suspected_idea_plagiarism', []))} 处")
+            lines.append(f"- 疑似剽窃文字表述：{len(plagiarism.get('suspected_text_plagiarism', []))} 处")
+            lines.append(f"- 疑似整体剽窃：{len(plagiarism.get('suspected_overall_plagiarism', []))} 处")
+            lines.append(f"- 过度引用：{plagiarism.get('over_citation_count', 0)} 处")
+            lines.append("")
+
+            # 详细列表
+            if plagiarism.get('suspected_idea_plagiarism'):
+                lines.append("### 疑似剽窃观点详情")
+                for idx, item in enumerate(plagiarism['suspected_idea_plagiarism'][:10], 1):
+                    lines.append(f"{idx}. **位置**：{item.get('location', 'N/A')}")
+                    lines.append(f"   - 相似度：{item.get('similarity', 'N/A')}")
+                    lines.append(f"   - 描述：{item.get('description', 'N/A')}")
                 lines.append("")
 
+            if plagiarism.get('suspected_text_plagiarism'):
+                lines.append("### 疑似剽窃文字表述详情")
+                for idx, item in enumerate(plagiarism['suspected_text_plagiarism'][:10], 1):
+                    lines.append(f"{idx}. **位置**：{item.get('location', 'N/A')}")
+                    lines.append(f"   - 相似度：{item.get('similarity', 'N/A')}")
+                    lines.append(f"   - 字数：{item.get('word_count', 'N/A')}")
+                lines.append("")
+
+            if plagiarism.get('suspected_overall_plagiarism'):
+                lines.append("### 疑似整体剽窃详情")
+                for idx, item in enumerate(plagiarism['suspected_overall_plagiarism'][:10], 1):
+                    lines.append(f"{idx}. **位置**：{item.get('location', 'N/A')}")
+                    lines.append(f"   - 相似度：{item.get('similarity', 'N/A')}")
+                    lines.append(f"   - 字数：{item.get('word_count', 'N/A')}")
+                lines.append("")
+
+        # ========== 相似片段详情 ==========
+        if 'similar_segments' in self.detection_results and self.detection_results['similar_segments']:
+            lines.append("## 六、相似片段详情")
+            for idx, segment in enumerate(self.detection_results['similar_segments'][:20], 1):
+                lines.append(f"### 片段 {idx}")
+                lines.append(f"- **位置**：{segment.get('location', 'N/A')}")
+                lines.append(f"- **相似度**：{segment.get('similarity', 'N/A')}")
+                lines.append(f"- **字数**：{segment.get('word_count', 'N/A')}")
+                lines.append(f"- **来源类型**：{segment.get('source_type', 'N/A')}")
+                lines.append("")
+
+        # ========== AIGC检测详细分析 ==========
+        if 'aigc_analysis' in self.detection_results:
+            aigc = self.detection_results['aigc_analysis']
+            lines.append("## 七、AIGC检测分析")
+            lines.append(f"- 总体生成率：{aigc.get('total_rate', 'N/A')}")
+            lines.append(f"- 风险等级：{aigc.get('risk_level', 'N/A')}")
+            lines.append("")
+
+            # 各章节生成率
+            if 'chapter_rates' in aigc:
+                lines.append("### 各章节AIGC生成率")
+                lines.append("| 章节 | 生成率 | 字数 |")
+                lines.append("|------|--------|------|")
+                for chapter, data in aigc['chapter_rates'].items():
+                    lines.append(f"| {chapter} | {data.get('rate', 'N/A')} | {data.get('words', 'N/A')} |")
+                lines.append("")
+
+            # 高风险段落
+            if aigc.get('high_risk_segments'):
+                lines.append("### 高风险段落详情")
+                for idx, segment in enumerate(aigc['high_risk_segments'][:10], 1):
+                    lines.append(f"{idx}. **位置**：{segment.get('location', 'N/A')}")
+                    lines.append(f"   - 生成率：{segment.get('rate', 'N/A')}")
+                    lines.append(f"   - 风险因素：{segment.get('risk_factors', 'N/A')}")
+                lines.append("")
+
+            # 修改建议
+            if aigc.get('suggestions'):
+                lines.append("### 修改建议")
+                for suggestion in aigc['suggestions']:
+                    lines.append(f"- {suggestion}")
+                lines.append("")
+
+        # ========== 相似内容检测 ==========
+        if 'similar_objects' in self.detection_results:
+            objects = self.detection_results['similar_objects']
+            lines.append("## 八、相似内容检测")
+
+            if objects.get('similar_tables'):
+                lines.append(f"- 疑似相似表格：{len(objects['similar_tables'])} 个")
+            if objects.get('similar_formulas'):
+                lines.append(f"- 疑似相似公式：{len(objects['similar_formulas'])} 个")
+            lines.append("")
+
         lines.append("---")
+        lines.append("")
         lines.append("*本报告由AI辅助生成，检测结果仅供参考，不代表最终学术评定。*")
+        lines.append("*建议结合官方检测平台（知网、维普等）进行交叉验证。*")
 
         return "\n".join(lines)
-
-    def generate_full_report(self) -> str:
         """生成全文版报告"""
         lines = []
         lines.append("# 论文检测报告（全文版）")
@@ -1020,55 +1110,6 @@ class ReportGenerator:
 
         return "\n".join(lines)
 
-    def generate_aigc_report(self) -> str:
-        """生成AIGC专项报告"""
-        lines = []
-        lines.append("# AIGC检测报告")
-        lines.append("")
-        lines.append("## 基本信息")
-        lines.append(f"- 论文题目：《{self.paper_info.get('title', '未知')}》")
-        lines.append(f"- 作者：{self.paper_info.get('author', '未知')}")
-        lines.append(f"- 检测时间：{self.detection_time}")
-        lines.append(f"- 检测编号：{self.detection_id}")
-        lines.append("")
-        lines.append("## AIGC检测结果汇总")
-        lines.append(f"- 原文总字数：{self.paper_info.get('word_count', 0)}字")
-
-        aigc = self.detection_results.get('aigc_analysis', {})
-        lines.append(f"- AIGC总体生成率：{aigc.get('total_rate', 'N/A')}")
-        lines.append(f"- 风险等级：{aigc.get('risk_level', 'N/A')}")
-        lines.append("")
-
-        lines.append("## 高风险段落详情")
-
-        high_risk = aigc.get('high_risk_segments', [])
-        if high_risk:
-            for i, seg in enumerate(high_risk, 1):
-                lines.append(f"\n### 高风险段落 {i}")
-                lines.append(f"- **位置**: {seg.get('location', '未知')}")
-                lines.append(f"- **生成率**: {seg.get('rate', 'N/A')}")
-                lines.append(f"- **风险因素**: {seg.get('risk_factors', '未知')}")
-                lines.append(f"- **内容预览**: {seg.get('content', '')[:150]}...")
-        else:
-            lines.append("\n未检测到高风险段落。")
-
-        lines.append("")
-        lines.append("## 修改建议")
-        suggestions = aigc.get('suggestions', [
-            "对高风险段落进行人工审核和修改",
-            "增加个人分析和观点，减少AI生成内容",
-            "补充具体的案例和数据支撑",
-            "调整语言风格，使表达更加自然"
-        ])
-        for i, suggestion in enumerate(suggestions, 1):
-            lines.append(f"{i}. {suggestion}")
-
-        lines.append("")
-        lines.append("---")
-        lines.append("*本报告由AI辅助生成，检测结果仅供参考。*")
-
-        return "\n".join(lines)
-
     def save_report(self, report_text: str, output_path: str):
         """保存报告到文件"""
         try:
@@ -1166,21 +1207,13 @@ def main():
 
         base_name = Path(paper_file).stem
 
-        # 生成3种报告
-        print("📋 生成报告...")
+        # 生成检测报告
+        print("📋 生成检测报告...")
         print()
 
-        simple_report = report_gen.generate_simple_report()
-        simple_file = output_dir / f"{base_name}_简洁版报告.md"
-        report_gen.save_report(simple_report, str(simple_file))
-
-        full_report = report_gen.generate_full_report()
-        full_file = output_dir / f"{base_name}_全文版报告.md"
-        report_gen.save_report(full_report, str(full_file))
-
-        aigc_report = report_gen.generate_aigc_report()
-        aigc_file = output_dir / f"{base_name}_AIGC报告.md"
-        report_gen.save_report(aigc_report, str(aigc_file))
+        report = report_gen.generate_report()
+        report_file = output_dir / f"{base_name}_检测报告.md"
+        report_gen.save_report(report, str(report_file))
 
         print()
         print("=" * 70)
@@ -1190,9 +1223,7 @@ def main():
 
         print("📁 输出文件:")
         print(f"  1. 检测结果: {json_file}")
-        print(f"  2. 简洁版报告: {simple_file}")
-        print(f"  3. 全文版报告: {full_file}")
-        print(f"  4. AIGC报告: {aigc_file}")
+        print(f"  2. 检测报告: {report_file}")
         print()
 
         # 显示建议

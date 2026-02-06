@@ -24,9 +24,7 @@ python3 scripts/one_click_detect_standalone.py paper.md
 
 **输出文件**：
 - `detection_result_*.json` - 检测结果（JSON格式）
-- `reports/论文名_简洁版报告.md` - 简洁版报告
-- `reports/论文名_全文版报告.md` - 全文版报告
-- `reports/论文名_AIGC报告.md` - AIGC专项报告
+- `reports/论文名_检测报告.md` - 检测报告
 
 ### Python API
 
@@ -47,10 +45,11 @@ report_gen = ReportGenerator(
     result['detection_results']
 )
 
-# 生成报告
-simple_report = report_gen.generate_simple_report()
-full_report = report_gen.generate_full_report()
-aigc_report = report_gen.generate_aigc_report()
+# 生成检测报告
+report = report_gen.generate_report()
+
+# 保存报告
+report_gen.save_report(report, "检测报告.md")
 ```
 
 ### 命令行参数
