@@ -485,43 +485,123 @@
 
 ---
 
-## 检测项覆盖清单
+## 检测项覆盖清单（29项核心检测）
 
-### 核心检测项（必须）
+### 📋 使用说明
+- ✅ = 必须检测（强制）
+- ⭐ = 可选检测（增强）
+- 📊 = 统计指标
+- 🔍 = 检测分析
 
-- [ ] **相似度检测**
-  - [ ] 总文字复制比
-  - [ ] 去除引用文献复制比
-  - [ ] 去除本人已发表文献复制比
-  - [ ] 单篇最大文字复制比
+### 1️⃣ 知网指标（4项）
 
-- [ ] **AIGC检测**
-  - [ ] AIGC总体生成率
-  - [ ] 各章节AIGC生成率
-  - [ ] 高风险段落识别
+| 序号 | 检测项 | 说明 | 输出位置 |
+|------|--------|------|----------|
+| 1 | ✅ 总文字复制比 | 整体相似度百分比 | `detection_results.total_similarity` |
+| 2 | ✅ 去除引用文献复制比 | 排除引用后的相似度 | `detection_results.similarity_without_citations` |
+| 3 | ✅ 去除本人已发表文献复制比 | 排除自我引用的相似度 | `detection_results.similarity_without_self` |
+| 4 | ✅ 单篇最大文字复制比 | 单个片段最高相似度占比 | `detection_results.max_single_similarity_ratio` |
 
-- [ ] **剽窃类型检测（4种）**
-  - [ ] 疑似剽窃观点
-  - [ ] 疑似剽窃文字表述
-  - [ ] 疑似整体剽窃
-  - [ ] 过度引用
+**执行步骤**: 步骤11（统计指标计算）
 
-- [ ] **相似内容检测**
-  - [ ] 相似表格
-  - [ ] 相似公式
+### 2️⃣ 维普指标（3项）
 
-- [ ] **统计指标**
-  - [ ] 知网指标（4项）
-  - [ ] 维普指标（3项）
-  - [ ] 字数统计（8项）
-  - [ ] 百分比划分（2项）
+| 序号 | 检测项 | 说明 | 输出位置 |
+|------|--------|------|----------|
+| 5 | ✅ 引用率 | 正确引用内容占比 | `detection_results.citation_rate` |
+| 6 | ✅ 复写率 | 相似度≥50%内容占比 | `detection_results.copy_rate` |
+| 7 | ✅ 自写率 | 相似度<30%原创内容占比 | `detection_results.original_rate` |
 
-### 增强检测项（可选）
+**关系**: 引用率 + 复写率 + 自写率 ≈ 100%
 
-- [ ] **增强AI检测（3项）**
-  - [ ] AI词汇密度检测
-  - [ ] 句式突发性检测
-  - [ ] 改写攻击检测
+**执行步骤**: 步骤11（统计指标计算）
+
+### 3️⃣ 字数统计（8项）
+
+| 序号 | 检测项 | 说明 | 输出位置 |
+|------|--------|------|----------|
+| 8 | ✅ 总字数 | 论文总字符数（知网标准） | `detection_results.total_words` |
+| 9 | ✅ 总段落数 | 检测的段落总数 | `detection_results.total_segments` |
+| 10 | ✅ 重复字数 | 相似度≥30%段落按比例累加 | `detection_results.duplicate_words` |
+| 11 | ✅ 疑似段落数 | 相似度≥30%的段落数量 | `detection_results.suspected_segment_count` |
+| 12 | ✅ 单篇最大重复字数 | 单个片段最大重复字数 | `detection_results.max_single_duplicate_words` |
+| 13 | ✅ 单篇最大重复位置 | 最大重复字数所在位置 | `detection_results.max_single_duplicate_location` |
+| 14 | ✅ 前部重合字数 | 前30%内容的重复字数 | `detection_results.front_overlap_words` |
+| 15 | ✅ 疑似段落最大重合字数 | 疑似段落中最大重合字数 | `detection_results.suspected_max_overlap_words` |
+| 16 | ✅ 疑似段落最小重合字数 | 疑似段落中最小重合字数 | `detection_results.suspected_min_overlap_words` |
+
+**执行步骤**: 步骤11（统计指标计算）
+
+### 4️⃣ 百分比划分（2项）
+
+| 序号 | 检测项 | 说明 | 输出位置 |
+|------|--------|------|----------|
+| 17 | ✅ 文字复制部分 | (重复字数/总字数)×100% | `detection_results.copy_part_percentage` |
+| 18 | ✅ 无问题部分 | 100% - 文字复制部分 | `detection_results.no_problem_percentage` |
+
+**关系**: 文字复制部分 + 无问题部分 = 100%
+
+**执行步骤**: 步骤11（统计指标计算）
+
+### 5️⃣ 剽窃类型检测（4种）
+
+| 序号 | 检测项 | 说明 | 输出位置 |
+|------|--------|------|----------|
+| 19 | ✅ 疑似剽窃观点 | 论点结构相似（30-40%） | `detection_results.plagiarism_analysis.suspected_idea_plagiarism` |
+| 20 | ✅ 疑似剽窃文字表述 | 文字高度相似（40-60%） | `detection_results.plagiarism_analysis.suspected_text_plagiarism` |
+| 21 | ✅ 疑似整体剽窃 | 大段内容相似（≥60%） | `detection_results.plagiarism_analysis.suspected_overall_plagiarism` |
+| 22 | ✅ 过度引用 | 引用密度过高（>3个/100字） | `detection_results.plagiarism_analysis.over_citation_segments` |
+
+**执行步骤**:
+- 剽窃类型：步骤7（剽窃类型检测）
+- 过度引用：步骤8（过度引用检测）
+
+### 6️⃣ 相似内容检测（2类）
+
+| 序号 | 检测项 | 说明 | 输出位置 |
+|------|--------|------|----------|
+| 23 | ✅ 相似表格 | 重复的表格引用 | `detection_results.similar_objects.similar_tables` |
+| 24 | ✅ 相似公式 | 重复的公式引用 | `detection_results.similar_objects.similar_formulas` |
+
+**执行步骤**: 步骤9（相似内容检测）
+
+### 7️⃣ AIGC检测（2项）
+
+| 序号 | 检测项 | 说明 | 输出位置 |
+|------|--------|------|----------|
+| 25 | ✅ AIGC总体生成率 | 整体AI生成概率 | `detection_results.aigc_rate` |
+| 26 | ✅ 各章节AIGC生成率 | 分章节生成概率 | `detection_results.aigc_analysis.chapter_rates` |
+
+**执行步骤**: 步骤6（AIGC检测）
+
+### 8️⃣ 增强AI检测（3项）⭐
+
+| 序号 | 检测项 | 说明 | 输出位置 |
+|------|--------|------|----------|
+| 27 | ⭐ AI词汇密度 | AI高频词汇使用频率（个/1000字） | `enhanced_ai_results.vocabulary.density_per_1000` |
+| 28 | ⭐ 句式突发性 | 句子长度变化程度（变异系数CV） | `enhanced_ai_results.burstiness.cv` |
+| 29 | ⭐ 改写攻击 | AI改写工具使用痕迹 | `enhanced_ai_results.paraphrasing.risk_level` |
+
+**执行步骤**: 步骤10（增强AI检测）[可选]
+
+### 📊 检测步骤与检测项映射
+
+| 步骤 | 名称 | 检测项数 | 检测项列表 |
+|------|------|----------|-----------|
+| 1 | 文档读取与预处理 | - | 提供基础数据 |
+| 2 | 章节提取 | - | 识别章节结构 |
+| 3 | 文本分割 | - | 生成检测片段 |
+| 4 | 引用识别 | - | 识别引用标记 |
+| 5 | 相似度检测 | - | 计算各片段相似度 |
+| 6 | AIGC检测 | 2 | AIGC总体生成率、各章节生成率 |
+| 7 | 剽窃类型检测 | 3 | 观点剽窃、文字剽窃、整体剽窃 |
+| 8 | 过度引用检测 | 1 | 过度引用 |
+| 9 | 相似内容检测 | 2 | 相似表格、相似公式 |
+| 10 | 增强AI检测 ⭐ | 3 | 词汇密度、突发性、改写攻击 |
+| 11 | 统计指标计算 | 17 | 知网4、维普3、字数8、百分比2 |
+| 12 | 报告生成 | - | 生成3种报告 |
+
+**总计**: 26项核心检测 + 3项可选检测 = 29项
 
 ---
 
@@ -652,14 +732,9 @@
 - **可选检测项**：
   - 增强AI检测：3项
 
-### C. 报告模板位置
+### C. 相关文档
 
-- 简洁版报告模板：`assets/report_template.md`
-- 报告生成脚本：`scripts/generate_report.py`
-- 检测流程脚本：`scripts/detection_workflow.py`
-
-### D. 相关文档
-
-- 检测标准和判定依据：`references/detection_criteria.md`
-- 技能说明文档：`SKILL.md`
-- 检测方法说明：`ai-references/detection-methods.md`
+- **检测方法与原理**：`references/detection_methods.md` - 检测算法、判定标准、技术原理
+- **技能说明文档**：`SKILL.md` - 技能使用指南和快速开始
+- **高级检测技术**：`references/advanced-detection.md` - 最新检测技术研究
+- **章节检测策略**：`references/chapter-strategies.md` - 各章节专项检测方法

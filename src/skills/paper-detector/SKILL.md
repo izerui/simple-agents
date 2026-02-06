@@ -1,232 +1,225 @@
 ---
-name: Paper Detector
-description: AI-powered academic paper detection tool that generates professional plagiarism and AIGC detection reports similar to CNKI and Weipu. Use when user needs to detect paper similarity or plagiarism, generate plagiarism detection reports, detect AI-generated content (AIGC) in papers, analyze citations and similar segments, or create professional detection reports. Supports .md, .txt, .docx, .pdf file formats. Enforced workflow mode ensures all 12 detection steps and 29 detection items are executed.
+name: 论文检测器
+description: 专业的学术论文检测工具，能够生成类似知网、维普的专业查重和AIGC检测报告。当用户需要进行论文相似度检测、生成查重报告、检测论文中的AI生成内容（AIGC）、分析引用和相似片段，或创建专业检测报告时使用此技能。支持.md、.txt、.docx、.pdf文件格式。强制工作流模式确保所有12个检测步骤和29个检测项都执行。
 ---
 
-# Paper Detector
+# 论文检测器 (Paper Detector)
 
-**Version**: 2.0 (Workflow Edition)
-**Last Updated**: 2025-02-07
+**版本**: 2.0 (工作流版)
+**最后更新**: 2025-02-07
 
-Professional academic paper detection tool that generates plagiarism and AIGC detection reports similar to CNKI and Weipu standards with mandatory workflow execution.
+专业的论文检测分析工具，能够对学术论文进行全面检测并生成类似知网、维普的专业查重和AIGC检测报告。
 
-## Quick Start
+## 快速开始
 
-### Basic Usage
+### 一键检测（推荐）⭐
 
 ```bash
-# Navigate to skill directory
+# 进入技能目录
 cd /skills/paper-detector
 
-# Execute detection (all 12 steps run automatically)
-python3 scripts/ai_paper_detector.py paper.md
-
-# Generate formatted reports
-python3 scripts/generate_report.py detection_result_*.json
+# 一键执行检测并生成所有报告（完全独立，单文件）
+python3 scripts/one_click_detect_standalone.py paper.md
 ```
 
-### Enhanced Detection
-
-```bash
-# Enable enhanced AI detection (adds 3 detection items)
-python3 scripts/ai_paper_detector.py paper.md --enhanced-ai
-```
+**输出文件**：
+- `detection_result_*.json` - 检测结果（JSON格式）
+- `reports/论文名_简洁版报告.md` - 简洁版报告
+- `reports/论文名_全文版报告.md` - 全文版报告
+- `reports/论文名_AIGC报告.md` - AIGC专项报告
 
 ### Python API
 
 ```python
 import sys
 sys.path.insert(0, '/skills/paper-detector/scripts')
-from ai_paper_detector import AIPaperDetector
+from one_click_detect_standalone import PaperDetector, ReportGenerator
 
-# Create detector
-detector = AIPaperDetector()
+# 创建检测器
+detector = PaperDetector()
 
-# Execute detection
-result = detector.analyze_paper(
-    "paper.md",
-    use_workflow=True,      # Mandatory workflow (default)
-    enhanced_ai=False       # Enhanced AI detection (optional)
-)
+# 执行检测
+result = detector.analyze_paper("paper.md")
 
-# Access results
-print(result['detection_results']['total_similarity'])
-print(result['detection_results']['aigc_rate'])
-```
-
-## Features
-
-### 1. Similarity Detection (CNKI Standard)
-
-**Core Indicators (4 items)**:
-- Total similarity ratio
-- Similarity excluding citations
-- Similarity excluding self-publications
-- Max single-source similarity ratio
-
-**Weipu Indicators (3 items)**:
-- Citation rate: Properly cited content percentage
-- Copy rate: Content with ≥50% similarity
-- Original rate: Content with <30% similarity
-
-**Word Count Statistics (8 items)**:
-- Total words
-- Total segments
-- Duplicate words
-- Suspected segment count
-- Max single duplicate words + location
-- Front overlap words
-- Suspected segment max/min overlap words
-
-**Plagiarism Type Detection (4 types)**:
-- Idea plagiarism (30-40% similarity)
-- Text expression plagiarism (40-60% similarity)
-- Overall plagiarism (≥60% similarity, >300 words)
-- Over-citation (>3 citations per 100 words)
-
-### 2. AIGC Detection
-
-**Basic Detection (2 items)**:
-- Overall AIGC generation rate
-- Chapter-wise AIGC generation rate
-
-**Enhanced AI Detection (3 items, optional)**:
-- AI vocabulary density (per 1000 words)
-- Sentence burstiness (coefficient of variation CV)
-- Paraphrasing attack detection
-
-**Risk Levels**:
-- Normal: <5%
-- Low risk: 5-15%
-- Medium risk: 15-30%
-- High risk: 30-50%
-- Extreme risk: ≥50%
-
-### 3. Similar Content Detection
-
-- Similar tables detection
-- Similar formulas detection
-
-## Mandatory Workflow
-
-### 12 Enforced Steps
-
-This skill uses a **mandatory workflow mode** that ensures all detection steps execute in sequence:
-
-1. Document reading and preprocessing
-2. Section extraction
-3. Text segmentation
-4. Citation detection
-5. Similarity detection (core)
-6. AIGC detection (core)
-7. Plagiarism type detection (4 types)
-8. Over-citation detection
-9. Similar content detection (tables, formulas)
-10. Enhanced AI detection (3 items) [optional]
-11. Metrics calculation
-12. Report generation
-
-### 29 Core Detection Items
-
-**CNKI indicators (4)**: Total similarity, similarity without citations, similarity without self, max single similarity
-
-**Weipu indicators (3)**: Citation rate, copy rate, original rate
-
-**Word count (8)**: Total words, segments, duplicate words, suspected segments, max duplicate, location, front overlap, min/max overlap
-
-**Percentage (2)**: Copy part percentage, problem-free percentage
-
-**Plagiarism types (4)**: Idea, text expression, overall, over-citation
-
-**Similar content (2)**: Tables, formulas
-
-**AIGC (2)**: Overall rate, chapter rates
-
-**Enhanced AI (3, optional)**: Vocabulary density, burstiness, paraphrasing
-
-### Why Mandatory Workflow?
-
-- ✅ **Completeness**: All steps must execute, no skipping
-- ✅ **Coverage**: All 29 detection items are checked
-- ✅ **Traceability**: Complete execution logs for each step
-- ✅ **Error Handling**: Any step failure interrupts the flow
-
-## Use Cases
-
-### Case 1: Thesis Pre-Check
-
-Before submitting your thesis, check for plagiarism and AIGC content:
-
-```python
-result = detector.analyze_paper("thesis.md")
-
-# Check if meets requirements
-similarity = float(result['detection_results']['total_similarity'].rstrip('%'))
-aigc = float(result['detection_results']['aigc_rate'].rstrip('%'))
-
-if similarity > 30:
-    print("⚠️ Similarity too high! Needs revision.")
-if aigc > 10:
-    print("⚠️ AIGC content too high! Needs revision.")
-```
-
-### Case 2: Paper Quality Analysis
-
-Analyze paper quality across multiple dimensions:
-
-```python
-# Analyze plagiarism types
-plagiarism = result['detection_results']['plagiarism_analysis']
-
-print(f"Idea plagiarism: {len(plagiarism['suspected_idea_plagiarism'])} cases")
-print(f"Text plagiarism: {len(plagiarism['suspected_text_plagiarism'])} cases")
-print(f"Overall plagiarism: {len(plagiarism['suspected_overall_plagiarism'])} cases")
-print(f"Over-citation: {plagiarism['over_citation_count']} cases")
-```
-
-### Case 3: Enhanced AI Analysis
-
-For deeper AI content analysis:
-
-```python
-result = detector.analyze_paper("paper.md", enhanced_ai=True)
-
-# Access enhanced AI results
-enhanced = result['detection_results']['enhanced_ai_results']
-
-print(f"Vocabulary density: {enhanced['vocabulary']['density_per_1000']}/1000 words")
-print(f"Burstiness CV: {enhanced['burstiness']['cv']}")
-print(f"Paraphrasing risk: {enhanced['paraphrasing']['risk_level']}")
-print(f"Overall risk: {enhanced['comprehensive']['overall_risk']}")
-```
-
-### Case 4: Report Generation
-
-Generate professional detection reports:
-
-```python
-from generate_report import PaperDetectionReport
-
-# Create report generator
-report_gen = PaperDetectionReport(
+# 生成报告
+report_gen = ReportGenerator(
     result['paper_info'],
     result['detection_results']
 )
 
-# Generate 3 types of reports
+# 生成报告
 simple_report = report_gen.generate_simple_report()
 full_report = report_gen.generate_full_report()
 aigc_report = report_gen.generate_aigc_report()
-
-# Save reports
-report_gen.save_report(simple_report, "simple_report.md")
-report_gen.save_report(full_report, "full_report.md")
-report_gen.save_report(aigc_report, "aigc_report.md")
 ```
 
-## Output Examples
+### 命令行参数
 
-### Console Output
+```bash
+# 启用增强AI检测
+python3 scripts/one_click_detect_standalone.py paper.md --enhanced-ai
+
+# 指定输出目录
+python3 scripts/one_click_detect_standalone.py paper.md --output-dir custom_reports
+```
+
+## 核心功能
+
+### 1. 相似度检测（知网标准）
+
+**核心指标（4项）**：
+- 总文字复制比
+- 去除引用文献复制比
+- 去除本人已发表文献复制比
+- 单篇最大文字复制比
+
+**维普指标（3项）**：
+- 引用率：正确引用内容占比
+- 复写率：相似度≥50%内容占比
+- 自写率：相似度<30%原创内容占比
+
+**字数统计（8项）**：
+- 总字数、总段落数、重复字数、疑似段落数
+- 单篇最大重复字数及位置
+- 前部重合字数
+- 疑似段落最大/最小重合字数
+
+**剽窃类型检测（4种）**：
+- 观点剽窃（30-40%相似度）
+- 文字表述剽窃（40-60%相似度）
+- 整体剽窃（≥60%相似度，>300字）
+- 过度引用（每100字超过3个引用）
+
+### 2. AIGC检测
+
+**基础检测（2项）**：
+- AIGC总体生成率
+- 各章节AIGC生成率
+
+**增强AI检测（3项，可选）**：
+- AI词汇密度（每1000字）
+- 句式突发性（变异系数CV）
+- 改写攻击检测
+
+**风险等级**：
+- 正常：<5%
+- 低风险：5-15%
+- 中风险：15-30%
+- 高风险：30-50%
+- 极高风险：≥50%
+
+### 3. 相似内容检测
+
+- 相似表格检测
+- 相似公式检测
+
+## 强制工作流
+
+### 12个强制步骤
+
+本技能使用**强制工作流模式**，确保所有检测步骤按顺序执行：
+
+1. 文档读取与预处理
+2. 章节提取
+3. 文本分割
+4. 引用识别
+5. 相似度检测（核心）
+6. AIGC检测（核心）
+7. 剽窃类型检测（4种）
+8. 过度引用检测
+9. 相似内容检测（表格、公式）
+10. 增强AI检测（3项）[可选]
+11. 统计指标计算
+12. 报告生成
+
+### 29个核心检测项
+
+**知网指标（4）**：总文字复制比、去除引用文献复制比、去除本人已发表文献复制比、单篇最大文字复制比
+
+**维普指标（3）**：引用率、复写率、自写率
+
+**字数统计（8）**：总字数、总段落数、重复字数、疑似段落数、单篇最大重复字数、单篇最大重复位置、前部重合字数、疑似段落最大/最小重合字数
+
+**百分比划分（2）**：文字复制部分、无问题部分
+
+**剽窃类型（4）**：疑似剽窃观点、疑似剽窃文字表述、疑似整体剽窃、过度引用
+
+**相似内容（2）**：表格、公式
+
+**AIGC检测（2）**：总体生成率、各章节生成率
+
+**增强AI检测（3，可选）**：AI词汇密度、句式突发性、改写攻击
+
+### 为什么使用强制工作流？
+
+- ✅ **完整性**：所有步骤必须执行，不能跳过
+- ✅ **覆盖性**：所有29个检测项都进行检查
+- ✅ **可追溯性**：每个步骤都有完整的执行日志
+- ✅ **错误处理**：任何步骤失败都会中断流程
+
+## 使用场景
+
+### 场景1：论文预检
+
+提交论文前进行自查：
+
+```python
+result = detector.analyze_paper("thesis.md")
+
+# 检查是否符合要求
+similarity = float(result['detection_results']['total_similarity'].rstrip('%'))
+aigc = float(result['detection_results']['aigc_rate'].rstrip('%'))
+
+if similarity > 30:
+    print("⚠️ 相似度过高！需要修改。")
+if aigc > 10:
+    print("⚠️ AIGC内容过高！需要修改。")
+```
+
+### 场景2：论文质量分析
+
+多维度分析论文质量：
+
+```python
+# 分析剽窃类型
+plagiarism = result['detection_results']['plagiarism_analysis']
+
+print(f"观点剽窃: {len(plagiarism['suspected_idea_plagiarism'])} 处")
+print(f"文字表述剽窃: {len(plagiarism['suspected_text_plagiarism'])} 处")
+print(f"整体剽窃: {len(plagiarism['suspected_overall_plagiarism'])} 处")
+print(f"过度引用: {plagiarism['over_citation_count']} 处")
+```
+
+### 场景3：增强AI分析
+
+进行更深入的AI内容分析：
+
+```python
+result = detector.analyze_paper("paper.md", enhanced_ai=True)
+
+# 访问增强AI结果
+enhanced = result['detection_results']['enhanced_ai_results']
+
+print(f"AI词汇密度: {enhanced['vocabulary']['density_per_1000']} 个/1000字")
+print(f"句式突发性CV: {enhanced['burstiness']['cv']}")
+print(f"改写攻击风险: {enhanced['paraphrasing']['risk_level']}")
+print(f"综合风险: {enhanced['comprehensive']['overall_risk']}")
+```
+
+### 场景4：批量处理
+
+批量处理多个论文文件：
+
+```bash
+# 使用脚本批量处理
+for file in papers/*.md; do
+    python3 scripts/one_click_detect_standalone.py "$file"
+done
+```
+
+## 输出示例
+
+### 控制台输出
 
 ```
 ======================================================================
@@ -262,7 +255,7 @@ report_gen.save_report(aigc_report, "aigc_report.md")
   AIGC总体生成率: 8.5%
 ```
 
-### Detection Result Structure
+### 检测结果结构
 
 ```json
 {
@@ -289,16 +282,7 @@ report_gen.save_report(aigc_report, "aigc_report.md")
       "40%-50%": {"count": 1, "words": 150},
       "30%-40%": {"count": 2, "words": 280},
       "<30%": {"count": 153, "words": 41163}
-    },
-    "similar_segments": [...],
-    "plagiarism_analysis": {
-      "suspected_idea_plagiarism": [...],
-      "suspected_text_plagiarism": [...],
-      "suspected_overall_plagiarism": [...],
-      "over_citation_segments": [...]
-    },
-    "similar_objects": {...},
-    "aigc_analysis": {...}
+    }
   },
   "metadata": {
     "detection_id": "PD20250207123456789",
@@ -310,101 +294,112 @@ report_gen.save_report(aigc_report, "aigc_report.md")
 }
 ```
 
-## Reference Standards
+## 参考标准
 
-### Similarity Thresholds (CNKI)
+### 相似度阈值（知网）
 
-| Level | Range | Color | Action |
-|-------|-------|-------|--------|
-| High | ≥50% | Red | Must revise |
-| Medium | 40%-50% | Yellow | Should revise |
-| Low | 30%-40% | Green | Consider revising |
-| Normal | <30% | None | No action needed |
+| 等级 | 范围 | 颜色 | 操作 |
+|------|------|------|------|
+| 高相似度 | ≥50% | 红色 | 必须修改 |
+| 中等相似度 | 40%-50% | 黄色 | 建议修改 |
+| 低相似度 | 30%-40% | 绿色 | 注意调整 |
+| 正常 | <30% | 无 | 无需处理 |
 
-### AIGC Risk Levels
+### AIGC风险等级
 
-| Level | Rate | Risk | Action |
-|-------|------|------|--------|
-| Extreme | ≥50% | Very High | Complete rewrite |
-| High | 30%-50% | High | Major revision |
-| Medium | 15%-30% | Medium | Focused revision |
-| Low | 5%-15% | Low | Minor revision |
-| Normal | <5% | None | No action needed |
+| 等级 | 生成率 | 风险 | 操作 |
+|------|--------|------|------|
+| 极高风险 | ≥50% | 很高 | 完全重写 |
+| 高风险 | 30%-50% | 高 | 大幅修改 |
+| 中风险 | 15%-30% | 中 | 重点修改 |
+| 低风险 | 5%-15% | 低 | 适当修改 |
+| 正常 | <5% | 无 | 无需处理 |
 
-### Acceptance Standards
+### 合格标准
 
-- **Bachelor thesis**: Total similarity ≤ 30%
-- **Master thesis**: Total similarity ≤ 20%
-- **PhD thesis**: Total similarity ≤ 15%
-- **Journal submission**: Total similarity ≤ 15%
-- **AIGC rate**: Generally ≤ 10%
+- **本科毕业论文**：总文字复制比 ≤ 30%
+- **硕士毕业论文**：总文字复制比 ≤ 20%
+- **博士毕业论文**：总文字复制比 ≤ 15%
+- **期刊投稿**：总文字复制比 ≤ 15%
+- **AIGC生成率**：一般要求 ≤ 10%
 
-## Limitations
+## 限制说明
 
-- **File formats**: Supports .md, .txt, .docx, .pdf (must be readable as text)
-- **File size**: Recommended < 10MB for optimal performance
-- **Language**: Optimized for Chinese and English
-- **Network access**: Not required (uses local analysis)
-- **Detection scope**: Text similarity and AIGC patterns, not semantic analysis
+- **文件格式**：支持.md、.txt、.docx、.pdf（必须可读为文本）
+- **文件大小**：建议 < 10MB 以获得最佳性能
+- **语言支持**：针对中文和英文优化
+- **网络访问**：不需要（使用本地分析）
+- **检测范围**：文本相似度和AIGC模式检测，非语义分析
 
-## Common Issues
+## 常见问题
 
-### Issue: High false positive rate
+### 问题：误报率较高
 
-**Symptoms**: Normal content flagged as similar or AI-generated
+**症状**：正常内容被标记为相似或AI生成
 
-**Solutions**:
-1. Ensure proper citations are marked with [1] or (Author, Year)
-2. Add personal insights and analysis
-3. Use varied sentence structures
-4. Include specific data and examples
+**解决方案**：
+1. 确保引用使用[1]或(作者, 年份)格式标记
+2. 增加个人观点和分析
+3. 使用多样的句式结构
+4. 包含具体的数据和案例
 
-### Issue: Workflow execution fails
+### 问题：工作流执行失败
 
-**Symptoms**: Detection stops at a certain step
+**症状**：检测在某一步骤停止
 
-**Solutions**:
+**解决方案**：
 ```python
-# Check which step failed
+# 检查哪个步骤失败
 workflow_info = result.get("workflow_info", {})
 for step_result in workflow_info.get('steps_summary', []):
     if not step_result['success']:
-        print(f"Failed step: {step_result['step_name']}")
-        print(f"Error: {step_result['error']}")
+        print(f"失败步骤: {step_result['step_name']}")
+        print(f"错误: {step_result['error']}")
 
-# Try using traditional mode (not recommended)
+# 尝试使用传统模式（不推荐）
 result = detector.analyze_paper("paper.md", use_workflow=False)
 ```
 
-### Issue: Processing too slow
+### 问题：处理速度慢
 
-**Symptoms**: Detection takes too long for large papers
+**症状**：大论文检测时间过长
 
-**Solutions**:
-1. Split large papers into chapters
-2. Disable enhanced AI detection if not needed
-3. Ensure sufficient system resources
+**解决方案**：
+1. 将大论文拆分为章节
+2. 如不需要可禁用增强AI检测
+3. 确保系统资源充足
 
-## Testing
+## 测试验证
 
-### Test Workflow
-
-```bash
-# Run workflow tests
-python3 scripts/test_workflow.py
-```
-
-Expected output:
-```
-✅ 步骤覆盖测试: All steps implemented
-✅ 检测项覆盖测试: 29 core items documented
-✅ 工作流检测测试: Workflow execution successful
-```
-
-### Verify Detection Items
+### 验证检测项
 
 ```python
-# Verify all core detection items exist
+# 验证所有核心检测项存在
+required_items = [
+    "total_similarity",
+    "similarity_without_citations",
+    "similarity_without_self",
+    "max_single_similarity_ratio",
+    "citation_rate",
+    "copy_rate",
+    "original_rate",
+    "aigc_rate"
+]
+
+detection_results = result["detection_results"]
+
+missing = [item for item in required_items if item not in detection_results]
+
+if missing:
+    print(f"❌ 缺少检测项: {missing}")
+else:
+    print("✅ 所有核心检测项都存在")
+```
+
+### 验证检测项
+
+```python
+# 验证所有核心检测项存在
 required_items = [
     "total_similarity",
     "similarity_without_citations",
@@ -421,87 +416,100 @@ detection_results = result["detection_results"]
 missing = [item for item in required_items if item not in detection_results]
 
 if missing:
-    print(f"❌ Missing items: {missing}")
+    print(f"❌ 缺少检测项: {missing}")
 else:
-    print("✅ All core detection items present")
+    print("✅ 所有核心检测项都存在")
 ```
 
-## Advanced Topics
+## 高级主题
 
-### Custom Workflow
-
-Create custom detection workflows:
+### 自定义工作流
 
 ```python
-from detection_workflow import DetectionWorkflow, DetectionStep
+# 直接导入独立脚本中的类
+import sys
+sys.path.insert(0, '/skills/paper-detector/scripts')
+from one_click_detect_standalone import PaperDetector
 
-class CustomWorkflow(DetectionWorkflow):
-    # Add custom steps
-    pass
+# 创建检测器
+detector = PaperDetector()
+
+# 执行检测
+result = detector.analyze_paper("paper.md")
 ```
 
-See `references/detection_workflow.md` for details.
+**参考文档**：
+- `references/detection_workflow.md` - 工作流规范
+- `references/detection_methods.md` - 检测方法原理
 
-### Report Templates
+### 报告模板
 
-Customize report templates in `assets/report_template.md`
+在 `assets/report_template.md` 中自定义报告模板
 
-### Integration with Other Tools
+### 与其他工具集成
 
 ```python
-# Integrate with document processing
+# 与文档处理集成
 from docx import Document
 
 doc = Document("paper.docx")
 text = "\n".join([para.text for para in doc.paragraphs])
 
-# Save as temp file
+# 保存为临时文件
 with open("temp.md", "w") as f:
     f.write(text)
 
-# Detect
+# 执行检测
 result = detector.analyze_paper("temp.md")
 ```
 
-## Documentation
+## 文档资源
 
-- **Workflow specification**: `references/detection_workflow.md`
-- **Quick start guide**: `references/quick_start_workflow.md`
-- **Detection checklist**: `references/detection_items_checklist.md`
-- **System architecture**: `detection_flow_architecture.md`
+### 核心文档
 
-## Version History
+- **检测流程规范**：`references/detection_workflow.md` - 12个强制步骤详细说明 + 29个核心检测项清单
+- **检测方法与原理**：`references/detection_methods.md` - 检测算法、判定标准、技术原理
 
-### v2.0 - Workflow Edition (2025-02-07)
+### 进阶文档
 
-**New Features**:
-- ✅ Mandatory workflow mode with 12 enforced steps
-- ✅ Complete coverage of 29 core detection items
-- ✅ Enhanced AI detection (3 additional items)
-- ✅ Comprehensive step logging and error handling
-- ✅ Workflow testing suite
+- **前沿技术**：`references/advanced-detection.md` - 最新检测技术
+- **章节策略**：`references/chapter-strategies.md` - 各章节检测策略
+- **中文资源**：`references/chinese-resources.md` - 中文论文特点
+- **工具指南**：`references/tools-guide.md` - 检测工具对比
+- **系统架构**：已整合到 `detection_workflow.md`
 
-### v1.0 - Traditional Edition
+## 版本历史
 
-**Features**:
-- Basic similarity and AIGC detection
-- Plagiarism type detection
-- Report generation
-- Maintained for backward compatibility
+### v2.0 - 工作流版 (2025-02-07)
 
-## Support
+**新功能**：
+- ✅ 强制工作流模式，12个强制步骤
+- ✅ 完全覆盖29个核心检测项
+- ✅ 增强AI检测（增加3项）
+- ✅ 完整的步骤日志和错误处理
+- ✅ 工作流测试套件
 
-For issues, questions, or contributions:
-- Check documentation in `references/` directory
-- Review `references/detection_workflow.md` for detailed workflow info
-- Run `python3 scripts/test_workflow.py` for diagnostics
+### v1.0 - 传统版
+
+**功能**：
+- 基础相似度和AIGC检测
+- 剽窃类型检测
+- 报告生成
+- 保留向后兼容性
+
+## 技术支持
+
+如有问题、疑问或贡献意向：
+- 查看 `references/` 目录中的文档
+- 阅读 `references/detection_workflow.md` 了解详细工作流信息
+- 阅读 `references/detection_methods.md` 了解检测方法原理
 
 ---
 
-**Related Skills**:
-- `document-skills:docx` - For working with .docx files
-- `document-skills:pdf` - For working with PDF files
+**相关技能**：
+- `document-skills:docx` - 处理.docx文件
+- `document-skills:pdf` - 处理PDF文件
 
-**See Also**:
-- [Claude Skills Best Practices](https://claudecn.com/docs/agent-skills/best-practices/)
-- [Agent Skills Documentation](https://claudecn.com/docs/agent-skills/)
+**参考资源**：
+- [Claude Skills 最佳实践](https://claudecn.com/docs/agent-skills/best-practices/)
+- [Agent Skills 文档](https://claudecn.com/docs/agent-skills/)
