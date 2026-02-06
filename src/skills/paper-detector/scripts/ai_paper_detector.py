@@ -1150,5 +1150,322 @@ def main():
     print("提示: 使用 generate_report.py 生成格式化的检测报告")
 
 
+
+# ============================================================================
+# 增强的AI检测功能（从ai文件夹整合）
+# ============================================================================
+
+class EnhancedAIDetector:
+    """
+    增强的AI检测器，整合了ai文件夹的检测功能
+
+    功能包括：
+    1. AI词汇密度检测
+    2. 句式突发性检测
+    3. 改写攻击检测
+    """
+
+    # AI词汇库定义
+    AI_WORDS = {
+        # 连接词/过渡词
+        "此外", "同时", "另外", "再者", "总体而言", "综上所述", "总的来说",
+        "而且", "并且", "进而", "从而", "首先", "其次", "最后",
+        "一方面", "另一方面", "除此之外", "另外一方面",
+        # 形容词/副词
+        "重要的", "关键的", "核心的", "显著的", "深刻的", "全面的", "系统的",
+        "基本的", "主要的", "本质的", "根本的", "重大的",
+        "具有", "关键", "重要",
+        # 动词
+        "促进", "推动", "助力", "支撑", "增强", "提升",
+        "体现", "反映", "展现", "表明", "涵盖", "包含", "涉及", "覆盖",
+        "强调", "突出", "彰显", "凸显",
+        # 虚词
+        "具有重要", "具有重要理论", "具有重要实践", "具有重要的",
+        "提供参考", "具有重要的参考价值", "重要参考",
+        "具有一定的", "具有重要意义",
+        # 其他
+        "深入分析", "详细分析", "全面分析", "综合分析",
+        "关键因素", "核心因素", "主要因素",
+        "理论意义", "实践意义",
+        "值得关注", "值得注意", "需要指出"
+    }
+
+    # 公式化开头模式
+    FORMULA_STARTS = [
+        r'^本文.*?(采用|使用|利用|通过)',
+        r'^本研究.*?(采用|使用|利用|通过)',
+        r'^本研究.*?(旨在|在于|关注)',
+        r'^文章.*?(分析|探讨|研究)',
+        r'从.*层面来看',
+        r'从.*方面来看',
+        r'总体而言',
+        r'综上所述',
+    ]
+
+    # AI常见模式
+    AI_PATTERNS = [
+        r'一方面.*?另一方面',
+        r'首先.*?其次.*?最后',
+        r'重要.*?意义',
+        r'关键.*?作用',
+        r'显著.*?影响',
+        r'具有.*?性',
+        r'研究表明.*?(，|。)',
+        r'学者认为.*?(，|。)',
+    ]
+
+    # 改写标记
+    PARAPHRASE_MARKERS = {
+        '采用': ['使用', '利用', '应用'],
+        '使用': ['采用', '利用', '运用'],
+        '分析': ['探讨', '研究', '探究'],
+        '表明': ['显示', '揭示', '展现'],
+        '包含': ['包括', '涵盖', '含有'],
+    }
+
+    @staticmethod
+    def detect_vocabulary_density(text: str) -> Dict:
+        """
+        检测AI词汇密度
+
+        Args:
+            text: 待检测文本
+
+        Returns:
+            检测结果字典
+        """
+        char_count = len(text)
+        ai_count = 0
+        found_words = []
+        text_lower = text.lower()
+        words_to_check = {word.lower(): word for word in EnhancedAIDetector.AI_WORDS}
+
+        for word_lower, original in words_to_check.items():
+            pattern = r'\b' + re.escape(word_lower) + r'\b'
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                count = len(matches)
+                ai_count += count
+                found_words.extend([original] * count)
+
+        density_per_1000 = (ai_count / char_count * 1000) if char_count > 0 else 0
+
+        if density_per_1000 > 50:
+            risk = "高风险"
+            risk_color = "🔴"
+        elif density_per_1000 > 30:
+            risk = "中等风险"
+            risk_color = "🟡"
+        else:
+            risk = "正常"
+            risk_color = "🟢"
+
+        return {
+            'total_chars': char_count,
+            'ai_count': ai_count,
+            'density_per_1000': round(density_per_1000, 1),
+            'risk_level': risk,
+            'risk_color': risk_color,
+            'found_words': found_words[:20]  # 只返回前20个
+        }
+
+    @staticmethod
+    def detect_burstiness(text: str) -> Dict:
+        """
+        检测句式突发性（变化程度）
+
+        Args:
+            text: 待检测文本
+
+        Returns:
+            突发性分析结果
+        """
+        # 分割句子
+        sentences = re.split(r'[。！？；]', text)
+        sentences = [s.strip() for s in sentences if 5 < len(s.strip()) < 200]
+
+        if len(sentences) < 5:
+            return {
+                'sentence_count': len(sentences),
+                'cv': 0,
+                'adjacent_diff': 0,
+                'risk_level': '数据不足',
+                'risk_color': '⚪',
+                'reason': '句子数量太少(少于5句),无法准确评估'
+            }
+
+        lengths = [len(s) for s in sentences]
+        mean_length = sum(lengths) / len(lengths)
+        variance = sum((x - mean_length) ** 2 for x in lengths) / len(lengths)
+        std_dev = variance ** 0.5
+
+        min_length = min(lengths)
+        max_length = max(lengths)
+        cv = std_dev / mean_length if mean_length > 0 else 0
+
+        adjacent_diffs = [abs(lengths[i] - lengths[i+1]) for i in range(len(lengths)-1)]
+        avg_adjacent_diff = sum(adjacent_diffs) / len(adjacent_diffs) if adjacent_diffs else 0
+
+        if cv < 0.15:
+            risk = "高风险"
+            risk_color = "🔴"
+            reason = f"句子长度过于一致(变异系数{cv:.3f}),缺乏自然变化"
+        elif cv < 0.25:
+            risk = "中等风险"
+            risk_color = "🟡"
+            reason = f"句子长度变化较小(变异系数{cv:.3f}),建议增加变化"
+        else:
+            risk = "正常"
+            risk_color = "🟢"
+            reason = f"句子长度变化自然(变异系数{cv:.3f})"
+
+        return {
+            'sentence_count': len(sentences),
+            'mean_length': round(mean_length, 1),
+            'std_dev': round(std_dev, 2),
+            'min_length': min_length,
+            'max_length': max_length,
+            'cv': round(cv, 3),
+            'adjacent_diff': round(avg_adjacent_diff, 1),
+            'length_range': max_length - min_length,
+            'risk_level': risk,
+            'risk_color': risk_color,
+            'reason': reason
+        }
+
+    @staticmethod
+    def detect_paraphrasing(text: str) -> Dict:
+        """
+        检测改写攻击痕迹
+
+        Args:
+            text: 待检测文本
+
+        Returns:
+            改写攻击检测结果
+        """
+        issues = []
+
+        # 1. 句子结构一致性
+        sentences = re.split(r'[。！？；]', text)
+        sentences = [s.strip() for s in sentences if 5 < len(s.strip()) < 200]
+
+        if len(sentences) >= 5:
+            lengths = [len(s) for s in sentences]
+            mean_len = sum(lengths) / len(lengths)
+            variance = sum((x - mean_len) ** 2 for x in lengths) / len(lengths)
+            std_dev = variance ** 0.5
+
+            if std_dev < 10:
+                issues.append("句子结构过于一致")
+        else:
+            issues.append("句子数量不足")
+
+        # 2. 改写痕迹
+        paraphrase_count = 0
+        paraphrase_examples = []
+
+        for original, alternatives in EnhancedAIDetector.PARAPHRASE_MARKERS.items():
+            if original in text:
+                for alt in alternatives:
+                    if alt in text:
+                        paraphrase_count += 1
+                        paraphrase_examples.append(f"{original} → {alt}")
+                        break
+
+        if paraphrase_count > 0:
+            issues.append(f"发现{paraphrase_count}处改写痕迹")
+
+        # 3. 个人表达特征
+        personal_features = []
+        if '我认为' in text or '笔者' in text or '我们' in text:
+            personal_features.append('个人声音')
+        if re.search(r'\d+.*?%|\d+.*?个|\d+.*?例', text):
+            personal_features.append('数据引用')
+        if '但是' in text or '然而' in text or '不过' in text:
+            personal_features.append('转折表达')
+
+        if len(personal_features) < 2:
+            issues.append("缺乏个人表达特征")
+
+        # 计算风险
+        risk_score = len(issues) / 4
+        if risk_score >= 0.6:
+            risk = "高风险"
+            risk_color = "🔴"
+        elif risk_score >= 0.3:
+            risk = "中等风险"
+            risk_color = "🟡"
+        else:
+            risk = "低风险"
+            risk_color = "🟢"
+
+        return {
+            'risk_level': risk,
+            'risk_color': risk_color,
+            'risk_score': round(risk_score, 2),
+            'issues': issues,
+            'paraphrase_examples': paraphrase_examples[:5]  # 只返回前5个
+        }
+
+    @classmethod
+    def comprehensive_detection(cls, text: str) -> Dict:
+        """
+        综合AI检测
+
+        Args:
+            text: 待检测文本
+
+        Returns:
+            综合检测结果
+        """
+        vocab_result = cls.detect_vocabulary_density(text)
+        burstiness_result = cls.detect_burstiness(text)
+        paraphrasing_result = cls.detect_paraphrasing(text)
+
+        # 计算综合风险
+        risk_scores = []
+        if vocab_result['risk_level'] == '高风险':
+            risk_scores.append(3)
+        elif vocab_result['risk_level'] == '中等风险':
+            risk_scores.append(2)
+        else:
+            risk_scores.append(1)
+
+        if burstiness_result['risk_level'] == '高风险':
+            risk_scores.append(3)
+        elif burstiness_result['risk_level'] == '中等风险':
+            risk_scores.append(2)
+        elif burstiness_result['risk_level'] == '正常':
+            risk_scores.append(1)
+
+        if paraphrasing_result['risk_level'] == '高风险':
+            risk_scores.append(3)
+        elif paraphrasing_result['risk_level'] == '中等风险':
+            risk_scores.append(2)
+        else:
+            risk_scores.append(1)
+
+        avg_score = sum(risk_scores) / len(risk_scores)
+
+        if avg_score >= 2.5:
+            overall_risk = "高风险"
+            overall_risk_color = "🔴"
+        elif avg_score >= 1.8:
+            overall_risk = "中等风险"
+            overall_risk_color = "🟡"
+        else:
+            overall_risk = "低风险"
+            overall_risk_color = "🟢"
+
+        return {
+            'overall_risk': overall_risk,
+            'overall_risk_color': overall_risk_color,
+            'vocabulary': vocab_result,
+            'burstiness': burstiness_result,
+            'paraphrasing': paraphrasing_result
+        }
+
+
 if __name__ == "__main__":
     main()

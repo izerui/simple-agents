@@ -70,15 +70,79 @@ python3 /skills/paper-detector/scripts/generate_report.py detection_result_PDXXX
 - **低相似度**（30%-40%）- 绿色标注，注意调整
 - **正常**（<30%）- 无需标注
 
-### 2. AIGC检测
+### 2. AIGC检测（增强版）
 
 检测论文中AI生成内容的比例，识别高风险AI生成段落。
 
-**检测内容**：
+**基础检测内容**：
 - AIGC总体生成率
 - 各章节/段落的AIGC生成率
 - 高风险段落标注
 - 风险等级评定（正常/低风险/中风险/高风险/极高风险）
+
+**增强检测功能**（从ai文件夹整合）：
+
+#### 2.1 AI词汇密度检测
+- 检测AI高频词汇使用频率（每1000字）
+- 识别连接词、形容词、动词等AI常用词
+- 风险等级：>50个/1000字（高风险），30-50个/1000字（中等风险），<30个/1000字（正常）
+
+**AI高频词汇示例**：
+```
+连接词：此外、同时、另外、再者、总体而言、综上所述
+形容词：重要的、关键的、核心的、显著的、深刻的
+动词：体现、反映、展现、表明、涵盖、包含
+虚词：具有重要、提供参考、具有重要意义
+```
+
+#### 2.2 句式突发性检测
+- 分析句子长度的变化程度（变异系数CV）
+- 识别过于规整的句式结构（AI特征）
+- 风险等级：CV<0.15（高风险），0.15-0.25（中等风险），>0.25（正常）
+
+**检测指标**：
+- 句子数量、平均长度、标准差
+- 变异系数（CV）
+- 相邻句子差异
+- 长度范围
+
+#### 2.3 改写攻击检测
+- 检测AI改写工具的痕迹
+- 识别同义词替换模式
+- 评估词汇多样性和个人表达特征
+
+**检测内容**：
+- 句子结构一致性
+- 改写痕迹（采用→使用，分析→探讨等）
+- 个人表达特征（个人声音、数据引用、转折表达）
+
+#### 2.4 综合AI检测
+整合以上三种检测方法，提供综合评估：
+- 整体风险评级
+- 分项检测详情
+- 修改建议
+
+**使用方法**：
+```python
+import sys
+sys.path.insert(0, '/skills/paper-detector/scripts')
+from ai_paper_detector import EnhancedAIDetector
+
+# 创建检测器
+detector = EnhancedAIDetector()
+
+# 1. AI词汇密度检测
+vocab_result = detector.detect_vocabulary_density(text)
+
+# 2. 句式突发性检测
+burstiness_result = detector.detect_burstiness(text)
+
+# 3. 改写攻击检测
+paraphrasing_result = detector.detect_paraphrasing(text)
+
+# 4. 综合检测（推荐）
+comprehensive_result = detector.comprehensive_detection(text)
+```
 
 ### 3. 剽窃类型识别
 
@@ -493,11 +557,52 @@ report.save_report(aigc_report, "AIGC报告.md")
   - `segment_text()` - 智能文本分段
   - `detect_citations()` - 引用识别
 
+  **增强AI检测功能**（从ai文件夹整合）：
+  - `EnhancedAIDetector` - 增强的AI检测器类
+  - `detect_vocabulary_density()` - AI词汇密度检测
+  - `detect_burstiness()` - 句式突发性检测
+  - `detect_paraphrasing()` - 改写攻击检测
+  - `comprehensive_detection()` - 综合AI检测
+
 - **generate_report.py** - 报告生成工具
   - `PaperDetectionReport` - 报告生成器类
   - `generate_simple_report()` - 生成简洁版报告（包含所有新指标）
   - `generate_full_report()` - 生成全文版报告（包含详细分析）
   - `generate_aigc_report()` - 生成AIGC专项报告
   - `save_report()` - 保存报告到文件
+
+### ai-references/
+
+AI检测相关参考资料（从ai文件夹整合）：
+
+- **advanced-detection.md** - 前沿AI检测技术
+  - 改写攻击检测
+  - 水印检测技术
+  - 对抗攻击识别
+
+- **chinese-resources.md** - 中文降AI率策略
+  - 中文写作特点
+  - 降AI率技巧
+  - 常见问题解答
+
+- **chapter-strategies.md** - 各章节降AI率策略
+  - 摘要降AI率
+  - 文献综述降AI率
+  - 方法/结果/结论章节策略
+
+- **detection-methods.md** - 详细检测方法
+  - 词汇密度检测
+  - 突发性分析
+  - 改写痕迹识别
+
+- **technical-principles.md** - 技术原理说明
+  - 困惑度分析
+  - 突发性理论
+  - AI生成模式识别
+
+- **tools-guide.md** - 检测工具完整指南
+  - 工具对比
+  - 使用方法
+  - 结果解读
 
 **注意**: `analyze_paper.py` 已被 `ai_paper_detector.py` 完全替代，不再建议使用。
