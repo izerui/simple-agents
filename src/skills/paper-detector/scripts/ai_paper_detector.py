@@ -56,9 +56,6 @@ class AIPaperDetector:
         """
         path = Path(file_path)
 
-        if not path.exists():
-            return {"error": f"文件不存在: {file_path}"}
-
         # 统一按文本方式读取，不区分文件格式
         return self._read_txt(path)
 
@@ -584,17 +581,51 @@ class AIPaperDetector:
 
         return suggestions
 
-    def analyze_paper(self, file_path: str, use_ai: bool = True) -> Dict:
+    def analyze_paper(self, file_path: str, use_ai: bool = True, use_workflow: bool = True, enhanced_ai: bool = False) -> Dict:
         """
         完整分析论文
+
+        ⚠️ 重要说明：默认使用强制工作流模式，确保所有检测步骤都执行
 
         Args:
             file_path: 论文文件路径
             use_ai: 是否使用AI分析（当前版本为模拟）
+            use_workflow: 是否使用强制工作流模式（默认True，强烈推荐）
+            enhanced_ai: 是否执行增强AI检测（默认False）
 
         Returns:
             完整的检测结果
         """
+        # 使用强制工作流模式（推荐）
+        if use_workflow:
+            try:
+                from detection_workflow import DetectionWorkflow
+
+                workflow = DetectionWorkflow(self)
+                result = workflow.execute_workflow(file_path, enhanced_ai_check=enhanced_ai)
+
+                # 返回检测结果和元数据
+                detection_result = result["detection_result"]
+                workflow_info = result["workflow_info"]
+
+                detection_result["metadata"] = {
+                    "detection_id": self.detection_id,
+                    "detection_time": self.detection_time,
+                    "workflow_mode": "enabled",
+                    "workflow_steps_completed": workflow_info["completed_steps"],
+                    "workflow_success_rate": f"{workflow_info['success_rate']*100:.1f}%"
+                }
+
+                return detection_result
+
+            except ImportError:
+                print("⚠️  警告：无法导入工作流模块，使用传统模式")
+            except Exception as e:
+                print(f"⚠️  工作流执行失败，使用传统模式: {str(e)}")
+
+        # 传统模式（不推荐，保留用于兼容性）
+        print("⚠️  使用传统检测模式（建议启用工作流模式 use_workflow=True）")
+
         # 读取文档
         doc_result = self.read_document(file_path)
         if "error" in doc_result:
@@ -1057,24 +1088,65 @@ class AIPaperDetector:
 def main():
     """主函数"""
     if len(sys.argv) < 2:
-        print("用法: python ai_paper_detector.py <论文文件路径>")
+        print("用法: python ai_paper_detector.py <论文文件路径> [选项]")
+        print()
+        print("选项:")
+        print("  --no-workflow    禁用强制工作流模式（不推荐）")
+        print("  --enhanced-ai    启用增强AI检测（词汇密度、突发性、改写攻击）")
+        print()
+        print("示例:")
+        print("  python ai_paper_detector.py paper.md")
+        print("  python ai_paper_detector.py paper.md --enhanced-ai")
         sys.exit(1)
 
     file_path = sys.argv[1]
+    use_workflow = "--no-workflow" not in sys.argv
+    enhanced_ai = "--enhanced-ai" in sys.argv
+
+    print("=" * 70)
+    print("🔍 论文检测工具 - AI驱动版")
+    print("=" * 70)
+    print(f"📁 文件: {file_path}")
+    print(f"⚙️  模式: {'强制工作流' if use_workflow else '传统模式'}")
+    if enhanced_ai:
+        print(f"🔬 增强AI检测: 启用")
+    print()
+    print("⚠️  重要提示:")
+    print("  - 强制工作流模式确保所有检测步骤都执行")
+    print("  - 增强AI检测可提供更深入的AI内容分析")
+    print()
 
     detector = AIPaperDetector()
-    result = detector.analyze_paper(file_path)
+
+    try:
+        result = detector.analyze_paper(
+            file_path,
+            use_workflow=use_workflow,
+            enhanced_ai=enhanced_ai
+        )
 
     if "error" in result:
-        print(f"错误: {result['error']}")
+        print(f"❌ 错误: {result['error']}")
         sys.exit(1)
 
+    # 检查是否使用了工作流
+    is_workflow_mode = result.get("metadata", {}).get("workflow_mode") == "enabled"
+
     # 输出结果
-    print("=" * 60)
-    print("论文检测报告")
-    print("=" * 60)
+    print()
+    print("=" * 70)
+    if is_workflow_mode:
+        print("✅ 论文检测完成 - 工作流模式")
+    else:
+        print("✅ 论文检测完成 - 传统模式")
+    print("=" * 70)
     print(f"检测编号: {result['metadata']['detection_id']}")
     print(f"检测时间: {result['metadata']['detection_time']}")
+
+    if is_workflow_mode:
+        print(f"工作流步骤: {result['metadata']['workflow_steps_completed']}/12")
+        print(f"成功率: {result['metadata']['workflow_success_rate']}")
+    print()
     print()
 
     paper_info = result["paper_info"]
