@@ -188,35 +188,6 @@ def _trip(path):
     return path.lstrip("/").lstrip("./").lstrip("../")
 
 
-def _normalize_output_path(source_path: str, output_pathlib) -> str:
-    """
-    确保输出路径与输入路径的格式保持一致（相对路径或绝对路径）
-
-    Args:
-        source_path: 原始输入路径
-        output_pathlib: Path 对象形式的输出路径
-
-    Returns:
-        与输入路径格式一致的输出路径字符串
-    """
-    # 判断输入路径是否为相对路径
-    source_path_obj = Path(source_path)
-
-    if source_path_obj.is_absolute():
-        # 输入是绝对路径，返回绝对路径
-        return str(output_pathlib.absolute())
-    else:
-        # 输入是相对路径，尝试生成相对路径
-        try:
-            from src.utils.util import get_backend_per_thread
-            backend = get_backend_per_thread({})
-            working_dir = backend._resolve_path('.')
-            return str(output_pathlib.relative_to(working_dir))
-        except (ValueError, AttributeError):
-            # 如果无法计算相对路径，返回原始相对路径形式
-            return str(output_pathlib)
-
-
 def _convert_via_remote_api(
         source_path: str,
         generate_picture_images: bool = False,
@@ -234,8 +205,9 @@ def _convert_via_remote_api(
     """
     backend = get_backend_per_thread({})
     source_pathlib = backend._resolve_path(source_path)
-    markdown_path = source_pathlib.with_suffix(".md")
-    output_file = _normalize_output_path(source_path, markdown_path)
+    # 基于 source_path 字符串生成 markdown 路径，避免路径解析问题
+    markdown_path = backend._resolve_path(source_path.rsplit('.', 1)[0] + '.md')
+    output_file = source_path.rsplit('.', 1)[0] + '.md'
     api_base_url = "https://dcca.hhstu.edu.cn/transfer"
 
     # 计算超时时间（AI 功能需要更长时间）
@@ -320,8 +292,9 @@ def _convert_pdf_to_markdown(source_path: str,
                 do_formula_enrichment=do_formula_enrichment,
             )
 
-        # 确定 Markdown 输出路径
-        markdown_path = source_pathlib.with_suffix(".md")
+        # 确定 Markdown 输出路径（基于 source_path 字符串，避免路径解析问题）
+        markdown_path = backend._resolve_path(source_path.rsplit('.', 1)[0] + '.md')
+        output_file = source_path.rsplit('.', 1)[0] + '.md'
 
         # 如果 Markdown 文件不存在，则进行转换
         if not markdown_path.exists():
@@ -344,9 +317,6 @@ def _convert_pdf_to_markdown(source_path: str,
                 "error": f"markdown file was not created: {markdown_path}",
                 "source_path": source_path,
             }
-
-        # 确保输出路径格式与输入路径一致
-        output_file = _normalize_output_path(source_path, markdown_path)
 
         return {
             "success": True,
