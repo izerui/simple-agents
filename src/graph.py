@@ -86,7 +86,7 @@ agent = create_deep_agent(
     store=my_store,
     backend=get_backend_per_thread,
     system_prompt=MAIN_AGENT_INSTRUCTIONS,
-    # subagents=[convert_agent, research_agent],
+    subagents=[research_agent],
     skills=[
         '/skills'
     ],
