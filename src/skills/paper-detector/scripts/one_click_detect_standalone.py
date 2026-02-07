@@ -1056,7 +1056,7 @@ def main():
         )
 
         # 创建输出目录
-        output_dir = script_dir / "reports"
+        output_dir = "reports"
         output_dir.mkdir(exist_ok=True)
 
         base_name = Path(paper_file).stem
