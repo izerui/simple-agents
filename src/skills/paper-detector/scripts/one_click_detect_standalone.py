@@ -1062,7 +1062,7 @@ def main():
         print()
 
         report = report_gen.generate_report()
-        report_file = "reports" / f"{base_name}_检测报告.md"
+        report_file = f"reports/{base_name}_检测报告.md"
         report_gen.save_report(report, str(report_file))
 
         print()
