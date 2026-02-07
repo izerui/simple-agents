@@ -1037,8 +1037,7 @@ def main():
 
         # ==================== 保存检测结果 ====================
         detection_id = result.get("metadata", {}).get("detection_id", detector.detection_id)
-        script_dir = Path(__file__).parent
-        json_file = script_dir / f"detection_result_{detection_id}.json"
+        json_file = f"detection_result_{detection_id}.json"
 
         print(f"💾 保存检测结果: {json_file}")
         with open(json_file, 'w', encoding='utf-8') as f:

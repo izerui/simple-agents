@@ -82,11 +82,11 @@ my_store = InMemoryStore()
 agent = create_deep_agent(
     name="主代理",
     model=chat_model,  # 使用模型实例
-    tools=[think_tool, fetch_markdown],
+    tools=[think_tool, fetch_markdown, convert_to_markdown],
     store=my_store,
     backend=get_backend_per_thread,
     system_prompt=MAIN_AGENT_INSTRUCTIONS,
-    subagents=[convert_agent, research_agent],
+    # subagents=[convert_agent, research_agent],
     skills=[
         '/skills'
     ],
