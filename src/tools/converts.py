@@ -159,11 +159,17 @@ def _convert_word_to_markdown(
             }
 
         # 再调用 PDF 转 Markdown 的内部实现
-        return _convert_pdf_to_markdown(
+        result = _convert_pdf_to_markdown(
             pdf_path,
             generate_picture_images=generate_picture_images,
             do_formula_enrichment=do_formula_enrichment,
         )
+
+        # 确保返回的 source_path 是原始 Word 文件路径，而不是 PDF 路径
+        if "source_path" in result:
+            result["source_path"] = source_path
+
+        return result
 
     except Exception as e:
         return {
@@ -180,6 +186,35 @@ def _trip(path):
     if path is None:
         return path
     return path.lstrip("/").lstrip("./").lstrip("../")
+
+
+def _normalize_output_path(source_path: str, output_pathlib) -> str:
+    """
+    确保输出路径与输入路径的格式保持一致（相对路径或绝对路径）
+
+    Args:
+        source_path: 原始输入路径
+        output_pathlib: Path 对象形式的输出路径
+
+    Returns:
+        与输入路径格式一致的输出路径字符串
+    """
+    # 判断输入路径是否为相对路径
+    source_path_obj = Path(source_path)
+
+    if source_path_obj.is_absolute():
+        # 输入是绝对路径，返回绝对路径
+        return str(output_pathlib.absolute())
+    else:
+        # 输入是相对路径，尝试生成相对路径
+        try:
+            from src.utils.util import get_backend_per_thread
+            backend = get_backend_per_thread({})
+            working_dir = backend._resolve_path('.')
+            return str(output_pathlib.relative_to(working_dir))
+        except (ValueError, AttributeError):
+            # 如果无法计算相对路径，返回原始相对路径形式
+            return str(output_pathlib)
 
 
 def _convert_via_remote_api(
@@ -199,7 +234,8 @@ def _convert_via_remote_api(
     """
     backend = get_backend_per_thread({})
     source_pathlib = backend._resolve_path(source_path)
-    output_file = str(source_pathlib.with_suffix(".md"))
+    markdown_path = source_pathlib.with_suffix(".md")
+    output_file = _normalize_output_path(source_path, markdown_path)
     api_base_url = "https://dcca.hhstu.edu.cn/transfer"
 
     # 计算超时时间（AI 功能需要更长时间）
@@ -233,7 +269,7 @@ def _convert_via_remote_api(
             }
 
         # 保存 Markdown 内容
-        with open(output_file, 'wb') as f:
+        with open(markdown_path, 'wb') as f:
             f.write(response.content)
 
         return {
@@ -309,10 +345,13 @@ def _convert_pdf_to_markdown(source_path: str,
                 "source_path": source_path,
             }
 
+        # 确保输出路径格式与输入路径一致
+        output_file = _normalize_output_path(source_path, markdown_path)
+
         return {
             "success": True,
             "source_path": source_path,
-            "output_file": str(markdown_path)
+            "output_file": output_file
         }
 
     except Exception as e:
