@@ -1055,10 +1055,6 @@ def main():
             detection_results
         )
 
-        # 创建输出目录
-        output_dir = "reports"
-        output_dir.mkdir(exist_ok=True)
-
         base_name = Path(paper_file).stem
 
         # 生成检测报告
@@ -1066,7 +1062,7 @@ def main():
         print()
 
         report = report_gen.generate_report()
-        report_file = output_dir / f"{base_name}_检测报告.md"
+        report_file = "reports" / f"{base_name}_检测报告.md"
         report_gen.save_report(report, str(report_file))
 
         print()
