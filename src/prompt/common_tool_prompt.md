@@ -17,6 +17,20 @@
 - 禁止相同工具、相同参数多次重复调用
 - 禁止无明确目的的试探性调用
 
+## 文件转换原则
+
+### 优先使用 convert_to_markdown
+
+**支持的文件格式**（优先使用 `convert_to_markdown` 工具转换）：
+- **文档类**：PDF、DOC、DOCX、XLSX、PPTX、AsciiDoc
+- **图片类**：PNG、JPG、JPEG、GIF、BMP
+
+**工具参数说明**：
+- `generate_picture_images`：当用户问题涉及图片、图表、截图、图形等视觉内容时设为 `True`
+- `do_formula_enrichment`：当用户问题涉及数学公式、方程、符号等内容时设为 `True`
+
+**不支持的格式**：对于 `convert_to_markdown` 不支持的格式，才考虑其他转换工具
+
 ## 工具调用原则
 
 ### 通用原则
