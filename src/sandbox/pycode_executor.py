@@ -668,6 +668,7 @@ class CodeExecutor:
                 args=(
                     code,
                     str(self.root_dir),
+                    script_path,  # 添加脚本路径
                     script_args,
                     result_queue,
                     self.timeout,
