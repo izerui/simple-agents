@@ -136,6 +136,9 @@ def _execute_in_subprocess(
         # 准备执行环境
         import builtins
 
+        # 预先导入 os.path（避免在 RestrictedOS.__getattr__ 中导入导致递归）
+        import os.path as _original_os_path
+
         # 创建受限制的 open 函数
         original_open = open
         root_path = Path(root_dir).resolve()
@@ -392,10 +395,113 @@ def _execute_in_subprocess(
                 raise AttributeError("os.link 被禁用（安全限制）")
 
             def __getattr__(self, name):
+                # 特殊处理 os.path 模块
+                if name == 'path':
+                    # 使用预先导入的 os.path 模块（避免递归）
+                    # 创建受限的 os.path 包装器
+                    class RestrictedOsPath:
+                        """受限的 os.path 模块，确保所有路径都经过重定向"""
+
+                        def __init__(self):
+                            object.__setattr__(self, '_module', _original_os_path)
+
+                        def exists(self, path):
+                            """检查路径是否存在，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.exists(redirected_path)
+
+                        def isfile(self, path):
+                            """检查是否是文件，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.isfile(redirected_path)
+
+                        def isdir(self, path):
+                            """检查是否是目录，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.isdir(redirected_path)
+
+                        def join(self, *paths):
+                            """连接路径，最后一个参数会被重定向"""
+                            if not paths:
+                                return ''
+                            # os.path.join 连接所有路径
+                            joined = self._module.join(*paths)
+                            # 只重定向最后一个完整路径
+                            return redirect_path(joined)
+
+                        def dirname(self, path):
+                            """获取目录名，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.dirname(redirected_path)
+
+                        def basename(self, path):
+                            """获取基础文件名（不需要重定向）"""
+                            return self._module.basename(path)
+
+                        def split(self, path):
+                            """分割路径，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.split(redirected_path)
+
+                        def splitext(self, path):
+                            """分割扩展名（不需要重定向）"""
+                            return self._module.splitext(path)
+
+                        def abspath(self, path):
+                            """获取绝对路径，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.abspath(redirected_path)
+
+                        def realpath(self, path):
+                            """获取真实路径，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.realpath(redirected_path)
+
+                        def relpath(self, path, start=None):
+                            """获取相对路径，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            if start is not None:
+                                start = redirect_path(start)
+                            return self._module.relpath(redirected_path, start)
+
+                        def isabs(self, path):
+                            """检查是否是绝对路径（不需要重定向）"""
+                            return self._module.isabs(path)
+
+                        def getsize(self, path):
+                            """获取文件大小，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.getsize(redirected_path)
+
+                        def getmtime(self, path):
+                            """获取修改时间，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.getmtime(redirected_path)
+
+                        def getatime(self, path):
+                            """获取访问时间，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.getatime(redirected_path)
+
+                        def getctime(self, path):
+                            """获取创建时间，自动重定向路径"""
+                            redirected_path = redirect_path(path)
+                            return self._module.getctime(redirected_path)
+
+                        def __getattr__(self, name):
+                            """其他方法和属性直接转发到原始模块"""
+                            return getattr(self._module, name)
+
+                        def __setattr__(self, name, value):
+                            raise AttributeError("不能修改 os.path 模块")
+
+                    return RestrictedOsPath()
+
                 # 只禁用直接文件描述符操作（避免绕过 restricted_open）
                 # 其他函数（remove、rmdir、mkdir 等）在 root_dir 内是安全的
                 if name in ['open', 'write', 'fdopen']:
                     raise AttributeError(f"os.{name} 被禁用，请使用 open() 函数")
+
                 # 返回原始 os 模块的属性
                 return getattr(os, name)
 
