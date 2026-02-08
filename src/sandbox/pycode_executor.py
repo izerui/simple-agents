@@ -174,6 +174,35 @@ def _execute_in_subprocess(
                 new_path = root_path / file_path
                 return original_open(str(new_path), mode, *args, **kwargs)
 
+        # 创建受限的 Path 类
+        class RestrictedPath(type(Path())):
+            """受限的 Path 类，所有操作都经过权限检查"""
+            def open(self, mode='r', *args, **kwargs):
+                return restricted_open(self, mode, *args, **kwargs)
+
+            def write_text(self, data, *args, **kwargs):
+                return restricted_open(self, 'w').write(data)
+
+            def read_text(self, *args, **kwargs):
+                return restricted_open(self, 'r').read()
+
+            def write_bytes(self, data, *args, **kwargs):
+                return restricted_open(self, 'wb').write(data)
+
+            def read_bytes(self, *args, **kwargs):
+                return restricted_open(self, 'rb').read()
+
+        # 创建受限的 os 模块
+        class RestrictedOS:
+            """受限的 os 模块，移除危险函数"""
+            def __getattr__(self, name):
+                if name in ['open', 'write', 'fdopen', 'remove', 'unlink', 'rmdir', 'mkdir']:
+                    raise AttributeError(f"os.{name} 被禁用")
+                return getattr(os, name)
+
+            def __setattr__(self, name, value):
+                raise AttributeError("不能修改 os 模块")
+
         safe_globals = {
             '__builtins__': builtins,
             '__name__': '__main__',
@@ -193,10 +222,10 @@ def _execute_in_subprocess(
             'type': type,
         }
 
-        # 添加系统模块（chroot 已隔离，可以直接使用）
+        # 添加受限的系统模块
         safe_globals['sys'] = sys
-        safe_globals['os'] = os
-        safe_globals['Path'] = Path
+        safe_globals['os'] = RestrictedOS()
+        safe_globals['Path'] = RestrictedPath
 
         # 设置 sys.argv
         if script_args:
@@ -437,10 +466,12 @@ class CodeExecutor:
 
                         # 危险的模块.函数组合
                         dangerous_combos = {
-                            'os': ['system', 'popen', 'spawn', 'fork', 'forkpty'],
+                            'os': ['system', 'popen', 'spawn', 'fork', 'forkpty', 'open', 'write', 'remove', 'unlink', 'rmdir', 'mkdir', 'fdopen', 'chmod', 'chown', 'link', 'symlink', 'rename', 'replace', 'putenv', 'unsetenv'],
                             'subprocess': ['run', 'call', 'Popen', 'check_output'],
                             'commands': ['getoutput', 'getstatusoutput'],
                             'ctypes': None,  # ctypes 模块的所有函数都危险
+                            'io': ['open', 'FileIO'],
+                            'codecs': ['open'],
                         }
 
                         if module_name in dangerous_combos:
@@ -467,6 +498,7 @@ class CodeExecutor:
                         'subprocess', 'commands', 'ctypes', 'importlib',
                         'pickle', 'marshal', 'shelve',
                         'multiprocessing', 'threading', 'signal',
+                        'io', 'codecs',  # 可能绕过文件限制
                     ]
 
                     if module_name in dangerous_modules or any(
@@ -487,6 +519,7 @@ class CodeExecutor:
                     'subprocess', 'commands', 'ctypes', 'importlib',
                     'pickle', 'marshal', 'shelve',
                     'multiprocessing', 'threading', 'signal',
+                    'io', 'codecs',  # 可能绕过文件限制
                 ]
 
                 if module_name in dangerous_modules or any(
