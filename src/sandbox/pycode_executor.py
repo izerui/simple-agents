@@ -831,6 +831,13 @@ class CodeExecutor:
         self.readable_paths.append(Path('/private/etc/apache2/mime.types'))
         self.readable_paths.append(Path('/private/etc/mime.types'))
 
+        # 添加 .venv 到只读白名单，python-pptx 等库需要访问模板文件
+        # .venv 在项目根目录下，而不是在沙箱 root_dir 下
+        project_root = Path(__file__).parent.parent.parent.resolve()
+        venv_path = project_root / '.venv'
+        if venv_path.exists():
+            self.readable_paths.append(venv_path)
+
     def _parse_command(self, command):
         """
         解析命令字符串
