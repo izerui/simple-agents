@@ -3,11 +3,13 @@
 安全沙箱后端（只支持标准执行格式）
 
 实现基于受限 open() 函数的文件访问控制：
-- root_dir 内：可读写
-- readable_paths 白名单：只读访问（如 .venv）
-- writable_paths：可读写
-- 其他绝对路径：自动加 root_dir 前缀
-- 相对路径：自动加 root_dir 前缀
+1. 相对路径
+ - 自动添加 root_dir 前缀
+2. 绝对路径
+ - 在root_dir内可读写
+ - 只读白名单内可读
+ - 读写白名单内可读写
+ - 自动添加 root_dir 前缀后可读写
 
 进程隔离方案：
 - 每次代码执行在独立子进程中进行
@@ -140,14 +142,57 @@ def _execute_in_subprocess(
         writable_resolved = [Path(p).resolve() for p in writable_paths]
         readable_resolved = [Path(p).resolve() for p in readable_paths]
 
-        def restricted_open(file, mode='r', *args, **kwargs):
+        def redirect_path(path_str):
             """
-            受限的 open 函数：
-            1. root_dir 内的路径：可读写
-            2. readable_paths 中的路径：只读
-            3. writable_paths 中的路径：可读写
+            路径重定向函数：
+            1. root_dir 内的路径：保持不变
+            2. writable_paths 中的路径：保持不变
+            3. readable_paths 中的路径：保持不变
             4. 其他绝对路径：自动加 root_dir 前缀
             5. 相对路径：自动加 root_dir 前缀
+
+            Returns:
+                重定向后的路径字符串
+            """
+            file_path = Path(path_str).expanduser()
+
+            if file_path.is_absolute():
+                resolved = file_path.resolve()
+
+                # 1. 检查是否在 root_dir 内
+                if str(resolved).startswith(str(root_path)):
+                    return path_str
+
+                # 2. 检查是否在 readable_paths 中（只读白名单）
+                for rp in readable_resolved:
+                    if str(resolved).startswith(str(rp)):
+                        return path_str
+
+                # 3. 检查是否在 writable_paths 中（读写白名单）
+                for wp in writable_resolved:
+                    if str(resolved).startswith(str(wp)):
+                        return path_str
+
+                # 4. 其他绝对路径：自动加 root_dir 前缀
+                new_path = root_path / file_path.relative_to(file_path.anchor)
+                return str(new_path)
+            else:
+                # 相对路径：强制加 root_dir 前缀
+                new_path = root_path / file_path
+                return str(new_path)
+
+        def restricted_open(file, mode='r', *args, **kwargs):
+            """
+            受限的 open 函数，严格按照顺序检查：
+
+            路径处理顺序：
+            1. 相对路径：自动添加 root_dir 前缀
+
+            绝对路径检查顺序：
+            2. 在root_dir内：可读写
+            3. 只读白名单（readable_paths）内：只读
+            4. 读写白名单（writable_paths）内：可读写
+            5. 其他绝对路径：自动添加 root_dir 前缀后可读写
             """
             file_path = Path(file).expanduser()
             mode_str = mode if isinstance(mode, str) else 'r'
@@ -157,23 +202,23 @@ def _execute_in_subprocess(
             if file_path.is_absolute():
                 resolved = file_path.resolve()
 
-                # 检查是否在 root_dir 内
+                # 1. 检查是否在 root_dir 内
                 if str(resolved).startswith(str(root_path)):
                     return original_open(file, mode, *args, **kwargs)
 
-                # 检查是否在 writable_paths 中
-                for wp in writable_resolved:
-                    if str(resolved).startswith(str(wp)):
-                        return original_open(file, mode, *args, **kwargs)
-
-                # 检查是否在 readable_paths 中
+                # 2. 检查是否在 readable_paths 中（只读白名单）
                 for rp in readable_resolved:
                     if str(resolved).startswith(str(rp)):
                         if is_writing:
                             raise PermissionError("只读路径，禁止写入: {0}".format(file))
                         return original_open(file, mode, *args, **kwargs)
 
-                # 其他绝对路径：自动加 root_dir 前缀
+                # 3. 检查是否在 writable_paths 中（读写白名单）
+                for wp in writable_resolved:
+                    if str(resolved).startswith(str(wp)):
+                        return original_open(file, mode, *args, **kwargs)
+
+                # 4. 其他绝对路径：自动加 root_dir 前缀
                 new_path = root_path / file_path.relative_to(file_path.anchor)
                 return original_open(str(new_path), mode, *args, **kwargs)
             else:
@@ -232,12 +277,126 @@ def _execute_in_subprocess(
 
         # 创建受限的 os 模块
         class RestrictedOS:
-            """受限的 os 模块，只禁用真正危险的函数"""
+            """受限的 os 模块，只禁用真正危险的函数，其他函数会进行路径重定向"""
+
+            def _redirect_path_args(self, args):
+                """重定向函数参数中的路径"""
+                if not args:
+                    return args
+                # 将第一个参数（通常是路径）进行重定向
+                redirected = [redirect_path(args[0])] + list(args[1:])
+                return tuple(redirected)
+
+            def mkdir(self, path, *args, **kwargs):
+                """创建目录，自动重定向路径"""
+                redirected_path = redirect_path(path)
+                return os.mkdir(redirected_path, *args, **kwargs)
+
+            def makedirs(self, path, *args, **kwargs):
+                """递归创建目录，自动重定向路径"""
+                redirected_path = redirect_path(path)
+                return os.makedirs(redirected_path, *args, **kwargs)
+
+            def remove(self, path, *args, **kwargs):
+                """删除文件，自动重定向路径"""
+                redirected_path = redirect_path(path)
+                return os.remove(redirected_path, *args, **kwargs)
+
+            def rmdir(self, path, *args, **kwargs):
+                """删除目录，自动重定向路径"""
+                redirected_path = redirect_path(path)
+                return os.rmdir(redirected_path, *args, **kwargs)
+
+            def removedirs(self, path, *args, **kwargs):
+                """递归删除目录，自动重定向路径"""
+                redirected_path = redirect_path(path)
+                return os.removedirs(redirected_path, *args, **kwargs)
+
+            def rename(self, src, dst, *args, **kwargs):
+                """重命名文件，自动重定向路径并严格按顺序检查权限"""
+                # 重定向路径
+                src_redirected = redirect_path(src)
+                dst_redirected = redirect_path(dst)
+
+                # 解析目标路径并检查权限
+                dst_resolved = Path(dst_redirected).resolve()
+
+                # 1. 检查目标是否在 root_dir 内 -> 允许
+                if str(dst_resolved).startswith(str(root_path)):
+                    pass  # 在 root_dir 内，允许操作
+                # 2. 检查目标是否在 readable_paths 中 -> 禁止写入
+                elif any(str(dst_resolved).startswith(str(rp)) for rp in readable_resolved):
+                    raise PermissionError("只读路径，禁止写入: {0}".format(dst))
+                # 3. 检查目标是否在 writable_paths 中 -> 允许
+                elif any(str(dst_resolved).startswith(str(wp)) for wp in writable_resolved):
+                    pass  # 在 writable_paths 内，允许操作
+                # 4. 其他情况（已重定向到 root_dir）-> 允许
+                else:
+                    pass  # 已经被 redirect_path 重定向到 root_dir
+
+                return os.rename(src_redirected, dst_redirected, *args, **kwargs)
+
+            def replace(self, src, dst, *args, **kwargs):
+                """替换文件，自动重定向路径并严格按顺序检查权限"""
+                src_redirected = redirect_path(src)
+                dst_redirected = redirect_path(dst)
+
+                # 解析目标路径并检查权限
+                dst_resolved = Path(dst_redirected).resolve()
+
+                # 1. 检查目标是否在 root_dir 内 -> 允许
+                if str(dst_resolved).startswith(str(root_path)):
+                    pass  # 在 root_dir 内，允许操作
+                # 2. 检查目标是否在 readable_paths 中 -> 禁止写入
+                elif any(str(dst_resolved).startswith(str(rp)) for rp in readable_resolved):
+                    raise PermissionError("只读路径，禁止写入: {0}".format(dst))
+                # 3. 检查目标是否在 writable_paths 中 -> 允许
+                elif any(str(dst_resolved).startswith(str(wp)) for wp in writable_resolved):
+                    pass  # 在 writable_paths 内，允许操作
+                # 4. 其他情况（已重定向到 root_dir）-> 允许
+                else:
+                    pass  # 已经被 redirect_path 重定向到 root_dir
+
+                return os.replace(src_redirected, dst_redirected, *args, **kwargs)
+
+            def renames(self, src, dst, *args, **kwargs):
+                """递归重命名文件，自动重定向路径并严格按顺序检查权限"""
+                src_redirected = redirect_path(src)
+                dst_redirected = redirect_path(dst)
+
+                # 解析目标路径并检查权限
+                dst_resolved = Path(dst_redirected).resolve()
+
+                # 1. 检查目标是否在 root_dir 内 -> 允许
+                if str(dst_resolved).startswith(str(root_path)):
+                    pass  # 在 root_dir 内，允许操作
+                # 2. 检查目标是否在 readable_paths 中 -> 禁止写入
+                elif any(str(dst_resolved).startswith(str(rp)) for rp in readable_resolved):
+                    raise PermissionError("只读路径，禁止写入: {0}".format(dst))
+                # 3. 检查目标是否在 writable_paths 中 -> 允许
+                elif any(str(dst_resolved).startswith(str(wp)) for wp in writable_resolved):
+                    pass  # 在 writable_paths 内，允许操作
+                # 4. 其他情况（已重定向到 root_dir）-> 允许
+                else:
+                    pass  # 已经被 redirect_path 重定向到 root_dir
+
+                return os.renames(src_redirected, dst_redirected, *args, **kwargs)
+
+            def symlink(self, src, dst, *args, **kwargs):
+                """创建符号链接，自动重定向路径"""
+                # 符号链接需要特殊处理
+                raise AttributeError("os.symlink 被禁用（安全限制）")
+
+            def link(self, src, dst, *args, **kwargs):
+                """创建硬链接，自动重定向路径"""
+                raise AttributeError("os.link 被禁用（安全限制）")
+
             def __getattr__(self, name):
                 # 只禁用直接文件描述符操作（避免绕过 restricted_open）
                 # 其他函数（remove、rmdir、mkdir 等）在 root_dir 内是安全的
                 if name in ['open', 'write', 'fdopen']:
                     raise AttributeError(f"os.{name} 被禁用，请使用 open() 函数")
+                # 返回原始 os 模块的属性
                 return getattr(os, name)
 
             def __setattr__(self, name, value):
@@ -535,7 +694,8 @@ class CodeExecutor:
                         # 危险的模块.函数组合
                         dangerous_combos = {
                             # 只阻止真正危险的系统操作
-                            'os': ['system', 'popen', 'spawn', 'fork', 'forkpty', 'chmod', 'chown', 'link', 'symlink', 'rename', 'replace', 'putenv', 'unsetenv'],
+                            # rename, replace 已经过路径重定向包装，可以使用
+                            'os': ['system', 'popen', 'spawn', 'fork', 'forkpty', 'chmod', 'chown', 'link', 'symlink', 'putenv', 'unsetenv'],
                             'subprocess': ['run', 'call', 'Popen', 'check_output'],
                             'commands': ['getoutput', 'getstatusoutput'],
                             'ctypes': None,  # ctypes 模块的所有函数都危险
