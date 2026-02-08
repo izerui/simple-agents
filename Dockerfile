@@ -14,7 +14,9 @@ RUN apt-get update && apt-get install -y \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
+USER root
 
+WORKDIR /deps/simple-agents
 
 # -- Adding local package . --
 ADD . /deps/simple-agents
@@ -32,5 +34,3 @@ ENV LANGSERVE_GRAPHS='{"research": "/deps/simple-agents/src/graph.py:agent"}'
 RUN mkdir -p /api/langgraph_api /api/langgraph_runtime /api/langgraph_license && touch /api/langgraph_api/__init__.py /api/langgraph_runtime/__init__.py /api/langgraph_license/__init__.py
 RUN PYTHONDONTWRITEBYTECODE=1 uv pip install --system --no-cache-dir --no-deps -e /api
 # -- End of ensuring user deps didn't inadvertently overwrite langgraph-api --
-
-WORKDIR /deps/simple-agents
