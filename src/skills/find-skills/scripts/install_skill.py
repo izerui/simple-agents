@@ -71,6 +71,13 @@ def print_header(msg: str):
     print(f"\n{Colors.BOLD}{msg}{Colors.RESET}\n")
 
 
+# 保存原始的 builtins.open（用于在沙箱中读取源文件）
+try:
+    _original_builtins_open_for_copy = builtins.open
+except:
+    _original_builtins_open_for_copy = open
+
+
 def copytree_with_open(src: str, dst: str) -> bool:
     """
     手动复制目录树，使用 open() 确保被沙箱拦截和重定向
@@ -89,6 +96,16 @@ def copytree_with_open(src: str, dst: str) -> bool:
         except FileExistsError:
             # 目录已被其他进程创建，忽略错误
             pass
+        except OSError as e:
+            # 如果创建失败，可能是父目录不存在，尝试创建父目录
+            if e.errno == 2:  # No such file or directory
+                parent_dir = os.path.dirname(dst)
+                if parent_dir and parent_dir != dst:
+                    try:
+                        os.makedirs(parent_dir, exist_ok=True)
+                        os.makedirs(dst, exist_ok=True)
+                    except:
+                        pass
 
         # 遍历源目录 - 使用 os.listdir
         for item in os.listdir(src):
@@ -100,18 +117,34 @@ def copytree_with_open(src: str, dst: str) -> bool:
                 if not copytree_with_open(src_item, dst_item):
                     return False
             else:
-                # 复制文件 - 使用 open() 会被沙箱的 safe_open 拦截
-                with open(src_item, 'rb') as f_src:
-                    with open(dst_item, 'wb') as f_dst:
-                        # 分块复制，避免大文件内存问题
-                        while True:
-                            chunk = f_src.read(8192)
-                            if not chunk:
-                                break
-                            f_dst.write(chunk)
+                # 复制文件
+                # 🔧 关键修复：源文件使用原始 open（读取源，可能在 /tmp/ 等白名单目录）
+                # 目标文件使用沙箱 open（会被 safe_open 拦截，写入到沙箱目录）
+                try:
+                    # 先尝试使用原始 open 读取源文件
+                    with _original_builtins_open_for_copy(src_item, 'rb') as f_src:
+                        with open(dst_item, 'wb') as f_dst:
+                            # 分块复制，避免大文件内存问题
+                            while True:
+                                chunk = f_src.read(8192)
+                                if not chunk:
+                                    break
+                                f_dst.write(chunk)
+                except (FileNotFoundError, PermissionError, OSError):
+                    # 如果原始 open 失败，尝试使用被沙箱拦截的 open
+                    with open(src_item, 'rb') as f_src:
+                        with open(dst_item, 'wb') as f_dst:
+                            # 分块复制，避免大文件内存问题
+                            while True:
+                                chunk = f_src.read(8192)
+                                if not chunk:
+                                    break
+                                f_dst.write(chunk)
         return True
     except Exception as e:
         print_error(f"复制失败: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
