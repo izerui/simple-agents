@@ -32,12 +32,10 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import sys
 import tarfile
 import tempfile
 import urllib.request
-from pathlib import Path
 from typing import Optional, Dict, List
 from urllib.parse import urlparse
 import urllib.error
@@ -73,6 +71,78 @@ def print_header(msg: str):
     print(f"\n{Colors.BOLD}{msg}{Colors.RESET}\n")
 
 
+def copytree_with_open(src: str, dst: str) -> bool:
+    """
+    手动复制目录树，使用 open() 确保被沙箱拦截和重定向
+
+    Args:
+        src: 源目录路径
+        dst: 目标目录路径
+
+    Returns:
+        bool: 是否成功
+    """
+    try:
+        # 确保目标目录存在 - 使用 os.mkdir 会被沙箱处理
+        if not os.path.exists(dst):
+            os.makedirs(dst)
+
+        # 遍历源目录 - 使用 os.listdir
+        for item in os.listdir(src):
+            src_item = os.path.join(src, item)
+            dst_item = os.path.join(dst, item)
+
+            if os.path.isdir(src_item):
+                # 递归复制子目录
+                if not copytree_with_open(src_item, dst_item):
+                    return False
+            else:
+                # 复制文件 - 使用 open() 会被沙箱的 safe_open 拦截
+                with open(src_item, 'rb') as f_src:
+                    with open(dst_item, 'wb') as f_dst:
+                        # 分块复制，避免大文件内存问题
+                        while True:
+                            chunk = f_src.read(8192)
+                            if not chunk:
+                                break
+                            f_dst.write(chunk)
+        return True
+    except Exception as e:
+        print_error(f"复制失败: {e}")
+        return False
+
+
+def rmtree_with_os(path: str) -> bool:
+    """
+    手动删除目录树，使用 os 操作确保被沙箱处理
+
+    Args:
+        path: 要删除的目录路径
+
+    Returns:
+        bool: 是否成功
+    """
+    try:
+        if not os.path.exists(path):
+            return True
+
+        # 先删除所有子项
+        for item in os.listdir(path):
+            item_path = os.path.join(path, item)
+
+            if os.path.isdir(item_path):
+                rmtree_with_os(item_path)
+            else:
+                os.remove(item_path)
+
+        # 最后删除目录本身
+        os.rmdir(path)
+        return True
+    except Exception as e:
+        # 忽略错误，清理失败不影响主流程
+        return False
+
+
 class NPXStyleInstaller:
     """
     npx-style package installer
@@ -85,20 +155,21 @@ class NPXStyleInstaller:
 
     def __init__(self, skills_dir: str = "/skills/"):
         """
-        Initialize installer
+        初始化安装器
 
         Args:
-            skills_dir: Target directory for skills (default: /skills/)
+            skills_dir: 技能目标目录（默认: /skills/）
         """
-        self.skills_dir = Path(skills_dir)
-        # Use /tmp/ for downloads and extraction
-        self.temp_dir = Path("/tmp/skill_install")
-        self.temp_dir.mkdir(exist_ok=True)
+        self.skills_dir = skills_dir
+        # 使用 /tmp/ 进行下载和解压
+        self.temp_dir = "/tmp/skill_install"
+        if not os.path.exists(self.temp_dir):
+            os.makedirs(self.temp_dir)
 
-        # npm registry configuration
+        # npm registry 配置
         self.npm_registry = "https://registry.npmjs.org"
 
-        # Common CDN mirrors for faster downloads
+        # 常用 CDN 镜像加速下载
         self.npm_mirrors = [
             "https://registry.npmjs.org",
             "https://registry.npmmirror.com",  # 中国镜像
@@ -108,28 +179,33 @@ class NPXStyleInstaller:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # Cleanup temp directory in /tmp/
-        temp_path = Path("/tmp/skill_install")
-        if temp_path.exists():
-            shutil.rmtree(temp_path, ignore_errors=True)
+        # 清理临时目录 - 使用 os 操作
+        temp_path = "/tmp/skill_install"
+        rmtree_with_os(temp_path)
 
-    def _download_file(self, url: str, dest_path: Path, timeout: int = 30) -> bool:
+    def _download_file(self, url: str, dest_path: str, timeout: int = 30) -> bool:
         """
-        Download file from URL to destination path
+        从 URL 下载文件到目标路径
 
         Args:
-            url: Source URL
-            dest_path: Destination file path
-            timeout: Download timeout in seconds
+            url: 源 URL
+            dest_path: 目标文件路径（字符串）
+            timeout: 下载超时时间（秒）
 
         Returns:
-            bool: True if successful
+            bool: 是否成功
         """
         try:
             print_info(f"Downloading from: {url}")
             with urllib.request.urlopen(url, timeout=timeout) as response:
+                # 使用 open() 写入，会被沙箱拦截
                 with open(dest_path, 'wb') as f:
-                    shutil.copyfileobj(response, f)
+                    # 分块写入，避免大文件内存问题
+                    while True:
+                        chunk = response.read(8192)
+                        if not chunk:
+                            break
+                        f.write(chunk)
             return True
         except urllib.error.HTTPError as e:
             print_error(f"HTTP Error {e.code}: {e.reason}")
@@ -141,26 +217,30 @@ class NPXStyleInstaller:
             print_error(f"Download failed: {e}")
             return False
 
-    def _extract_tarball(self, tarball_path: Path, dest_dir: Path) -> bool:
+    def _extract_tarball(self, tarball_path: str, dest_dir: str) -> bool:
         """
-        Extract .tgz tarball to destination directory
+        解压 .tgz tarball 到目标目录
 
         Args:
-            tarball_path: Path to .tgz file
-            dest_dir: Destination directory
+            tarball_path: tarball 文件路径（字符串）
+            dest_dir: 目标目录（字符串）
 
         Returns:
-            bool: True if successful
+            bool: 是否成功
         """
         try:
-            # Use the same approach as the working example
-            if tarball_path.suffix == '.gz':
+            # 确保目标目录存在
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir)
+
+            # 使用 gzip + tarfile 解压
+            if tarball_path.endswith('.gz') or tarball_path.endswith('.tgz'):
                 with gzip.open(tarball_path, 'rb') as gz:
                     with tarfile.open(fileobj=gz, mode='r:gz') as tar:
-                        tar.extractall(path=str(dest_dir))
+                        tar.extractall(path=dest_dir)
             else:
-                with tarfile.open(str(tarball_path), 'r:gz') as tar:
-                    tar.extractall(path=str(dest_dir))
+                with tarfile.open(tarball_path, 'r:gz') as tar:
+                    tar.extractall(path=dest_dir)
             return True
         except Exception as e:
             print_error(f"Extraction failed: {e}")
@@ -192,24 +272,24 @@ class NPXStyleInstaller:
 
     def _install_from_npm(self, package_name: str, version: Optional[str] = None) -> bool:
         """
-        Download and install package from npm registry
+        从 npm registry 下载并安装包
 
         Args:
-            package_name: npm package name (e.g., 'create-react-app')
-            version: Specific version (default: latest)
+            package_name: npm 包名（如 'create-react-app'）
+            version: 特定版本（默认: latest）
 
         Returns:
-            bool: True if successful
+            bool: 是否成功
         """
         print_header(f"📦 Installing from npm registry: {package_name}")
 
-        # Fetch package metadata
+        # 获取包元数据
         pkg_info = self._get_npm_package_info(package_name)
         if not pkg_info:
             print_error("Package not found in npm registry")
             return False
 
-        # Determine version to install
+        # 确定要安装的版本
         if version:
             if version not in pkg_info.get('versions', {}):
                 print_error(f"Version {version} not found")
@@ -221,7 +301,7 @@ class NPXStyleInstaller:
 
         print_info(f"Version: {version}")
 
-        # Get tarball URL and metadata
+        # 获取 tarball URL 和元数据
         versions_data = pkg_info.get('versions', {})
         version_data = versions_data.get(version, {})
         dist_data = version_data.get('dist', {})
@@ -231,64 +311,73 @@ class NPXStyleInstaller:
             print_error("No tarball URL found in package metadata")
             return False
 
-        # Download tarball
+        # 下载 tarball
         tarball_filename = f"{package_name}-{version}.tgz"
-        tarball_path = self.temp_dir / tarball_filename
+        tarball_path = os.path.join(self.temp_dir, tarball_filename)
 
         if not self._download_file(tarball_url, tarball_path):
             return False
 
-        # Extract to temp directory
-        extract_dir = self.temp_dir / "extracted"
-        extract_dir.mkdir(exist_ok=True)
+        # 解压到临时目录
+        extract_dir = os.path.join(self.temp_dir, "extracted")
+        if not os.path.exists(extract_dir):
+            os.makedirs(extract_dir)
 
         if not self._extract_tarball(tarball_path, extract_dir):
             return False
 
-        # Find package directory (usually in 'package/' subdirectory)
-        extracted_items = list(extract_dir.iterdir())
-        if len(extracted_items) == 1 and extracted_items[0].is_dir():
-            package_source = extracted_items[0]
+        # 找到包目录（通常在 'package/' 子目录中）
+        extracted_items = os.listdir(extract_dir)
+        if len(extracted_items) == 1:
+            item_path = os.path.join(extract_dir, extracted_items[0])
+            if os.path.isdir(item_path):
+                package_source = item_path
+            else:
+                package_source = extract_dir
         else:
             package_source = extract_dir
 
-        # Determine target directory name
-        # Explicitly convert to string to avoid sandbox detection issues
-        skill_name = str(package_name).replace('/', '-')
-        target_dir = self.skills_dir / skill_name
+        # 确定目标目录名
+        skill_name = package_name.replace('/', '-')
+        target_dir = os.path.join(self.skills_dir, skill_name)
 
-        # Check if already installed (NEVER overwrite)
-        if target_dir.exists():
+        # 检查是否已安装（绝不覆盖）
+        if os.path.exists(target_dir):
             print_warning(f"Skill already exists: {target_dir}")
             print_warning("Skipping installation (NEVER overwrites existing files)")
             return True
 
-        # Install to skills directory
+        # 安装到 skills 目录
         try:
-            # Ensure parent directory exists
-            target_dir.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(package_source, target_dir)
-            print_success(f"Installed to: {target_dir}")
-            return True
+            # 确保父目录存在
+            parent_dir = os.path.dirname(target_dir)
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_dir)
+
+            # 使用自定义的 copytree，通过 open() 被沙箱拦截
+            if copytree_with_open(package_source, target_dir):
+                print_success(f"Installed to: {target_dir}")
+                return True
+            return False
         except Exception as e:
             print_error(f"Installation failed: {e}")
             return False
 
     def _install_from_github(self, repo_spec: str, skill_path: Optional[str] = None) -> bool:
         """
-        Download and install from GitHub repository
+        从 GitHub 仓库下载并安装
 
         Args:
-            repo_spec: Repository specification (e.g., 'owner/repo' or 'owner/repo@tag')
-            skill_path: Path to skill subdirectory in repo (e.g., 'skills/my-skill')
+            repo_spec: 仓库规格（如 'owner/repo' 或 'owner/repo@tag'）
+            skill_path: 仓库中技能子目录的路径（如 'skills/my-skill'）
 
         Returns:
-            bool: True if successful
+            bool: 是否成功
         """
         print_header(f"📦 Installing from GitHub: {repo_spec}")
 
-        # Parse repo specification
-        # Format: owner/repo[@tag][/path/to/skill]
+        # 解析仓库规格
+        # 格式: owner/repo[@tag][/path/to/skill]
         parts = repo_spec.split('@')
         repo = parts[0]
 
@@ -298,217 +387,224 @@ class NPXStyleInstaller:
 
         owner, repo_name = repo.split('/')[:2]
 
-        # Parse tag/branch
+        # 解析 tag/branch
         tag = parts[1] if len(parts) > 1 else 'main'
 
-        # Try both 'main' and 'master' if default
+        # 如果是默认值，尝试 'main' 和 'master'
         if tag in ['main', 'master']:
-            tag = 'main'  # Default to main
+            tag = 'main'  # 默认使用 main
 
-        # Build download URL
+        # 构建下载 URL
         # GitHub tarball URL: https://github.com/owner/repo/archive/refs/tags/tag.tar.gz
-        # or for branch: https://github.com/owner/repo/archive/refs/heads/branch.tar.gz
+        # 或 branch: https://github.com/owner/repo/archive/refs/heads/branch.tar.gz
         tarball_url = f"https://github.com/{owner}/{repo_name}/archive/refs/tags/{tag}.tar.gz"
 
-        # Fallback to branch if tag doesn't exist
+        # 如果 tag 不存在，回退到 branch
         fallback_url = f"https://github.com/{owner}/{repo_name}/archive/refs/heads/{tag}.tar.gz"
 
         tarball_filename = f"{repo_name}-{tag}.tar.gz"
-        tarball_path = self.temp_dir / tarball_filename
+        tarball_path = os.path.join(self.temp_dir, tarball_filename)
 
-        # Try to download
+        # 尝试下载
         if not self._download_file(tarball_url, tarball_path):
             print_warning("Tag download failed, trying branch...")
             if not self._download_file(fallback_url, tarball_path):
                 print_error("Failed to download from GitHub")
                 return False
 
-        # Extract
-        extract_dir = self.temp_dir / "extracted"
-        extract_dir.mkdir(exist_ok=True)
+        # 解压
+        extract_dir = os.path.join(self.temp_dir, "extracted")
+        if not os.path.exists(extract_dir):
+            os.makedirs(extract_dir)
 
         if not self._extract_tarball(tarball_path, extract_dir):
             return False
 
-        # Find extracted directory
-        extracted_items = list(extract_dir.iterdir())
+        # 找到解压后的目录
+        extracted_items = os.listdir(extract_dir)
         if not extracted_items:
             print_error("No files extracted")
             return False
 
-        package_source = extracted_items[0]
+        package_source = os.path.join(extract_dir, extracted_items[0])
 
-        # Navigate to skill subdirectory if specified
+        # 如果指定了技能子目录，导航到该目录
         if skill_path:
-            package_source = package_source / skill_path
-            if not package_source.exists():
+            package_source = os.path.join(package_source, skill_path)
+            if not os.path.exists(package_source):
                 print_error(f"Skill path not found: {skill_path}")
                 return False
 
-        # Determine target directory
+        # 确定目标目录
         skill_name = f"{owner}-{repo_name}"
         if skill_path:
-            # Explicitly convert to string to avoid sandbox detection issues
-            skill_path_str = str(skill_path)
-            skill_name = skill_path_str.replace('/', '-')
+            skill_name = skill_path.replace('/', '-')
 
-        target_dir = self.skills_dir / skill_name
+        target_dir = os.path.join(self.skills_dir, skill_name)
 
-        # Check if already installed (NEVER overwrite)
-        if target_dir.exists():
+        # 检查是否已安装（绝不覆盖）
+        if os.path.exists(target_dir):
             print_warning(f"Skill already exists: {target_dir}")
             print_warning("Skipping installation (NEVER overwrites existing files)")
             return True
 
-        # Install
+        # 安装
         try:
-            # Ensure parent directory exists
-            target_dir.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(package_source, target_dir)
-            print_success(f"Installed to: {target_dir}")
-            return True
+            # 确保父目录存在
+            parent_dir = os.path.dirname(target_dir)
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_dir)
+
+            # 使用自定义的 copytree，通过 open() 被沙箱拦截
+            if copytree_with_open(package_source, target_dir):
+                print_success(f"Installed to: {target_dir}")
+                return True
+            return False
         except Exception as e:
             print_error(f"Installation failed: {e}")
             return False
 
     def _install_from_url(self, url: str) -> bool:
         """
-        Download and install from direct URL
+        从直接 URL 下载并安装
 
         Args:
-            url: Direct URL to tarball or file
+            url: tarball 或文件的直接 URL
 
         Returns:
-            bool: True if successful
+            bool: 是否成功
         """
         print_header(f"📦 Installing from URL: {url}")
 
-        # Determine file type from URL
+        # 从 URL 确定文件类型
         parsed_url = urlparse(url)
         filename = os.path.basename(parsed_url.path) or "downloaded_file"
 
-        download_path = self.temp_dir / filename
+        download_path = os.path.join(self.temp_dir, filename)
 
-        # Download
+        # 下载
         if not self._download_file(url, download_path):
             return False
 
-        # Extract and install
+        # 解压并安装
         return self._install_from_tarball(download_path, filename)
 
     def _install_from_local_file(self, file_path: str) -> bool:
         """
-        Install from local tarball file
+        从本地 tarball 文件安装
 
         Args:
-            file_path: Path to local tarball file
+            file_path: 本地 tarball 文件路径
 
         Returns:
-            bool: True if successful
+            bool: 是否成功
         """
         print_header(f"📦 Installing from local file: {file_path}")
 
-        # Validate file exists
-        file_path_obj = Path(file_path)
-        if not file_path_obj.exists():
+        # 验证文件存在
+        if not os.path.exists(file_path):
             print_error(f"File not found: {file_path}")
             return False
 
-        # Extract and install
-        filename = file_path_obj.name
-        return self._install_from_tarball(file_path_obj, filename)
+        # 解压并安装
+        filename = os.path.basename(file_path)
+        return self._install_from_tarball(file_path, filename)
 
-    def _install_from_tarball(self, tarball_path: Path, fallback_name: str) -> bool:
+    def _install_from_tarball(self, tarball_path: str, fallback_name: str) -> bool:
         """
-        Extract and install from tarball
+        从 tarball 解压并安装
 
         Args:
-            tarball_path: Path to tarball file
-            fallback_name: Fallback name for the skill
+            tarball_path: tarball 文件路径
+            fallback_name: 技能的备用名称
 
         Returns:
-            bool: True if successful
+            bool: 是否成功
         """
-        # If it's a tarball, extract it
+        # 如果是 tarball，解压它
         if tarfile.is_tarfile(tarball_path):
-            extract_dir = self.temp_dir / "extracted"
-            extract_dir.mkdir(exist_ok=True)
+            extract_dir = os.path.join(self.temp_dir, "extracted")
+            if not os.path.exists(extract_dir):
+                os.makedirs(extract_dir)
 
-            print_info(f"Extracting: {tarball_path.name}")
+            print_info(f"Extracting: {os.path.basename(tarball_path)}")
             if not self._extract_tarball(tarball_path, extract_dir):
                 return False
 
-            # Find extracted directory
-            extracted_items = list(extract_dir.iterdir())
-            package_source = extracted_items[0] if len(extracted_items) == 1 else extract_dir
+            # 找到解压后的目录
+            extracted_items = os.listdir(extract_dir)
+            if len(extracted_items) == 1:
+                package_source = os.path.join(extract_dir, extracted_items[0])
+            else:
+                package_source = extract_dir
         else:
             print_error(f"Not a tarball file: {tarball_path}")
             return False
 
-        # Determine target name - use string operations instead of Path methods
-        import os
-        filename = os.path.basename(str(fallback_name))
-        # Remove extensions using string replace
+        # 确定目标名称 - 使用字符串操作而不是 Path 方法
+        filename = os.path.basename(fallback_name)
+        # 使用字符串 replace 移除扩展名
         skill_name = filename.replace('.tar.gz', '').replace('.tgz', '').replace('.tar.bz2', '').replace('.tar', '')
-        target_dir = self.skills_dir / skill_name
+        target_dir = os.path.join(self.skills_dir, skill_name)
 
-        # Check if already installed
-        if target_dir.exists():
+        # 检查是否已安装
+        if os.path.exists(target_dir):
             print_warning(f"Skill already exists: {target_dir}")
             print_warning("Skipping installation (NEVER overwrites existing files)")
             return True
 
-        # Install
+        # 安装
         print_info(f"Installing to: {target_dir}")
         try:
-            shutil.copytree(package_source, target_dir)
-            print_success(f"Installed successfully: {target_dir}")
-            return True
+            if copytree_with_open(package_source, target_dir):
+                print_success(f"Installed successfully: {target_dir}")
+                return True
+            return False
         except Exception as e:
             print_error(f"Installation failed: {e}")
             return False
 
     def install(self, package_spec: str) -> bool:
         """
-        Install a package from various sources
+        从各种来源安装包
 
-        Package format:
-        - npm package: 'package-name' or 'package-name@version'
-        - GitHub: 'owner/repo' or 'owner/repo@tag' or 'owner/repo@tag/path/to/skill'
-        - Direct URL: 'https://example.com/package.tar.gz'
-        - Local file: '/path/to/file.tar.gz' or 'file.tar.gz'
+        包格式:
+        - npm package: 'package-name' 或 'package-name@version'
+        - GitHub: 'owner/repo' 或 'owner/repo@tag' 或 'owner/repo@tag/path/to/skill'
+        - 直接 URL: 'https://example.com/package.tar.gz'
+        - 本地文件: '/path/to/file.tar.gz' 或 'file.tar.gz'
 
         Args:
-            package_spec: Package specification string
+            package_spec: 包规格字符串
 
         Returns:
-            bool: True if successful
+            bool: 是否成功
         """
-        # Ensure skills directory exists
+        # 确保 skills 目录存在
         if not os.path.exists(self.skills_dir):
             os.makedirs(self.skills_dir)
         print_info(f"Skills directory: {self.skills_dir}")
 
-        # Detect package type and install accordingly
-        # 1. Check if it's a URL
+        # 检测包类型并相应安装
+        # 1. 检查是否是 URL
         if package_spec.startswith('http://') or package_spec.startswith('https://'):
             return self._install_from_url(package_spec)
 
-        # 2. Check if it's a local file (exists and ends with .tgz or .tar.gz)
+        # 2. 检查是否是本地文件（存在且以 .tgz 或 .tar.gz 结尾）
         if package_spec.endswith(('.tgz', '.tar.gz', '.tar.bz2', '.tar')):
             return self._install_from_local_file(package_spec)
 
-        # 3. Check if it's a GitHub repo (contains /)
+        # 3. 检查是否是 GitHub repo（包含 /）
         if '/' in package_spec and not package_spec.startswith('@'):
-            # Parse format: owner/repo[@tag][/skill/path]
+            # 解析格式: owner/repo[@tag][/skill/path]
             parts = package_spec.split('/')
             if len(parts) >= 2:
                 repo_part = f"{parts[0]}/{parts[1]}"
                 skill_path = '/'.join(parts[2:]) if len(parts) > 2 else None
                 return self._install_from_github(repo_part, skill_path)
 
-        # 4. Treat as npm package
-        # Parse version: package@version
+        # 4. 视为 npm 包
+        # 解析版本: package@version
         if '@' in package_spec and not package_spec.startswith('@'):
             pkg_name, version = package_spec.rsplit('@', 1)
             return self._install_from_npm(pkg_name, version)
@@ -516,12 +612,18 @@ class NPXStyleInstaller:
         return self._install_from_npm(package_spec)
 
     def list_installed(self) -> None:
-        """List all installed skills"""
-        if not self.skills_dir.exists():
+        """列出所有已安装的技能"""
+        if not os.path.exists(self.skills_dir):
             print_error(f"Skills directory does not exist: {self.skills_dir}")
             return
 
-        skills = [d for d in self.skills_dir.iterdir() if d.is_dir()]
+        # 使用 os.listdir 获取所有目录
+        try:
+            items = os.listdir(self.skills_dir)
+            skills = [item for item in items if os.path.isdir(os.path.join(self.skills_dir, item))]
+        except Exception as e:
+            print_error(f"Failed to list skills: {e}")
+            return
 
         if not skills:
             print_warning(f"No skills installed in {self.skills_dir}")
@@ -529,20 +631,20 @@ class NPXStyleInstaller:
 
         print_header(f"📚 Installed Skills ({len(skills)})")
         for skill in sorted(skills):
-            # Try to read skill metadata
-            skill_md = skill / "SKILL.md"
-            if skill_md.exists():
+            # 尝试读取技能元数据
+            skill_md = os.path.join(self.skills_dir, skill, "SKILL.md")
+            if os.path.exists(skill_md):
                 try:
                     with open(skill_md, 'r', encoding='utf-8') as f:
                         first_line = f.readline().strip()
                         if first_line.startswith('name:'):
                             name = first_line.split(':', 1)[1].strip()
-                            print(f"  {Colors.GREEN}•{Colors.RESET} {skill.name} - {name}")
+                            print(f"  {Colors.GREEN}•{Colors.RESET} {skill} - {name}")
                             continue
                 except:
                     pass
 
-            print(f"  {Colors.GREEN}•{Colors.RESET} {skill.name}")
+            print(f"  {Colors.GREEN}•{Colors.RESET} {skill}")
 
     def _search_github(self, query: str) -> bool:
         """
