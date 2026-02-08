@@ -162,7 +162,7 @@ Create a basic PowerPoint presentation with common slide types.
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
-from pptx.dml.color import RgbColor
+from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 
 def create_basic_presentation(output_path: str) -> None:
@@ -287,7 +287,7 @@ def create_basic_presentation(output_path: str) -> None:
         Inches(3), Inches(2)
     )
     rect.fill.solid()
-    rect.fill.fore_color.rgb = RgbColor(0x44, 0x72, 0xC4)
+    rect.fill.fore_color.rgb = RGBColor(0x44, 0x72, 0xC4)
     rect.text = "Feature A"
 
     # Rounded rectangle
@@ -297,7 +297,7 @@ def create_basic_presentation(output_path: str) -> None:
         Inches(3), Inches(2)
     )
     rounded.fill.solid()
-    rounded.fill.fore_color.rgb = RgbColor(0x70, 0xAD, 0x47)
+    rounded.fill.fore_color.rgb = RGBColor(0x70, 0xAD, 0x47)
     rounded.text = "Feature B"
 
     # Oval
@@ -307,7 +307,7 @@ def create_basic_presentation(output_path: str) -> None:
         Inches(3), Inches(2)
     )
     oval.fill.solid()
-    oval.fill.fore_color.rgb = RgbColor(0xED, 0x7D, 0x31)
+    oval.fill.fore_color.rgb = RGBColor(0xED, 0x7D, 0x31)
     oval.text = "Feature C"
 
     # Save presentation
@@ -327,7 +327,7 @@ Advanced text formatting with runs, fonts, and paragraph styles.
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
-from pptx.dml.color import RgbColor
+from pptx.dml.color import RGBColor
 from pptx.oxml.ns import nsmap
 
 def create_formatted_presentation(output_path: str) -> None:
@@ -355,19 +355,19 @@ def create_formatted_presentation(output_path: str) -> None:
     run1.text = "Quarterly "
     run1.font.size = Pt(40)
     run1.font.bold = True
-    run1.font.color.rgb = RgbColor(0x2F, 0x54, 0x96)
+    run1.font.color.rgb = RGBColor(0x2F, 0x54, 0x96)
 
     run2 = p.add_run()
     run2.text = "Performance"
     run2.font.size = Pt(40)
     run2.font.bold = True
-    run2.font.color.rgb = RgbColor(0x70, 0xAD, 0x47)
+    run2.font.color.rgb = RGBColor(0x70, 0xAD, 0x47)
 
     run3 = p.add_run()
     run3.text = " Report"
     run3.font.size = Pt(40)
     run3.font.bold = True
-    run3.font.color.rgb = RgbColor(0x2F, 0x54, 0x96)
+    run3.font.color.rgb = RGBColor(0x2F, 0x54, 0x96)
 
     # Formatted paragraph with various styles
     content_box = slide.shapes.add_textbox(
@@ -400,7 +400,7 @@ def create_formatted_presentation(output_path: str) -> None:
     p3.text = "Key Achievement: "
     p3.font.size = Pt(18)
     p3.font.bold = True
-    p3.font.color.rgb = RgbColor(0xC0, 0x00, 0x00)
+    p3.font.color.rgb = RGBColor(0xC0, 0x00, 0x00)
 
     run = p3.add_run()
     run.text = "Achieved 120% of quarterly target"
@@ -467,7 +467,7 @@ def create_formatted_presentation(output_path: str) -> None:
         run = p.add_run()
         run.text = f"({change})"
         run.font.size = Pt(14)
-        run.font.color.rgb = RgbColor(0x00, 0x80, 0x00)
+        run.font.color.rgb = RGBColor(0x00, 0x80, 0x00)
 
     prs.save(output_path)
     print(f"Formatted presentation saved to {output_path}")
@@ -486,7 +486,7 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.chart.data import CategoryChartData, ChartData
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
-from pptx.dml.color import RgbColor
+from pptx.dml.color import RGBColor
 
 def create_chart_presentation(output_path: str) -> None:
     """Create presentation with various chart types."""
@@ -637,7 +637,7 @@ Create and format tables in PowerPoint presentations.
 """
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from pptx.dml.color import RgbColor
+from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.oxml.ns import qn
 from pptx.oxml import parse_xml
@@ -646,7 +646,7 @@ from typing import List, Any
 def set_cell_color(cell, color_hex: str) -> None:
     """Set cell background color."""
     cell.fill.solid()
-    cell.fill.fore_color.rgb = RgbColor(
+    cell.fill.fore_color.rgb = RGBColor(
         int(color_hex[0:2], 16),
         int(color_hex[2:4], 16),
         int(color_hex[4:6], 16)
@@ -695,7 +695,7 @@ def create_table_slide(
         para = cell.text_frame.paragraphs[0]
         para.font.bold = True
         para.font.size = Pt(12)
-        para.font.color.rgb = RgbColor(255, 255, 255)
+        para.font.color.rgb = RGBColor(255, 255, 255)
         para.alignment = PP_ALIGN.CENTER
         cell.vertical_anchor = MSO_ANCHOR.MIDDLE
 
@@ -790,7 +790,7 @@ from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
 from pptx.enum.shapes import MSO_SHAPE, MSO_CONNECTOR
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
-from pptx.dml.color import RgbColor
+from pptx.dml.color import RGBColor
 from pathlib import Path
 from io import BytesIO
 from typing import Tuple
@@ -812,7 +812,7 @@ def add_image_with_border(
             Inches(height) if height else None
         )
         # Add line border
-        pic.line.color.rgb = RgbColor(0, 0, 0)
+        pic.line.color.rgb = RGBColor(0, 0, 0)
         pic.line.width = Pt(1)
 
 
@@ -829,7 +829,7 @@ def create_arrow_connector(
         Inches(end[0]), Inches(end[1])
     )
 
-    connector.line.color.rgb = RgbColor(
+    connector.line.color.rgb = RGBColor(
         int(color[0:2], 16),
         int(color[2:4], 16),
         int(color[4:6], 16)
@@ -879,7 +879,7 @@ def create_shape_presentation(output_path: str) -> None:
         )
 
         shape.fill.solid()
-        shape.fill.fore_color.rgb = RgbColor(
+        shape.fill.fore_color.rgb = RGBColor(
             int(color[0:2], 16),
             int(color[2:4], 16),
             int(color[4:6], 16)
@@ -889,7 +889,7 @@ def create_shape_presentation(output_path: str) -> None:
         tf = shape.text_frame
         p = tf.paragraphs[0]
         p.text = step
-        p.font.color.rgb = RgbColor(255, 255, 255)
+        p.font.color.rgb = RGBColor(255, 255, 255)
         p.font.bold = True
         p.font.size = Pt(14)
         p.alignment = PP_ALIGN.CENTER
@@ -903,7 +903,7 @@ def create_shape_presentation(output_path: str) -> None:
                 Inches(0.3), Inches(0.3)
             )
             arrow.fill.solid()
-            arrow.fill.fore_color.rgb = RgbColor(128, 128, 128)
+            arrow.fill.fore_color.rgb = RGBColor(128, 128, 128)
 
     # Slide 2: Organization Chart Style
     slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -926,10 +926,10 @@ def create_shape_presentation(output_path: str) -> None:
         Inches(2.5), Inches(1)
     )
     ceo.fill.solid()
-    ceo.fill.fore_color.rgb = RgbColor(0x2F, 0x54, 0x96)
+    ceo.fill.fore_color.rgb = RGBColor(0x2F, 0x54, 0x96)
     ceo.text = "CEO\nJohn Smith"
     for para in ceo.text_frame.paragraphs:
-        para.font.color.rgb = RgbColor(255, 255, 255)
+        para.font.color.rgb = RGBColor(255, 255, 255)
         para.font.size = Pt(12)
         para.alignment = PP_ALIGN.CENTER
 
@@ -948,10 +948,10 @@ def create_shape_presentation(output_path: str) -> None:
             Inches(2.5), Inches(1)
         )
         box.fill.solid()
-        box.fill.fore_color.rgb = RgbColor(0x5B, 0x9B, 0xD5)
+        box.fill.fore_color.rgb = RGBColor(0x5B, 0x9B, 0xD5)
         box.text = name
         for para in box.text_frame.paragraphs:
-            para.font.color.rgb = RgbColor(255, 255, 255)
+            para.font.color.rgb = RGBColor(255, 255, 255)
             para.font.size = Pt(11)
             para.alignment = PP_ALIGN.CENTER
 
@@ -976,7 +976,7 @@ def create_shape_presentation(output_path: str) -> None:
         Inches(3.5), Inches(2)
     )
     callout1.fill.solid()
-    callout1.fill.fore_color.rgb = RgbColor(0xFF, 0xEB, 0x84)
+    callout1.fill.fore_color.rgb = RGBColor(0xFF, 0xEB, 0x84)
     callout1.text = "Important!\nReview by Friday"
     for para in callout1.text_frame.paragraphs:
         para.font.size = Pt(14)
@@ -988,7 +988,7 @@ def create_shape_presentation(output_path: str) -> None:
         Inches(3.5), Inches(2)
     )
     callout2.fill.solid()
-    callout2.fill.fore_color.rgb = RgbColor(0xC6, 0xEF, 0xCE)
+    callout2.fill.fore_color.rgb = RGBColor(0xC6, 0xEF, 0xCE)
     callout2.text = "Great idea!\nLet's discuss"
     for para in callout2.text_frame.paragraphs:
         para.font.size = Pt(14)
@@ -1000,7 +1000,7 @@ def create_shape_presentation(output_path: str) -> None:
         Inches(3.5), Inches(2)
     )
     callout3.fill.solid()
-    callout3.fill.fore_color.rgb = RgbColor(0xFF, 0xC7, 0xCE)
+    callout3.fill.fore_color.rgb = RGBColor(0xFF, 0xC7, 0xCE)
     callout3.text = "Warning!\nDeadline approaching"
     for para in callout3.text_frame.paragraphs:
         para.font.size = Pt(14)
@@ -1137,13 +1137,13 @@ def create_monthly_report_template(output_path: str) -> None:
             Inches(3), Inches(1.5)
         )
         shape.fill.solid()
-        shape.fill.fore_color.rgb = RgbColor(0x44, 0x72, 0xC4)
+        shape.fill.fore_color.rgb = RGBColor(0x44, 0x72, 0xC4)
         tf = shape.text_frame
         p = tf.paragraphs[0]
         p.text = placeholder
         p.font.size = Pt(28)
         p.font.bold = True
-        p.font.color.rgb = RgbColor(255, 255, 255)
+        p.font.color.rgb = RGBColor(255, 255, 255)
         p.alignment = 1
 
     prs.save(output_path)
@@ -1273,7 +1273,7 @@ Generate presentations from pandas DataFrames.
 import pandas as pd
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from pptx.dml.color import RgbColor
+from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 
 def dataframe_to_slide(
@@ -1306,10 +1306,10 @@ def dataframe_to_slide(
         cell = table.cell(0, i)
         cell.text = str(col_name)
         cell.fill.solid()
-        cell.fill.fore_color.rgb = RgbColor(0x2F, 0x54, 0x96)
+        cell.fill.fore_color.rgb = RGBColor(0x2F, 0x54, 0x96)
         para = cell.text_frame.paragraphs[0]
         para.font.bold = True
-        para.font.color.rgb = RgbColor(255, 255, 255)
+        para.font.color.rgb = RGBColor(255, 255, 255)
         para.font.size = Pt(10)
         para.alignment = PP_ALIGN.CENTER
 
@@ -1388,9 +1388,9 @@ class SlideBuilder:
 
 # DO: Reuse color objects
 COLORS = {
-    'primary': RgbColor(0x2F, 0x54, 0x96),
-    'secondary': RgbColor(0x70, 0xAD, 0x47),
-    'accent': RgbColor(0xED, 0x7D, 0x31)
+    'primary': RGBColor(0x2F, 0x54, 0x96),
+    'secondary': RGBColor(0x70, 0xAD, 0x47),
+    'accent': RGBColor(0xED, 0x7D, 0x31)
 }
 
 # DO: Batch similar operations
