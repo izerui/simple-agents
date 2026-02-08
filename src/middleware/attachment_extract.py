@@ -193,5 +193,3 @@ class AttachmentExtractMiddleware(AgentMiddleware):
             # 复制整个 src/skills 目录到沙箱内
             logger.info(f"复制 skills 目录到沙箱: {src_skills_path} -> {sandbox_skills_path}")
             copytree_hardlink(str(src_skills_path), str(sandbox_skills_path))
-        else:
-            logger.info(f"沙箱 skills 目录已存在: {sandbox_skills_path}")
