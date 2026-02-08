@@ -780,11 +780,6 @@ class CodeExecutor:
                                 if node.func.value.func.attr == 'Path':
                                     is_path_call = True
 
-                        # 情况2: path_variable.method() (变量名包含 path)
-                        elif isinstance(node.func.value, ast.Name):
-                            if 'path' in node.func.value.id.lower():
-                                is_path_call = True
-
                         if is_path_call:
                             self.dangerous_calls.append(
                                 f"在 {node.lineno} 行: 禁止使用 Path.{func_name}() (可能绕过沙箱安全限制)"
