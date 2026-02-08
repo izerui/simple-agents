@@ -1,6 +1,10 @@
 import asyncio
 import base64
 import logging
+import os
+import platform
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +20,35 @@ from deepagents.backends.protocol import BACKEND_TYPES, BackendProtocol, FileUpl
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def copytree_hardlink(src, dst):
+    """跨平台硬链接复制"""
+    # 如果目标已存在，跳过
+    if os.path.exists(dst):
+        logger.info(f"⏭️ skills 已存在，跳过: {dst}")
+        return
+
+    system = platform.system()
+    success = False
+    if system == "Linux":
+        # Linux 使用 cp -al
+        try:
+            subprocess.run(['cp', '-al', str(src), str(dst)], check=True)
+            success = True
+            logger.info(f"✅ 使用硬链接复制 skills: {src} -> {dst}")
+        except Exception as e:
+            logger.warning(f"⚠️ linux 创建 skills 硬链接 失败: {e}")
+    else:
+        # 其他系统使用普通复制
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+        success = True
+        logger.info(f"✅ 使用普通复制 skills: {src} -> {dst}")
+
+    # 如果都失败，使用普通复制
+    if not success:
+        logger.warning("⚠️ 硬链接方法失败，使用普通复制 skills")
+        shutil.copytree(src, dst)
 
 
 class AttachmentExtractMiddleware(AgentMiddleware):
@@ -108,13 +141,16 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                 # 非人类消息或非列表内容，保持原样
                 updated_messages.append(msg)
 
+        config: RunnableConfig = get_config()
+        #  获取后端实例
+        backend: FilesystemBackend = self._get_backend(config)
+
         # 如果有提取的附件，上传到沙箱目录
         if extracted_attachments:
-            config: RunnableConfig = get_config()
-            #  获取后端实例
-            backend: FilesystemBackend = self._get_backend(config)
             await self.upload_files(backend, extracted_attachments)
-            pass
+
+        # 检查并复制 skills 目录到沙箱
+        await asyncio.to_thread(self._ensure_skills_in_sandbox, backend)
 
         # 更新消息
         return {'messages': updated_messages}
@@ -136,3 +172,26 @@ class AttachmentExtractMiddleware(AgentMiddleware):
             )
             uploads: list[FileUploadResponse] = await backend.aupload_files(files_to_upload)
             logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
+
+    def _ensure_skills_in_sandbox(self, backend: FilesystemBackend):
+        """确保 skills 目录存在于沙箱中
+
+        检查沙箱中的 /skills 目录是否存在，如果不存在则从 src/skills 复制到沙箱
+        """
+        # 获取项目根目录和源 skills 路径
+        project_root = Path(__file__).parent.parent.parent
+        src_skills_path = project_root / 'src' / 'skills'
+        sandbox_skills_path = backend.cwd / 'skills'
+
+        # 检查源 skills 目录是否存在
+        if not src_skills_path.exists():
+            logger.warning(f"源 skills 目录不存在: {src_skills_path}")
+            return
+
+        # 检查沙箱 skills 目录是否存在
+        if not sandbox_skills_path.exists():
+            # 复制整个 src/skills 目录到沙箱内
+            logger.info(f"复制 skills 目录到沙箱: {src_skills_path} -> {sandbox_skills_path}")
+            copytree_hardlink(str(src_skills_path), str(sandbox_skills_path))
+        else:
+            logger.info(f"沙箱 skills 目录已存在: {sandbox_skills_path}")

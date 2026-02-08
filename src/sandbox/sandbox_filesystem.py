@@ -148,35 +148,6 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             # 使用 Python 代码执行器
             return self._pycode_executor.execute(command)
 
-    def ls_info(self, path: str) -> list[FileInfo]:
-        if path.startswith('/skills'):
-            project_root = Path(__file__).parent.parent.parent
-            src_skills_path = project_root / 'src' / 'skills'
-
-            # 提取子技能目录名（如 /skills/paper-detector -> paper-detector）
-            path_parts = path.rstrip('/').split('/')
-            if len(path_parts) > 2:
-                # 访问的是具体子技能目录
-                skill_name = path_parts[2]
-                src_skill_path = src_skills_path / skill_name
-                sandbox_skill_path = self.root_dir / 'skills' / skill_name
-
-                # 判断源子技能目录是否存在
-                if src_skill_path.exists():
-                    # 判断沙箱子技能目录是否存在
-                    if not sandbox_skill_path.exists():
-                        # 确保父目录存在
-                        sandbox_skill_path.parent.mkdir(parents=True, exist_ok=True)
-                        # 复制具体子技能目录到沙箱内
-                        copytree_hardlink(str(src_skill_path), str(sandbox_skill_path))
-            else:
-                # 访问的是 /skills 根目录
-                skills_pathlib = self.root_dir / 'skills'
-                if not skills_pathlib.exists():
-                    # 复制整个 src/skills 目录到沙箱内
-                    copytree_hardlink(str(src_skills_path), str(skills_pathlib))
-        return super().ls_info(path)
-
     # def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
     #     # 如果是pdf文件
     #     if file_path.lower().endswith('.pdf'):
