@@ -481,7 +481,8 @@ class NPXStyleInstaller:
             bool: True if successful
         """
         # Ensure skills directory exists
-        self.skills_dir.mkdir(parents=True, exist_ok=True)
+        if not os.path.exists(self.skills_dir):
+            os.makedirs(self.skills_dir)
         print_info(f"Skills directory: {self.skills_dir}")
 
         # Detect package type and install accordingly
