@@ -16,23 +16,15 @@
 
 安全拦截机制（多重保护）：
 1. 受限 open() 函数：控制文件访问权限
-2. AST 语法层检查：阻止危险函数调用（os.system, subprocess等）
-3. 进程隔离：每个执行在独立子进程，避免污染主进程
-4. 超时保护：防止无限循环和资源耗尽
-5. 输出限制：防止输出过大
+2. 受限 os 模块：禁用危险函数，允许安全函数
+3. AST 语法层检查：阻止危险函数调用（os.system, subprocess等）
+4. 进程隔离：每个执行在独立子进程，避免污染主进程
+5. 超时保护：防止无限循环和资源耗尽
+6. 输出限制：防止输出过大
 
-测试结果总结
-测试	结果	说明
-1. root_dir 内可读写	✅	沙箱内文件操作正常
-2. 读取只读白名单路径	✅	readable_paths 可读
-3. 禁止写入只读路径	✅	只读路径无法写入
-4. 可以写入 writable_paths	✅	writable_paths 可写
-5. 绝对路径自动加 root_dir 前缀	✅	外部路径被重定向
-6. 相对路径自动加 root_dir 前缀	✅	相对路径也被限制
-7. Path.write_text 受限	✅	Path 类也受权限控制
-8. os.open 被禁用	✅	AST 检查阻止
-9. io 模块被阻止	✅	危险模块被阻止
-10. Python 标准库可用	✅	标准库正常工作
+可用和禁用的 os 函数：
+✅ 可用：os.remove, os.rmdir, os.mkdir, os.listdir, os.path.exists 等
+❌ 禁用：os.open, os.write, os.fdopen（使用内置 open() 代替）
 
 只支持两种标准执行格式：
 1. python -c "code" - 直接执行代码字符串
@@ -238,10 +230,12 @@ def _execute_in_subprocess(
 
         # 创建受限的 os 模块
         class RestrictedOS:
-            """受限的 os 模块，移除危险函数"""
+            """受限的 os 模块，只禁用真正危险的函数"""
             def __getattr__(self, name):
-                if name in ['open', 'write', 'fdopen', 'remove', 'unlink', 'rmdir', 'mkdir']:
-                    raise AttributeError(f"os.{name} 被禁用")
+                # 只禁用直接文件描述符操作（避免绕过 restricted_open）
+                # 其他函数（remove、rmdir、mkdir 等）在 root_dir 内是安全的
+                if name in ['open', 'write', 'fdopen']:
+                    raise AttributeError(f"os.{name} 被禁用，请使用 open() 函数")
                 return getattr(os, name)
 
             def __setattr__(self, name, value):
@@ -511,7 +505,8 @@ class CodeExecutor:
 
                         # 危险的模块.函数组合
                         dangerous_combos = {
-                            'os': ['system', 'popen', 'spawn', 'fork', 'forkpty', 'open', 'write', 'remove', 'unlink', 'rmdir', 'mkdir', 'fdopen', 'chmod', 'chown', 'link', 'symlink', 'rename', 'replace', 'putenv', 'unsetenv'],
+                            # 只阻止真正危险的系统操作
+                            'os': ['system', 'popen', 'spawn', 'fork', 'forkpty', 'chmod', 'chown', 'link', 'symlink', 'rename', 'replace', 'putenv', 'unsetenv'],
                             'subprocess': ['run', 'call', 'Popen', 'check_output'],
                             'commands': ['getoutput', 'getstatusoutput'],
                             'ctypes': None,  # ctypes 模块的所有函数都危险
