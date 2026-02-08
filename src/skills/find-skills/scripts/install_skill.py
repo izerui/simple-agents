@@ -265,6 +265,8 @@ class NPXStyleInstaller:
 
         # Install to skills directory
         try:
+            # Ensure parent directory exists
+            target_dir.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(package_source, target_dir)
             print_success(f"Installed to: {target_dir}")
             return True
@@ -360,6 +362,8 @@ class NPXStyleInstaller:
 
         # Install
         try:
+            # Ensure parent directory exists
+            target_dir.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(package_source, target_dir)
             print_success(f"Installed to: {target_dir}")
             return True
