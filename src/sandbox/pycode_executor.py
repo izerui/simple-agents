@@ -186,14 +186,16 @@ def _execute_in_subprocess(
             except MemoryError:
                 print("  [子进程] ✗ 内存错误")
                 exit_code = -1
+                traceback.print_exc()  # 输出完整堆栈
             except RecursionError:
                 print("  [子进程] ✗ 递归错误")
                 exit_code = -1
+                traceback.print_exc()  # 输出完整堆栈
             except Exception as e:
                 # 执行错误
                 print("  [子进程] ✗ 执行异常: {0}".format(type(e).__name__))
                 exit_code = 1
-                tb_str = traceback.format_exc()
+                traceback.print_exc()  # 输出完整堆栈
 
         # 获取输出
         output = output_capture.get_output()
@@ -207,22 +209,25 @@ def _execute_in_subprocess(
 
     except TimeoutError as e:
         print("  [子进程] ✗ 超时")
+        tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
-            output="执行超时: {0}".format(str(e)),
+            output="执行超时: {0}\n\n{1}".format(str(e), tb_str),
             exit_code=-1,
             error=str(e)
         ))
     except MemoryError as e:
         print("  [子进程] ✗ 内存错误")
+        tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
-            output="错误: 内存使用超过限制",
+            output="错误: 内存使用超过限制\n\n{0}".format(tb_str),
             exit_code=-1,
             error=str(e)
         ))
     except RecursionError as e:
         print("  [子进程] ✗ 递归错误")
+        tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
-            output="错误: 递归深度超过限制（可能导致无限递归）",
+            output="错误: 递归深度超过限制（可能导致无限递归）\n\n{0}".format(tb_str),
             exit_code=-1,
             error=str(e)
         ))
