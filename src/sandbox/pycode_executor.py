@@ -2,22 +2,20 @@
 """
 安全沙箱后端（只支持标准执行格式）
 
-实现基于 os.chroot() 的真正文件系统隔离：
-- root_dir 变成新的根目录 /
-- 无法访问 root_dir 外的任何文件
-- 需要 root 权限运行
+实现基于受限 open() 函数的文件访问控制：
+- root_dir 内：可读写
+- readable_paths 白名单：只读访问（如 .venv）
+- writable_paths：可读写
+- 其他绝对路径：自动加 root_dir 前缀
+- 相对路径：自动加 root_dir 前缀
 
-新进程隔离方案：
+进程隔离方案：
 - 每次代码执行在独立子进程中进行
-- 使用 os.chroot() 将 root_dir 设为新的根目录
 - 使用 multiprocessing.Queue 进行进程间通信
-- 彻底解决多线程安全问题
+- 不需要 root 权限
 
 安全拦截机制（多重保护）：
-1. chroot 文件系统隔离：
-   - 内核级别的文件系统隔离
-   - /etc/passwd 实际访问的是 root_dir/etc/passwd
-   - 无法通过任何方式访问 root_dir 外的文件
+1. 受限 open() 函数：控制文件访问权限
 2. AST 语法层检查：阻止危险函数调用（os.system, subprocess等）
 3. 进程隔离：每个执行在独立子进程，避免污染主进程
 4. 超时保护：防止无限循环和资源耗尽
@@ -85,7 +83,9 @@ def _execute_in_subprocess(
         root_dir,
         script_args,
         result_queue,
-        timeout
+        timeout,
+        writable_paths,
+        readable_paths
 ):
     """
     在子进程中执行代码
@@ -96,26 +96,13 @@ def _execute_in_subprocess(
         script_args: 脚本参数
         result_queue: 结果队列（用于传递结果回主进程）
         timeout: 超时时间（秒）
+        writable_paths: 可写路径列表
+        readable_paths: 只读白名单路径列表
     """
     try:
-        # 使用 chroot 进行文件系统隔离（需要 root 权限）
-        try:
-            # 先切换到 root_dir
-            os.chdir(root_dir)
-            # 执行 chroot，将 root_dir 作为新的根目录
-            os.chroot(root_dir)
-            # 切换到新根目录
-            os.chdir('/')
-            print("  [子进程] Chroot 设置成功")
-        except PermissionError:
-            # 如果没有 root 权限，返回错误
-            print("  [子进程] ✗ Chroot 权限错误")
-            result_queue.put(ExecuteResult(
-                output="错误: chroot 需要 root 权限，请使用 sudo 运行",
-                exit_code=-1,
-                error="chroot 需要 root 权限"
-            ))
-            return
+        # 切换工作目录
+        os.chdir(root_dir)
+        print("  [子进程] 工作目录: {0}".format(os.getcwd()))
 
         # 设置超时信号
         def timeout_handler(signum, frame):
@@ -140,11 +127,59 @@ def _execute_in_subprocess(
         # 准备执行环境
         import builtins
 
+        # 创建受限制的 open 函数
+        original_open = open
+        root_path = Path(root_dir).resolve()
+        writable_resolved = [Path(p).resolve() for p in writable_paths]
+        readable_resolved = [Path(p).resolve() for p in readable_paths]
+
+        def restricted_open(file, mode='r', *args, **kwargs):
+            """
+            受限的 open 函数：
+            1. root_dir 内的路径：可读写
+            2. readable_paths 中的路径：只读
+            3. writable_paths 中的路径：可读写
+            4. 其他绝对路径：自动加 root_dir 前缀
+            5. 相对路径：自动加 root_dir 前缀
+            """
+            file_path = Path(file).expanduser()
+            mode_str = mode if isinstance(mode, str) else 'r'
+            is_writing = any(c in mode_str for c in ['w', 'a', '+', 'x'])
+
+            # 处理路径
+            if file_path.is_absolute():
+                resolved = file_path.resolve()
+
+                # 检查是否在 root_dir 内
+                if str(resolved).startswith(str(root_path)):
+                    return original_open(file, mode, *args, **kwargs)
+
+                # 检查是否在 writable_paths 中
+                for wp in writable_resolved:
+                    if str(resolved).startswith(str(wp)):
+                        return original_open(file, mode, *args, **kwargs)
+
+                # 检查是否在 readable_paths 中
+                for rp in readable_resolved:
+                    if str(resolved).startswith(str(rp)):
+                        if is_writing:
+                            raise PermissionError("只读路径，禁止写入: {0}".format(file))
+                        return original_open(file, mode, *args, **kwargs)
+
+                # 其他绝对路径：自动加 root_dir 前缀
+                new_path = root_path / file_path.relative_to(file_path.anchor)
+                return original_open(str(new_path), mode, *args, **kwargs)
+            else:
+                # 相对路径：强制加 root_dir 前缀
+                new_path = root_path / file_path
+                return original_open(str(new_path), mode, *args, **kwargs)
+
         safe_globals = {
             '__builtins__': builtins,
             '__name__': '__main__',
             '__file__': '<sandbox>',
             'print': print,
+            'open': restricted_open,
             'range': range,
             'len': len,
             'str': str,
@@ -249,30 +284,34 @@ def _execute_in_subprocess(
 
 class CodeExecutor:
     """
-    安全沙箱执行器（基于 os.chroot 隔离）
+    安全沙箱执行器（基于受限 open() 函数）
 
-    使用子进程隔离执行环境，每个代码执行在独立进程中，
-    通过 os.chroot() 进行真正的文件系统隔离，彻底解决安全问题。
+    权限控制：
+    - root_dir 内：可读写
+    - readable_paths：只读
+    - writable_paths：可读写
+    - 其他绝对路径：自动加 root_dir 前缀
+    - 相对路径：自动加 root_dir 前缀
     """
 
-    def __init__(self, root_dir=None, timeout=30, max_output_length=100 * 1024):
+    def __init__(self, root_dir=None, timeout=30, max_output_length=100 * 1024,
+                 writable_paths=None, readable_paths=None):
         """
         初始化沙箱执行器
 
         Args:
-            root_dir: 沙箱根目录（如果为 None，使用系统临时目录）
+            root_dir: 沙箱根目录
             timeout: 执行超时时间（秒）
             max_output_length: 最大输出长度（字节）
-
-        注意：
-            - 必须使用 root 权限运行（sudo）
-            - root_dir 将成为新的根目录 /
-            - 无法访问 root_dir 外的任何文件
+            writable_paths: 额外的可写路径列表
+            readable_paths: 只读白名单路径列表（如 .venv）
         """
         self.root_dir = Path(root_dir)
-        # self.root_dir.mkdir(parents=True, exist_ok=True)
+        self.root_dir.mkdir(parents=True, exist_ok=True)
         self.timeout = timeout
         self.max_output_length = max_output_length
+        self.writable_paths = [Path(p).resolve() for p in (writable_paths or [])]
+        self.readable_paths = [Path(p).resolve() for p in (readable_paths or [])]
 
     def _parse_command(self, command):
         """
@@ -354,7 +393,7 @@ class CodeExecutor:
         2. 动态导入（importlib）
         3. 危险内置函数（exec, eval, compile）
 
-        注意：由于 chroot 已提供文件系统隔离，open() 函数可以正常使用
+        注意：文件访问通过受限的 open() 函数控制
 
         Args:
             code: 要检查的代码
@@ -548,7 +587,15 @@ class CodeExecutor:
             result_queue = Queue()
             process = Process(
                 target=_execute_in_subprocess,
-                args=(code, str(self.root_dir), script_args, result_queue, self.timeout)
+                args=(
+                    code,
+                    str(self.root_dir),
+                    script_args,
+                    result_queue,
+                    self.timeout,
+                    [str(p) for p in self.writable_paths],
+                    [str(p) for p in self.readable_paths]
+                )
             )
 
             # 启动子进程
