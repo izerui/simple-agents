@@ -326,6 +326,16 @@ def _execute_in_subprocess(
                 redirected_path = redirect_path(path)
                 return os.listdir(redirected_path)
 
+            def stat(self, path, *args, **kwargs):
+                """获取文件状态，自动重定向路径"""
+                redirected_path = redirect_path(path)
+                return os.stat(redirected_path, *args, **kwargs)
+
+            def lstat(self, path, *args, **kwargs):
+                """获取文件状态（不跟随符号链接），自动重定向路径"""
+                redirected_path = redirect_path(path)
+                return os.lstat(redirected_path, *args, **kwargs)
+
             def rename(self, src, dst, *args, **kwargs):
                 """重命名文件，自动重定向路径并严格按顺序检查权限"""
                 # 重定向路径
