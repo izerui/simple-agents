@@ -106,8 +106,10 @@ def _execute_in_subprocess(
             os.chroot(root_dir)
             # 切换到新根目录
             os.chdir('/')
+            print("  [子进程] Chroot 设置成功")
         except PermissionError:
             # 如果没有 root 权限，返回错误
+            print("  [子进程] ✗ Chroot 权限错误")
             result_queue.put(ExecuteResult(
                 output="错误: chroot 需要 root 权限，请使用 sudo 运行",
                 exit_code=-1,
@@ -125,7 +127,9 @@ def _execute_in_subprocess(
         # 编译代码
         try:
             compiled_code = compile(code, '<sandbox>', 'exec')
+            print("  [子进程] 代码编译成功")
         except SyntaxError as e:
+            print("  [子进程] ✗ 代码编译失败")
             result_queue.put(ExecuteResult(
                 output="语法错误: {0}".format(str(e)),
                 exit_code=-1,
@@ -169,19 +173,25 @@ def _execute_in_subprocess(
         locals_dict = safe_globals.copy()
 
         # 执行代码
+        print("  [子进程] 执行代码")
         with OutputCapture() as output_capture:
             exit_code = 0
             try:
                 exec(compiled_code, locals_dict, locals_dict)
+                print("  [子进程] ✓ 代码执行完成")
             except SystemExit as e:
                 # 正常退出
                 exit_code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+                print("  [子进程] SystemExit: {0}".format(exit_code))
             except MemoryError:
+                print("  [子进程] ✗ 内存错误")
                 exit_code = -1
             except RecursionError:
+                print("  [子进程] ✗ 递归错误")
                 exit_code = -1
             except Exception as e:
                 # 执行错误
+                print("  [子进程] ✗ 执行异常: {0}".format(type(e).__name__))
                 exit_code = 1
                 tb_str = traceback.format_exc()
 
@@ -189,30 +199,35 @@ def _execute_in_subprocess(
         output = output_capture.get_output()
 
         # 发送结果
+        print("  [子进程] 发送结果")
         result_queue.put(ExecuteResult(
             output=output,
             exit_code=exit_code
         ))
 
     except TimeoutError as e:
+        print("  [子进程] ✗ 超时")
         result_queue.put(ExecuteResult(
             output="执行超时: {0}".format(str(e)),
             exit_code=-1,
             error=str(e)
         ))
     except MemoryError as e:
+        print("  [子进程] ✗ 内存错误")
         result_queue.put(ExecuteResult(
             output="错误: 内存使用超过限制",
             exit_code=-1,
             error=str(e)
         ))
     except RecursionError as e:
+        print("  [子进程] ✗ 递归错误")
         result_queue.put(ExecuteResult(
             output="错误: 递归深度超过限制（可能导致无限递归）",
             exit_code=-1,
             error=str(e)
         ))
     except Exception as e:
+        print("  [子进程] ✗ 未预期异常")
         tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
             output="执行错误:\n{0}: {1}\n{2}".format(type(e).__name__, str(e), tb_str),
@@ -310,8 +325,20 @@ class CodeExecutor:
         Returns:
             脚本内容
         """
+        print("→ 读取脚本文件: {0}".format(script_path))
 
-        return script_path.read_text(encoding='utf-8')
+        # 去掉开头的 /，将绝对路径转换为相对路径
+        if script_path.startswith('/'):
+            script_path = script_path.lstrip('/')
+
+        full_path = self.root_dir / script_path
+        if not full_path.exists():
+            print("✗ 文件不存在: {0}".format(full_path))
+            raise FileNotFoundError(str(full_path))
+
+        content = full_path.read_text(encoding='utf-8')
+        print("✓ 文件读取成功 ({0} 字节)".format(len(content)))
+        return content
 
     def _check_code_safety(self, code):
         """
@@ -330,9 +357,11 @@ class CodeExecutor:
         Raises:
             SyntaxError: 如果代码不安全
         """
+        print("→ 安全检查")
         try:
             tree = ast.parse(code)
         except SyntaxError as e:
+            print("✗ 语法错误")
             raise SyntaxError("语法错误: {0}".format(str(e)))
 
         class SafetyChecker(ast.NodeVisitor):
@@ -439,9 +468,12 @@ class CodeExecutor:
 
         # 报告安全问题
         if checker.unsafe_calls or checker.unsafe_imports:
+            print("✗ 安全检查失败")
             error_msg = "安全检查失败，发现以下危险操作：\n"
             error_msg += "\n".join(checker.unsafe_calls + checker.unsafe_imports)
             raise SyntaxError(error_msg)
+
+        print("✓ 安全检查通过")
 
     def execute(self, command):
         """
@@ -453,11 +485,14 @@ class CodeExecutor:
         Returns:
             ExecuteResponse 包含输出、退出码和截断标志
         """
+        print("═ 执行命令")
         try:
             # 步骤 1: 解析命令
             try:
                 code, script_path, script_args = self._parse_command(command)
+                print("→ 解析命令: {0}".format("脚本文件" if script_path else "代码字符串"))
             except ValueError as e:
+                print("✗ 命令格式错误")
                 return ExecuteResponse(
                     output="命令格式错误:\n{0}".format(str(e)),
                     exit_code=-1,
@@ -475,6 +510,7 @@ class CodeExecutor:
                         truncated=False
                     )
                 except Exception as e:
+                    print("✗ 读取文件失败")
                     return ExecuteResponse(
                         output="错误: 读取脚本文件失败: {0}\n详细信息: {1}".format(script_path, str(e)),
                         exit_code=-1,
@@ -485,6 +521,7 @@ class CodeExecutor:
             code = code.strip()
 
             if not code:
+                print("✗ 代码为空")
                 return ExecuteResponse(
                     output="错误: 没有提供要执行的代码",
                     exit_code=-1,
@@ -502,6 +539,7 @@ class CodeExecutor:
                 )
 
             # 步骤 4: 创建子进程执行代码
+            print("→ 启动子进程")
             result_queue = Queue()
             process = Process(
                 target=_execute_in_subprocess,
@@ -517,6 +555,7 @@ class CodeExecutor:
             # 检查子进程状态
             if process.is_alive():
                 # 子进程超时，强制终止
+                print("✗ 执行超时")
                 process.terminate()
                 process.join(timeout=2)
                 if process.is_alive():
@@ -530,10 +569,12 @@ class CodeExecutor:
                 )
 
             # 获取执行结果
+            print("→ 获取执行结果")
             if not result_queue.empty():
                 result = result_queue.get()
             else:
                 # 子进程异常退出但没有返回结果
+                print("✗ 子进程异常退出")
                 return ExecuteResponse(
                     output="错误: 子进程异常退出，没有返回结果",
                     exit_code=-1,
@@ -541,6 +582,7 @@ class CodeExecutor:
                 )
 
             # 步骤 5: 检查输出长度并截断
+            print("→ 处理输出")
             output = result.output
             truncated = False
 
@@ -549,6 +591,7 @@ class CodeExecutor:
                 truncated = True
                 output += "\n\n... [输出被截断，超过最大长度限制] ..."
 
+            print("✓ 执行完成 (退出码: {0})".format(result.exit_code))
             return ExecuteResponse(
                 output=output,
                 exit_code=result.exit_code,
@@ -557,6 +600,7 @@ class CodeExecutor:
 
         except Exception as e:
             # 捕获任何未预期的异常
+            print("✗ 系统异常")
             import traceback
             return ExecuteResponse(
                 output="系统异常: {0}\n{1}".format(str(e), traceback.format_exc()),
