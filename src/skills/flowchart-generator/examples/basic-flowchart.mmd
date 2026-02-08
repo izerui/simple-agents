@@ -1,0 +1,15 @@
+graph TD
+    A[开始] --> B{是否登录?}
+    B -->|是| C[显示主页]
+    B -->|否| D[跳转登录页]
+    D --> E{登录成功?}
+    E -->|是| C
+    E -->|否| F[显示错误信息]
+    F --> D
+    C --> G[用户操作]
+    G --> H[结束]
+
+    style A fill:#e1f5e1,stroke:#2d6a2d
+    style H fill:#ffe1e1,stroke:#6a2d2d
+    style B fill:#fff4e1,stroke:#6a5a2d
+    style E fill:#fff4e1,stroke:#6a5a2d

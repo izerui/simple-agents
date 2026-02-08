@@ -1,0 +1,52 @@
+classDiagram
+    class User {
+        +String id
+        +String username
+        +String email
+        +String password
+        +register()
+        +login()
+        +logout()
+        +updateProfile()
+    }
+
+    class Order {
+        +String orderId
+        +Date createTime
+        +String status
+        +Float totalAmount
+        +createOrder()
+        +cancelOrder()
+        +updateStatus()
+    }
+
+    class Product {
+        +String productId
+        +String name
+        +Float price
+        +Integer stock
+        +updateStock()
+        +getDetails()
+    }
+
+    class Payment {
+        +String paymentId
+        +Float amount
+        +String method
+        +String status
+        +process()
+        +refund()
+    }
+
+    class Address {
+        +String addressId
+        +String province
+        +String city
+        +String detail
+        +String zipCode
+    }
+
+    User "1" -- "*" Order : 下单
+    Order "1" -- "*" Product : 包含
+    Order "1" -- "1" Payment : 支付
+    User "1" -- "*" Address : 拥有

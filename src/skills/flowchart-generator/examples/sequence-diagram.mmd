@@ -1,0 +1,30 @@
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 前端应用
+    participant API as API网关
+    participant Auth as 认证服务
+    participant Backend as 后端服务
+    participant DB as 数据库
+
+    User->>Frontend: 点击登录按钮
+    Frontend->>API: POST /api/auth/login
+    API->>Auth: 验证用户凭证
+    Auth->>DB: 查询用户信息
+    DB-->>Auth: 返回用户数据
+    Auth-->>API: 返回Token
+    API-->>Frontend: 返回登录结果
+    Frontend->>Frontend: 保存Token到本地
+    Frontend-->>User: 显示登录成功
+
+    Note over Frontend,DB: 后续请求携带Token
+
+    User->>Frontend: 访问受保护页面
+    Frontend->>API: GET /api/user/profile (带Token)
+    API->>Auth: 验证Token
+    Auth-->>API: Token有效
+    API->>Backend: 获取用户资料
+    Backend->>DB: 查询资料
+    DB-->>Backend: 返回数据
+    Backend-->>API: 返回结果
+    API-->>Frontend: 返回用户资料
+    Frontend-->>User: 显示个人信息
