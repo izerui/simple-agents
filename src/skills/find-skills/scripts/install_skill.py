@@ -37,7 +37,7 @@ import tarfile
 import tempfile
 import urllib.request
 from typing import Optional, Dict, List
-from urllib.parse import urlparse, quote
+from urllib.parse import urlparse
 import urllib.error
 
 
@@ -197,9 +197,15 @@ class NPXStyleInstaller:
         """
         try:
             print_info(f"Downloading from: {url}")
-            # 使用 urlretrieve 下载到临时目录（/tmp/ 在白名单中）
-            urllib.request.urlretrieve(url, dest_path)
-            print_success(f"Downloaded to: {dest_path}")
+            with urllib.request.urlopen(url, timeout=timeout) as response:
+                # 使用 open() 写入，会被沙箱拦截
+                with open(dest_path, 'wb') as f:
+                    # 分块写入，避免大文件内存问题
+                    while True:
+                        chunk = response.read(8192)
+                        if not chunk:
+                            break
+                        f.write(chunk)
             return True
         except urllib.error.HTTPError as e:
             print_error(f"HTTP Error {e.code}: {e.reason}")
@@ -211,56 +217,31 @@ class NPXStyleInstaller:
             print_error(f"Download failed: {e}")
             return False
 
-    def _extract_tarball_to_target(self, tarball_path: str, target_dir: str, prefix: str = "package/") -> bool:
+    def _extract_tarball(self, tarball_path: str, dest_dir: str) -> bool:
         """
-        直接从 tarball 提取文件到目标目录，使用 open() 确保被沙箱拦截
+        解压 .tgz tarball 到目标目录
 
         Args:
-            tarball_path: tarball 文件路径
-            target_dir: 目标目录路径
-            prefix: 要移除的路径前缀（如 'package/'）
+            tarball_path: tarball 文件路径（字符串）
+            dest_dir: 目标目录（字符串）
 
         Returns:
             bool: 是否成功
         """
         try:
-            print_info(f"Extracting to: {target_dir}")
-
             # 确保目标目录存在
-            if not os.path.exists(target_dir):
-                os.makedirs(target_dir)
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir)
 
-            file_count = 0
-            with tarfile.open(tarball_path, 'r:gz') as tar:
-                for member in tar.getmembers():
-                    # 只处理以指定前缀开头的文件
-                    if member.name.startswith(prefix):
-                        # 移除前缀，获取相对路径
-                        relative_path = member.name[len(prefix):]
-
-                        if relative_path and member.isfile():
-                            # 构建目标文件路径
-                            file_path = os.path.join(target_dir, relative_path)
-
-                            # 确保父目录存在（使用 os 操作，会被沙箱处理）
-                            parent_dir = os.path.dirname(file_path)
-                            if parent_dir and not os.path.exists(parent_dir):
-                                os.makedirs(parent_dir, exist_ok=True)
-
-                            # 提取文件内容（一次性读取）
-                            f = tar.extractfile(member)
-                            if f:
-                                content = f.read()
-
-                                # 使用 open() 写入文件（被沙箱拦截）
-                                with open(file_path, 'wb') as out:
-                                    out.write(content)
-
-                                file_count += 1
-
-            print_success(f"Successfully extracted {file_count} files to {target_dir}")
+            # 使用 gzip + tarfile 解压
+            if tarball_path.endswith('.gz') or tarball_path.endswith('.tgz'):
+                with gzip.open(tarball_path, 'rb') as gz:
+                    with tarfile.open(fileobj=gz, mode='r:gz') as tar:
+                        tar.extractall(path=dest_dir)
+            else:
+                with tarfile.open(tarball_path, 'r:gz') as tar:
+                    tar.extractall(path=dest_dir)
             return True
-
         except Exception as e:
             print_error(f"Extraction failed: {e}")
             return False
@@ -330,6 +311,32 @@ class NPXStyleInstaller:
             print_error("No tarball URL found in package metadata")
             return False
 
+        # 下载 tarball
+        tarball_filename = f"{package_name}-{version}.tgz"
+        tarball_path = os.path.join(self.temp_dir, tarball_filename)
+
+        if not self._download_file(tarball_url, tarball_path):
+            return False
+
+        # 解压到临时目录
+        extract_dir = os.path.join(self.temp_dir, "extracted")
+        if not os.path.exists(extract_dir):
+            os.makedirs(extract_dir)
+
+        if not self._extract_tarball(tarball_path, extract_dir):
+            return False
+
+        # 找到包目录（通常在 'package/' 子目录中）
+        extracted_items = os.listdir(extract_dir)
+        if len(extracted_items) == 1:
+            item_path = os.path.join(extract_dir, extracted_items[0])
+            if os.path.isdir(item_path):
+                package_source = item_path
+            else:
+                package_source = extract_dir
+        else:
+            package_source = extract_dir
+
         # 确定目标目录名
         skill_name = package_name.replace('/', '-')
         target_dir = os.path.join(self.skills_dir, skill_name)
@@ -340,19 +347,21 @@ class NPXStyleInstaller:
             print_warning("Skipping installation (NEVER overwrites existing files)")
             return True
 
-        # 下载 tarball 到临时目录
-        tarball_filename = f"{package_name}-{version}.tgz"
-        tarball_path = os.path.join(self.temp_dir, tarball_filename)
+        # 安装到 skills 目录
+        try:
+            # 确保父目录存在
+            parent_dir = os.path.dirname(target_dir)
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_dir)
 
-        if not self._download_file(tarball_url, tarball_path):
+            # 使用自定义的 copytree，通过 open() 被沙箱拦截
+            if copytree_with_open(package_source, target_dir):
+                print_success(f"Installed to: {target_dir}")
+                return True
             return False
-
-        # 直接从 tarball 提取到目标目录，使用 open() 被沙箱拦截
-        if not self._extract_tarball_to_target(tarball_path, target_dir, prefix="package/"):
+        except Exception as e:
+            print_error(f"Installation failed: {e}")
             return False
-
-        print_success(f"Installed to: {target_dir}")
-        return True
 
     def _install_from_github(self, repo_spec: str, skill_path: Optional[str] = None) -> bool:
         """
@@ -385,19 +394,6 @@ class NPXStyleInstaller:
         if tag in ['main', 'master']:
             tag = 'main'  # 默认使用 main
 
-        # 确定目标目录
-        skill_name = f"{owner}-{repo_name}"
-        if skill_path:
-            skill_name = skill_path.replace('/', '-')
-
-        target_dir = os.path.join(self.skills_dir, skill_name)
-
-        # 检查是否已安装（绝不覆盖）
-        if os.path.exists(target_dir):
-            print_warning(f"Skill already exists: {target_dir}")
-            print_warning("Skipping installation (NEVER overwrites existing files)")
-            return True
-
         # 构建下载 URL
         # GitHub tarball URL: https://github.com/owner/repo/archive/refs/tags/tag.tar.gz
         # 或 branch: https://github.com/owner/repo/archive/refs/heads/branch.tar.gz
@@ -416,50 +412,57 @@ class NPXStyleInstaller:
                 print_error("Failed to download from GitHub")
                 return False
 
-        # 确定要移除的前缀（GitHub tarball 的目录名格式）
-        # 例如: repo-name-1.0.0/ 或 owner-repo-name-tag/
-        prefix_prefix = f"{repo_name}-{tag}"
+        # 解压
+        extract_dir = os.path.join(self.temp_dir, "extracted")
+        if not os.path.exists(extract_dir):
+            os.makedirs(extract_dir)
 
-        # 如果指定了技能子目录，需要特殊处理
+        if not self._extract_tarball(tarball_path, extract_dir):
+            return False
+
+        # 找到解压后的目录
+        extracted_items = os.listdir(extract_dir)
+        if not extracted_items:
+            print_error("No files extracted")
+            return False
+
+        package_source = os.path.join(extract_dir, extracted_items[0])
+
+        # 如果指定了技能子目录，导航到该目录
         if skill_path:
-            # 先解压到临时目录，然后复制子目录
-            temp_extract = os.path.join(self.temp_dir, "github_extract")
-            if not os.path.exists(temp_extract):
-                os.makedirs(temp_extract)
-
-            if not self._extract_tarball_to_target(tarball_path, temp_extract, prefix=""):
-                return False
-
-            # 找到实际的解压目录（可能是 repo-name-tag 或 owner-repo-tag）
-            extracted_items = os.listdir(temp_extract)
-            source_dir = None
-            for item in extracted_items:
-                item_path = os.path.join(temp_extract, item)
-                if os.path.isdir(item_path) and item.startswith(repo_name):
-                    source_dir = item_path
-                    break
-
-            if not source_dir:
-                source_dir = temp_extract
-
-            # 导航到技能子目录
-            package_source = os.path.join(source_dir, skill_path)
+            package_source = os.path.join(package_source, skill_path)
             if not os.path.exists(package_source):
                 print_error(f"Skill path not found: {skill_path}")
                 return False
 
-            # 使用 copytree 复制到目标目录
-            if not copytree_with_open(package_source, target_dir):
-                return False
+        # 确定目标目录
+        skill_name = f"{owner}-{repo_name}"
+        if skill_path:
+            skill_name = skill_path.replace('/', '-')
 
-        else:
-            # 直接从 tarball 提取到目标目录
-            # GitHub tarball 的前缀通常是 {repo_name}-{tag}/
-            if not self._extract_tarball_to_target(tarball_path, target_dir, prefix=f"{repo_name}-{tag}/"):
-                return False
+        target_dir = os.path.join(self.skills_dir, skill_name)
 
-        print_success(f"Installed to: {target_dir}")
-        return True
+        # 检查是否已安装（绝不覆盖）
+        if os.path.exists(target_dir):
+            print_warning(f"Skill already exists: {target_dir}")
+            print_warning("Skipping installation (NEVER overwrites existing files)")
+            return True
+
+        # 安装
+        try:
+            # 确保父目录存在
+            parent_dir = os.path.dirname(target_dir)
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_dir)
+
+            # 使用自定义的 copytree，通过 open() 被沙箱拦截
+            if copytree_with_open(package_source, target_dir):
+                print_success(f"Installed to: {target_dir}")
+                return True
+            return False
+        except Exception as e:
+            print_error(f"Installation failed: {e}")
+            return False
 
     def _install_from_url(self, url: str) -> bool:
         """
@@ -518,8 +521,23 @@ class NPXStyleInstaller:
         Returns:
             bool: 是否成功
         """
-        # 如果不是 tarball，返回错误
-        if not tarfile.is_tarfile(tarball_path):
+        # 如果是 tarball，解压它
+        if tarfile.is_tarfile(tarball_path):
+            extract_dir = os.path.join(self.temp_dir, "extracted")
+            if not os.path.exists(extract_dir):
+                os.makedirs(extract_dir)
+
+            print_info(f"Extracting: {os.path.basename(tarball_path)}")
+            if not self._extract_tarball(tarball_path, extract_dir):
+                return False
+
+            # 找到解压后的目录
+            extracted_items = os.listdir(extract_dir)
+            if len(extracted_items) == 1:
+                package_source = os.path.join(extract_dir, extracted_items[0])
+            else:
+                package_source = extract_dir
+        else:
             print_error(f"Not a tarball file: {tarball_path}")
             return False
 
@@ -535,27 +553,16 @@ class NPXStyleInstaller:
             print_warning("Skipping installation (NEVER overwrites existing files)")
             return True
 
-        # 直接从 tarball 提取到目标目录
-        # 尝试常见的前缀（package/ 或 dist/）
-        print_info(f"Extracting: {os.path.basename(tarball_path)}")
-
-        # 先尝试 'package/' 前缀（npm tarball 常用）
-        if self._extract_tarball_to_target(tarball_path, target_dir, prefix="package/"):
-            print_success(f"Installed successfully: {target_dir}")
-            return True
-
-        # 如果失败，尝试 'dist/' 前缀
-        if self._extract_tarball_to_target(tarball_path, target_dir, prefix="dist/"):
-            print_success(f"Installed successfully: {target_dir}")
-            return True
-
-        # 如果还失败，尝试无前缀
-        if self._extract_tarball_to_target(tarball_path, target_dir, prefix=""):
-            print_success(f"Installed successfully: {target_dir}")
-            return True
-
-        print_error("Failed to extract tarball with any prefix")
-        return False
+        # 安装
+        print_info(f"Installing to: {target_dir}")
+        try:
+            if copytree_with_open(package_source, target_dir):
+                print_success(f"Installed successfully: {target_dir}")
+                return True
+            return False
+        except Exception as e:
+            print_error(f"Installation failed: {e}")
+            return False
 
     def install(self, package_spec: str) -> bool:
         """
@@ -692,7 +699,7 @@ class NPXStyleInstaller:
 
         try:
             # 使用 npm registry 的搜索 API
-            url = f"https://registry.npmjs.org/-/v1/search?text={quote(query)}&size=10"
+            url = f"https://registry.npmjs.org/-/v1/search?text={urllib.parse.quote(query)}&size=10"
 
             print_info(f"Querying: {url}\n")
 
@@ -717,7 +724,7 @@ class NPXStyleInstaller:
 
             # 提供手动搜索链接
             print_info(f"🔗 Search npm registry manually:")
-            print(f"   https://www.npmjs.com/search?q={quote(query)}")
+            print(f"   https://www.npmjs.com/search?q={urllib.parse.quote(query)}")
             print()
 
             return True
