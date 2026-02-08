@@ -315,6 +315,11 @@ def _execute_in_subprocess(
                 redirected_path = redirect_path(path)
                 return os.removedirs(redirected_path, *args, **kwargs)
 
+            def listdir(self, path):
+                """列出目录内容，自动重定向路径"""
+                redirected_path = redirect_path(path)
+                return os.listdir(redirected_path)
+
             def rename(self, src, dst, *args, **kwargs):
                 """重命名文件，自动重定向路径并严格按顺序检查权限"""
                 # 重定向路径
