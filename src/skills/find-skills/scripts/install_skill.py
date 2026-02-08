@@ -84,8 +84,11 @@ def copytree_with_open(src: str, dst: str) -> bool:
     """
     try:
         # 确保目标目录存在 - 使用 os.mkdir 会被沙箱处理
-        if not os.path.exists(dst):
-            os.makedirs(dst)
+        try:
+            os.makedirs(dst, exist_ok=True)
+        except FileExistsError:
+            # 目录已被其他进程创建，忽略错误
+            pass
 
         # 遍历源目录 - 使用 os.listdir
         for item in os.listdir(src):
@@ -163,8 +166,8 @@ class NPXStyleInstaller:
         self.skills_dir = skills_dir
         # 使用 /tmp/ 进行下载和解压
         self.temp_dir = "/tmp/skill_install"
-        if not os.path.exists(self.temp_dir):
-            os.makedirs(self.temp_dir)
+        # 临时目录在 /tmp/ 白名单中，不需要创建
+        # 如果已存在会被复用，不存在会在下载时自动创建
 
         # npm registry 配置
         self.npm_registry = "https://registry.npmjs.org"
@@ -230,17 +233,16 @@ class NPXStyleInstaller:
         """
         try:
             # 确保目标目录存在
-            if not os.path.exists(dest_dir):
-                os.makedirs(dest_dir)
+            try:
+                os.makedirs(dest_dir, exist_ok=True)
+            except FileExistsError:
+                pass
 
-            # 使用 gzip + tarfile 解压
-            if tarball_path.endswith('.gz') or tarball_path.endswith('.tgz'):
-                with gzip.open(tarball_path, 'rb') as gz:
-                    with tarfile.open(fileobj=gz, mode='r:gz') as tar:
-                        tar.extractall(path=dest_dir)
-            else:
-                with tarfile.open(tarball_path, 'r:gz') as tar:
-                    tar.extractall(path=dest_dir)
+            # 使用 tarfile.open() 自动检测压缩格式
+            # r:* 模式会自动检测 gzip、bzip2 等格式
+            with tarfile.open(tarball_path, 'r:*') as tar:
+                tar.extractall(path=dest_dir)
+
             return True
         except Exception as e:
             print_error(f"Extraction failed: {e}")
@@ -320,8 +322,10 @@ class NPXStyleInstaller:
 
         # 解压到临时目录
         extract_dir = os.path.join(self.temp_dir, "extracted")
-        if not os.path.exists(extract_dir):
-            os.makedirs(extract_dir)
+        try:
+            os.makedirs(extract_dir, exist_ok=True)
+        except FileExistsError:
+            pass
 
         if not self._extract_tarball(tarball_path, extract_dir):
             return False
@@ -351,8 +355,10 @@ class NPXStyleInstaller:
         try:
             # 确保父目录存在
             parent_dir = os.path.dirname(target_dir)
-            if not os.path.exists(parent_dir):
-                os.makedirs(parent_dir)
+            try:
+                os.makedirs(parent_dir, exist_ok=True)
+            except FileExistsError:
+                pass
 
             # 使用自定义的 copytree，通过 open() 被沙箱拦截
             if copytree_with_open(package_source, target_dir):
@@ -414,8 +420,10 @@ class NPXStyleInstaller:
 
         # 解压
         extract_dir = os.path.join(self.temp_dir, "extracted")
-        if not os.path.exists(extract_dir):
-            os.makedirs(extract_dir)
+        try:
+            os.makedirs(extract_dir, exist_ok=True)
+        except FileExistsError:
+            pass
 
         if not self._extract_tarball(tarball_path, extract_dir):
             return False
@@ -452,8 +460,10 @@ class NPXStyleInstaller:
         try:
             # 确保父目录存在
             parent_dir = os.path.dirname(target_dir)
-            if not os.path.exists(parent_dir):
-                os.makedirs(parent_dir)
+            try:
+                os.makedirs(parent_dir, exist_ok=True)
+            except FileExistsError:
+                pass
 
             # 使用自定义的 copytree，通过 open() 被沙箱拦截
             if copytree_with_open(package_source, target_dir):
@@ -524,8 +534,10 @@ class NPXStyleInstaller:
         # 如果是 tarball，解压它
         if tarfile.is_tarfile(tarball_path):
             extract_dir = os.path.join(self.temp_dir, "extracted")
-            if not os.path.exists(extract_dir):
-                os.makedirs(extract_dir)
+            try:
+                os.makedirs(extract_dir, exist_ok=True)
+            except FileExistsError:
+                pass
 
             print_info(f"Extracting: {os.path.basename(tarball_path)}")
             if not self._extract_tarball(tarball_path, extract_dir):
@@ -581,8 +593,10 @@ class NPXStyleInstaller:
             bool: 是否成功
         """
         # 确保 skills 目录存在
-        if not os.path.exists(self.skills_dir):
-            os.makedirs(self.skills_dir)
+        try:
+            os.makedirs(self.skills_dir, exist_ok=True)
+        except FileExistsError:
+            pass
         print_info(f"Skills directory: {self.skills_dir}")
 
         # 检测包类型并相应安装
