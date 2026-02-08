@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Skills Installation Script - npx-like Implementation
@@ -20,10 +20,10 @@ Features:
 - Supports multiple package formats
 
 Usage:
-    python3 /skills/find-skills/scripts/install_skill.py <package_name>
-    python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
-    python3 /skills/find-skills/scripts/install_skill.py -s "react performance"
-    python3 /skills/find-skills/scripts/install_skill.py -l
+    python /skills/find-skills/scripts/install_skill.py <package_name>
+    python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+    python /skills/find-skills/scripts/install_skill.py -s "react performance"
+    python /skills/find-skills/scripts/install_skill.py -l
 """
 
 import argparse
@@ -738,7 +738,7 @@ class NPXStyleInstaller:
         for owner, repo, description in popular_repos:
             print(f"  {Colors.GREEN}•{Colors.RESET} {owner}/{repo}")
             print(f"    {description}")
-            print(f"    📦 Install: python3 install_skill.py {owner}/{repo}")
+            print(f"    📦 Install: python install_skill.py {owner}/{repo}")
             print()
 
         print_info(f"🔗 Search GitHub manually:")
@@ -778,7 +778,7 @@ class NPXStyleInstaller:
 
                         print(f"  {Colors.GREEN}•{Colors.RESET} {name}@{version}")
                         print(f"    {desc_short}")
-                        print(f"    📦 Install: python3 install_skill.py {name}")
+                        print(f"    📦 Install: python install_skill.py {name}")
                         print()
                 else:
                     print_warning("No packages found")
@@ -840,35 +840,35 @@ def main():
         epilog="""
 Examples:
   # Install from npm registry
-  python3 /skills/find-skills/scripts/install_skill.py create-react-app
+  python /skills/find-skills/scripts/install_skill.py create-react-app
 
   # Install specific version from npm
-  python3 /skills/find-skills/scripts/install_skill.py create-react-app@5.0.1
+  python /skills/find-skills/scripts/install_skill.py create-react-app@5.0.1
 
   # Install from GitHub
-  python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills
+  python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills
 
   # Install from GitHub with specific tag
-  python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@v1.0.0
+  python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@v1.0.0
 
   # Install skill subdirectory from GitHub
-  python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+  python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
 
   # Install from direct URL
-  python3 /skills/find-skills/scripts/install_skill.py https://example.com/skill.tar.gz
+  python /skills/find-skills/scripts/install_skill.py https://example.com/skill.tar.gz
 
   # Install from local tarball file
-  python3 /skills/find-skills/scripts/install_skill.py /path/to/skill.tar.gz
-  python3 /skills/find-skills/scripts/install_skill.py ./my-skill.tgz
+  python /skills/find-skills/scripts/install_skill.py /path/to/skill.tar.gz
+  python /skills/find-skills/scripts/install_skill.py ./my-skill.tgz
 
   # Search for skills
-  python3 /skills/find-skills/scripts/install_skill.py -s "react performance"
+  python /skills/find-skills/scripts/install_skill.py -s "react performance"
 
   # List installed skills
-  python3 /skills/find-skills/scripts/install_skill.py -l
+  python /skills/find-skills/scripts/install_skill.py -l
 
   # Install to custom directory
-  python3 /skills/find-skills/scripts/install_skill.py -d /path/to/skills <package>
+  python /skills/find-skills/scripts/install_skill.py -d /path/to/skills <package>
         """
     )
 

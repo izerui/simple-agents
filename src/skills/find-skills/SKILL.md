@@ -36,13 +36,13 @@ Install skills using the provided Python script with direct HTTP download:
 
 ```bash
 # Search for skills (no npx required!)
-python3 /skills/find-skills/scripts/install_skill.py -s "react performance"
+python /skills/find-skills/scripts/install_skill.py -s "react performance"
 
 # Install a skill
-python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
 
 # List installed skills
-python3 /skills/find-skills/scripts/install_skill.py -l
+python /skills/find-skills/scripts/install_skill.py -l
 ```
 
 ### Installation Examples
@@ -50,50 +50,50 @@ python3 /skills/find-skills/scripts/install_skill.py -l
 **From GitHub (Recommended for agent skills):**
 ```bash
 # Install specific skill from repository
-python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
 
 # Install entire repository
-python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills
+python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills
 
 # Install from specific tag
-python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@v1.0.0
+python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@v1.0.0
 ```
 
 **From npm registry:**
 ```bash
 # Install latest version
-python3 /skills/find-skills/scripts/install_skill.py create-react-app
+python /skills/find-skills/scripts/install_skill.py create-react-app
 
 # Install specific version
-python3 /skills/find-skills/scripts/install_skill.py create-react-app@5.0.1
+python /skills/find-skills/scripts/install_skill.py create-react-app@5.0.1
 ```
 
 **From direct URL:**
 ```bash
-python3 /skills/find-skills/scripts/install_skill.py https://example.com/skill-package.tar.gz
+python /skills/find-skills/scripts/install_skill.py https://example.com/skill-package.tar.gz
 ```
 
 **From local tarball file:**
 ```bash
 # Install from local .tgz or .tar.gz file
-python3 /skills/find-skills/scripts/install_skill.py /path/to/skill-package.tar.gz
-python3 /skills/find-skills/scripts/install_skill.py ./my-skill.tgz
+python /skills/find-skills/scripts/install_skill.py /path/to/skill-package.tar.gz
+python /skills/find-skills/scripts/install_skill.py ./my-skill.tgz
 ```
 
 ### Available Commands
 
 ```bash
 # Search for skills (no npx required!)
-python3 /skills/find-skills/scripts/install_skill.py -s "query"
+python /skills/find-skills/scripts/install_skill.py -s "query"
 
 # Install to custom directory
-python3 /skills/find-skills/scripts/install_skill.py -d /path/to/skills <package>
+python /skills/find-skills/scripts/install_skill.py -d /path/to/skills <package>
 
 # List installed skills
-python3 /skills/find-skills/scripts/install_skill.py -l
+python /skills/find-skills/scripts/install_skill.py -l
 
 # Show help
-python3 /skills/find-skills/scripts/install_skill.py --help
+python /skills/find-skills/scripts/install_skill.py --help
 ```
 
 ## How to Help Users Find Skills
@@ -110,7 +110,7 @@ When a user asks for help with something, identify:
 
 **Option A: Use the script's search feature (no npx required!):**
 ```bash
-python3 /skills/find-skills/scripts/install_skill.py -s "react performance"
+python /skills/find-skills/scripts/install_skill.py -s "react performance"
 ```
 
 The search will:
@@ -135,7 +135,7 @@ I found a skill that might help! The "vercel-react-best-practices" skill provide
 React and Next.js performance optimization guidelines from Vercel Engineering.
 
 To install it:
-python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
 
 Learn more: https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices
 ```
@@ -145,7 +145,7 @@ Learn more: https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practic
 If the user wants to proceed, install it directly:
 
 ```bash
-python3 /skills/find-skills/scripts/install_skill.py <package_spec>
+python /skills/find-skills/scripts/install_skill.py <package_spec>
 ```
 
 The script will:
@@ -277,24 +277,24 @@ using the template in /skills/find-skills/
 
 **Problem:** Command not found or Python 2 error
 ```bash
-# Solution: Use python3 instead of python
-python3 /skills/find-skills/scripts/install_skill.py <package>
+# Solution: Use python instead of python
+python /skills/find-skills/scripts/install_skill.py <package>
 ```
 
 **Problem:** Permission denied
 ```python
 # Solution: Make sure /skills/ directory is writable
-python3 -c "import os; os.chmod('/skills/', 0o755)"
+python -c "import os; os.chmod('/skills/', 0o755)"
 ```
 
 **Problem:** Skill already exists
 ```python
 # This is expected behavior! The script never overwrites.
 # To reinstall, first delete the existing skill:
-python3 -c "import shutil; shutil.rmtree('/skills/<skill-name>')"
+python -c "import shutil; shutil.rmtree('/skills/<skill-name>')"
 
 # Then install again
-python3 /skills/find-skills/scripts/install_skill.py <package>
+python /skills/find-skills/scripts/install_skill.py <package>
 ```
 
 **Note:** This script uses only Python standard library - no external commands required.
