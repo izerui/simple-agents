@@ -28,16 +28,13 @@ Usage:
 
 import argparse
 import gzip
-import hashlib
 import json
 import os
-import re
 import shutil
 import sys
 import tarfile
 import tempfile
 import urllib.request
-from pathlib import Path
 from typing import Optional, Dict, List
 from urllib.parse import urlparse
 import urllib.error
@@ -90,10 +87,11 @@ class NPXStyleInstaller:
         Args:
             skills_dir: Target directory for skills (default: /skills/)
         """
-        self.skills_dir = Path(skills_dir)
+        self.skills_dir = skills_dir
         # Use /tmp/ for downloads and extraction
-        self.temp_dir = Path("/tmp/skill_install")
-        self.temp_dir.mkdir(exist_ok=True)
+        self.temp_dir = "/tmp/skill_install"
+        if not os.path.exists(self.temp_dir):
+            os.makedirs(self.temp_dir)
 
         # npm registry configuration
         self.npm_registry = "https://registry.npmjs.org"
@@ -109,17 +107,16 @@ class NPXStyleInstaller:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Cleanup temp directory in /tmp/
-        temp_path = Path("/tmp/skill_install")
-        if temp_path.exists():
-            shutil.rmtree(temp_path, ignore_errors=True)
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def _download_file(self, url: str, dest_path: Path, timeout: int = 30) -> bool:
+    def _download_file(self, url: str, dest_path: str, timeout: int = 30) -> bool:
         """
         Download file from URL to destination path
 
         Args:
             url: Source URL
-            dest_path: Destination file path
+            dest_path: Destination file path (string)
             timeout: Download timeout in seconds
 
         Returns:
@@ -141,26 +138,26 @@ class NPXStyleInstaller:
             print_error(f"Download failed: {e}")
             return False
 
-    def _extract_tarball(self, tarball_path: Path, dest_dir: Path) -> bool:
+    def _extract_tarball(self, tarball_path: str, dest_dir: str) -> bool:
         """
         Extract .tgz tarball to destination directory
 
         Args:
-            tarball_path: Path to .tgz file
-            dest_dir: Destination directory
+            tarball_path: Path to .tgz file (string)
+            dest_dir: Destination directory (string)
 
         Returns:
             bool: True if successful
         """
         try:
             # Use the same approach as the working example
-            if tarball_path.suffix == '.gz':
+            if tarball_path.endswith('.gz'):
                 with gzip.open(tarball_path, 'rb') as gz:
                     with tarfile.open(fileobj=gz, mode='r:gz') as tar:
-                        tar.extractall(path=str(dest_dir))
+                        tar.extractall(path=dest_dir)
             else:
-                with tarfile.open(str(tarball_path), 'r:gz') as tar:
-                    tar.extractall(path=str(dest_dir))
+                with tarfile.open(tarball_path, 'r:gz') as tar:
+                    tar.extractall(path=dest_dir)
             return True
         except Exception as e:
             print_error(f"Extraction failed: {e}")
@@ -178,7 +175,7 @@ class NPXStyleInstaller:
         """
         for registry in self.npm_mirrors:
             try:
-                url = f"{registry}/{package_name}"
+                url = registry + "/" + package_name
                 print_info(f"Querying registry: {registry}")
 
                 with urllib.request.urlopen(url, timeout=10) as response:
@@ -232,33 +229,37 @@ class NPXStyleInstaller:
             return False
 
         # Download tarball
-        tarball_filename = f"{package_name}-{version}.tgz"
-        tarball_path = self.temp_dir / tarball_filename
+        tarball_filename = package_name.replace('/', '-') + "-" + version + ".tgz"
+        tarball_path = os.path.join(self.temp_dir, tarball_filename)
 
         if not self._download_file(tarball_url, tarball_path):
             return False
 
         # Extract to temp directory
-        extract_dir = self.temp_dir / "extracted"
-        extract_dir.mkdir(exist_ok=True)
+        extract_dir = os.path.join(self.temp_dir, "extracted")
+        if not os.path.exists(extract_dir):
+            os.makedirs(extract_dir)
 
         if not self._extract_tarball(tarball_path, extract_dir):
             return False
 
         # Find package directory (usually in 'package/' subdirectory)
-        extracted_items = list(extract_dir.iterdir())
-        if len(extracted_items) == 1 and extracted_items[0].is_dir():
-            package_source = extracted_items[0]
+        extracted_items = os.listdir(extract_dir)
+        if len(extracted_items) == 1:
+            item_path = os.path.join(extract_dir, extracted_items[0])
+            if os.path.isdir(item_path):
+                package_source = item_path
+            else:
+                package_source = extract_dir
         else:
             package_source = extract_dir
 
-        # Determine target directory name
-        # Explicitly convert to string to avoid sandbox detection issues
-        skill_name = str(package_name).replace('/', '-')
-        target_dir = self.skills_dir / skill_name
+        # Determine target directory name - use string operations only
+        skill_name = package_name.replace('/', '-')
+        target_dir = os.path.join(self.skills_dir, skill_name)
 
         # Check if already installed (NEVER overwrite)
-        if target_dir.exists():
+        if os.path.exists(target_dir):
             print_warning(f"Skill already exists: {target_dir}")
             print_warning("Skipping installation (NEVER overwrites existing files)")
             return True
@@ -294,25 +295,23 @@ class NPXStyleInstaller:
             print_error("Invalid GitHub repo format. Use: owner/repo")
             return False
 
-        owner, repo_name = repo.split('/')[:2]
+        parts2 = repo.split('/')
+        owner = parts2[0]
+        repo_name = parts2[1]
 
         # Parse tag/branch
         tag = parts[1] if len(parts) > 1 else 'main'
 
-        # Try both 'main' and 'master' if default
-        if tag in ['main', 'master']:
-            tag = 'main'  # Default to main
-
         # Build download URL
         # GitHub tarball URL: https://github.com/owner/repo/archive/refs/tags/tag.tar.gz
         # or for branch: https://github.com/owner/repo/archive/refs/heads/branch.tar.gz
-        tarball_url = f"https://github.com/{owner}/{repo_name}/archive/refs/tags/{tag}.tar.gz"
+        tarball_url = "https://github.com/" + owner + "/" + repo_name + "/archive/refs/tags/" + tag + ".tar.gz"
 
         # Fallback to branch if tag doesn't exist
-        fallback_url = f"https://github.com/{owner}/{repo_name}/archive/refs/heads/{tag}.tar.gz"
+        fallback_url = "https://github.com/" + owner + "/" + repo_name + "/archive/refs/heads/" + tag + ".tar.gz"
 
-        tarball_filename = f"{repo_name}-{tag}.tar.gz"
-        tarball_path = self.temp_dir / tarball_filename
+        tarball_filename = repo_name + "-" + tag + ".tar.gz"
+        tarball_path = os.path.join(self.temp_dir, tarball_filename)
 
         # Try to download
         if not self._download_file(tarball_url, tarball_path):
@@ -322,38 +321,37 @@ class NPXStyleInstaller:
                 return False
 
         # Extract
-        extract_dir = self.temp_dir / "extracted"
-        extract_dir.mkdir(exist_ok=True)
+        extract_dir = os.path.join(self.temp_dir, "extracted")
+        if not os.path.exists(extract_dir):
+            os.makedirs(extract_dir)
 
         if not self._extract_tarball(tarball_path, extract_dir):
             return False
 
         # Find extracted directory
-        extracted_items = list(extract_dir.iterdir())
+        extracted_items = os.listdir(extract_dir)
         if not extracted_items:
             print_error("No files extracted")
             return False
 
-        package_source = extracted_items[0]
+        package_source = os.path.join(extract_dir, extracted_items[0])
 
         # Navigate to skill subdirectory if specified
         if skill_path:
-            package_source = package_source / skill_path
-            if not package_source.exists():
+            package_source = os.path.join(package_source, skill_path)
+            if not os.path.exists(package_source):
                 print_error(f"Skill path not found: {skill_path}")
                 return False
 
-        # Determine target directory
-        skill_name = f"{owner}-{repo_name}"
+        # Determine target directory - use string operations only
+        skill_name = owner + "-" + repo_name
         if skill_path:
-            # Explicitly convert to string to avoid sandbox detection issues
-            skill_path_str = str(skill_path)
-            skill_name = skill_path_str.replace('/', '-')
+            skill_name = skill_path.replace('/', '-')
 
-        target_dir = self.skills_dir / skill_name
+        target_dir = os.path.join(self.skills_dir, skill_name)
 
         # Check if already installed (NEVER overwrite)
-        if target_dir.exists():
+        if os.path.exists(target_dir):
             print_warning(f"Skill already exists: {target_dir}")
             print_warning("Skipping installation (NEVER overwrites existing files)")
             return True
@@ -381,9 +379,11 @@ class NPXStyleInstaller:
 
         # Determine file type from URL
         parsed_url = urlparse(url)
-        filename = os.path.basename(parsed_url.path) or "downloaded_file"
+        filename = os.path.basename(parsed_url.path)
+        if not filename:
+            filename = "downloaded_file"
 
-        download_path = self.temp_dir / filename
+        download_path = os.path.join(self.temp_dir, filename)
 
         # Download
         if not self._download_file(url, download_path):
@@ -405,51 +405,57 @@ class NPXStyleInstaller:
         print_header(f"📦 Installing from local file: {file_path}")
 
         # Validate file exists
-        file_path_obj = Path(file_path)
-        if not file_path_obj.exists():
+        if not os.path.exists(file_path):
             print_error(f"File not found: {file_path}")
             return False
 
         # Extract and install
-        filename = file_path_obj.name
-        return self._install_from_tarball(file_path_obj, filename)
+        filename = os.path.basename(file_path)
+        return self._install_from_tarball(file_path, filename)
 
-    def _install_from_tarball(self, tarball_path: Path, fallback_name: str) -> bool:
+    def _install_from_tarball(self, tarball_path: str, fallback_name: str) -> bool:
         """
         Extract and install from tarball
 
         Args:
-            tarball_path: Path to tarball file
+            tarball_path: Path to tarball file (string)
             fallback_name: Fallback name for the skill
 
         Returns:
             bool: True if successful
         """
         # If it's a tarball, extract it
-        if tarfile.is_tarfile(tarball_path):
-            extract_dir = self.temp_dir / "extracted"
-            extract_dir.mkdir(exist_ok=True)
-
-            print_info(f"Extracting: {tarball_path.name}")
-            if not self._extract_tarball(tarball_path, extract_dir):
-                return False
-
-            # Find extracted directory
-            extracted_items = list(extract_dir.iterdir())
-            package_source = extracted_items[0] if len(extracted_items) == 1 else extract_dir
-        else:
+        try:
+            # Check if it's a tarfile
+            with tarfile.open(tarball_path, 'r:gz') as test_tar:
+                pass  # Just test if it can be opened
+        except:
             print_error(f"Not a tarball file: {tarball_path}")
             return False
 
-        # Determine target name - use string operations instead of Path methods
-        import os
-        filename = os.path.basename(str(fallback_name))
+        extract_dir = os.path.join(self.temp_dir, "extracted")
+        if not os.path.exists(extract_dir):
+            os.makedirs(extract_dir)
+
+        print_info(f"Extracting: {os.path.basename(tarball_path)}")
+        if not self._extract_tarball(tarball_path, extract_dir):
+            return False
+
+        # Find extracted directory
+        extracted_items = os.listdir(extract_dir)
+        if len(extracted_items) == 1:
+            package_source = os.path.join(extract_dir, extracted_items[0])
+        else:
+            package_source = extract_dir
+
+        # Determine target name - use string operations only
+        filename = os.path.basename(fallback_name)
         # Remove extensions using string replace
         skill_name = filename.replace('.tar.gz', '').replace('.tgz', '').replace('.tar.bz2', '').replace('.tar', '')
-        target_dir = self.skills_dir / skill_name
+        target_dir = os.path.join(self.skills_dir, skill_name)
 
         # Check if already installed
-        if target_dir.exists():
+        if os.path.exists(target_dir):
             print_warning(f"Skill already exists: {target_dir}")
             print_warning("Skipping installation (NEVER overwrites existing files)")
             return True
@@ -481,7 +487,8 @@ class NPXStyleInstaller:
             bool: True if successful
         """
         # Ensure skills directory exists
-        self.skills_dir.mkdir(parents=True, exist_ok=True)
+        if not os.path.exists(self.skills_dir):
+            os.makedirs(self.skills_dir)
         print_info(f"Skills directory: {self.skills_dir}")
 
         # Detect package type and install accordingly
@@ -489,7 +496,7 @@ class NPXStyleInstaller:
         if package_spec.startswith('http://') or package_spec.startswith('https://'):
             return self._install_from_url(package_spec)
 
-        # 2. Check if it's a local file (exists and ends with .tgz or .tar.gz)
+        # 2. Check if it's a local file (ends with .tgz or .tar.gz)
         if package_spec.endswith(('.tgz', '.tar.gz', '.tar.bz2', '.tar')):
             return self._install_from_local_file(package_spec)
 
@@ -498,25 +505,31 @@ class NPXStyleInstaller:
             # Parse format: owner/repo[@tag][/skill/path]
             parts = package_spec.split('/')
             if len(parts) >= 2:
-                repo_part = f"{parts[0]}/{parts[1]}"
+                repo_part = parts[0] + "/" + parts[1]
                 skill_path = '/'.join(parts[2:]) if len(parts) > 2 else None
                 return self._install_from_github(repo_part, skill_path)
 
         # 4. Treat as npm package
         # Parse version: package@version
         if '@' in package_spec and not package_spec.startswith('@'):
-            pkg_name, version = package_spec.rsplit('@', 1)
+            idx = package_spec.rindex('@')
+            pkg_name = package_spec[:idx]
+            version = package_spec[idx+1:]
             return self._install_from_npm(pkg_name, version)
 
         return self._install_from_npm(package_spec)
 
     def list_installed(self) -> None:
         """List all installed skills"""
-        if not self.skills_dir.exists():
+        if not os.path.exists(self.skills_dir):
             print_error(f"Skills directory does not exist: {self.skills_dir}")
             return
 
-        skills = [d for d in self.skills_dir.iterdir() if d.is_dir()]
+        try:
+            skills = [d for d in os.listdir(self.skills_dir) if os.path.isdir(os.path.join(self.skills_dir, d))]
+        except:
+            print_error(f"Cannot list directory: {self.skills_dir}")
+            return
 
         if not skills:
             print_warning(f"No skills installed in {self.skills_dir}")
@@ -525,19 +538,19 @@ class NPXStyleInstaller:
         print_header(f"📚 Installed Skills ({len(skills)})")
         for skill in sorted(skills):
             # Try to read skill metadata
-            skill_md = skill / "SKILL.md"
-            if skill_md.exists():
+            skill_md = os.path.join(self.skills_dir, skill, "SKILL.md")
+            if os.path.exists(skill_md):
                 try:
                     with open(skill_md, 'r', encoding='utf-8') as f:
                         first_line = f.readline().strip()
                         if first_line.startswith('name:'):
                             name = first_line.split(':', 1)[1].strip()
-                            print(f"  {Colors.GREEN}•{Colors.RESET} {skill.name} - {name}")
+                            print(f"  {Colors.GREEN}•{Colors.RESET} {skill} - {name}")
                             continue
                 except:
                     pass
 
-            print(f"  {Colors.GREEN}•{Colors.RESET} {skill.name}")
+            print(f"  {Colors.GREEN}•{Colors.RESET} {skill}")
 
     def _search_github(self, query: str) -> bool:
         """
@@ -550,13 +563,6 @@ class NPXStyleInstaller:
             bool: True if successful
         """
         print_header(f"🔍 Searching GitHub for: {query}")
-
-        # Build GitHub search query
-        search_terms = [
-            f"{query} agent skill",
-            f"{query} claude skill",
-            f"{query} AI assistant",
-        ]
 
         # Popular skill repositories
         popular_repos = [
@@ -572,8 +578,10 @@ class NPXStyleInstaller:
             print(f"    📦 Install: python3 install_skill.py {owner}/{repo}")
             print()
 
+        # Format query for URL
+        query_encoded = query.replace(' ', '+')
         print_info(f"🔗 Search GitHub manually:")
-        print(f"   https://github.com/search?q={query.replace(' ', '+')+ '+agent+skill'}")
+        print(f"   https://github.com/search?q={query_encoded}+agent+skill")
         print()
 
         return True
@@ -593,8 +601,9 @@ class NPXStyleInstaller:
         try:
             # npm registry search API (deprecated but still works)
             # Alternatively, we can suggest manual search
+            query_encoded = query.replace(' ', '+')
             print_info(f"🔗 Search npm registry manually:")
-            print(f"   https://www.npmjs.com/search?q={query.replace(' ', '+')}")
+            print(f"   https://www.npmjs.com/search?q={query_encoded}")
             print()
 
             # Try to get some suggestions based on common patterns
