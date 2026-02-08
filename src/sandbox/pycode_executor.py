@@ -583,11 +583,17 @@ def _execute_in_subprocess(
 
             # ZipFile 类作为类属性
             ZipFile = _RestrictedZipFile
-            is_zipfile = _original_zipfile.is_zipfile
+
+            # 常量
             ZIP_STORED = _original_zipfile.ZIP_STORED
             ZIP_DEFLATED = _original_zipfile.ZIP_DEFLATED
             ZIP_BZIP2 = _original_zipfile.ZIP_BZIP2
             ZIP_LZMA = _original_zipfile.ZIP_LZMA
+
+            @staticmethod
+            def is_zipfile(filename, *args, **kwargs):
+                """检查文件是否是 zip 文件"""
+                return _original_zipfile.is_zipfile(filename, *args, **kwargs)
 
             def __getattr__(self, name):
                 """其他属性和方法直接返回原始值"""
