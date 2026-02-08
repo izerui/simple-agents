@@ -12,6 +12,7 @@ from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
 from langchain_core.stores import InMemoryStore
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph_sdk import Auth
 
 from deepagents import create_deep_agent, SubAgent
@@ -77,6 +78,17 @@ research_agent = SubAgent(
 
 my_store = InMemoryStore()
 
+# 配置哪些工具需要中断
+# 决策类型
+# approve: 批准并执行工具调用
+# edit: 修改工具参数后执行
+# reject: 拒绝执行该工具调用
+interrupt_config = {
+    # "convert_to_markdown": True,  # 简单模式：默认允许 approve/edit/reject
+    # "fetch_markdown": {"allowed_decisions": ["approve", "reject"]},  # 自定义允许的决策
+    # "some_tool": False  # False 表示不中断
+}
+
 # Create the agent
 # 每个对话会获得独立的沙箱路径（./data/sandbox_sessions/{thread_id}/）
 agent = create_deep_agent(
@@ -90,6 +102,7 @@ agent = create_deep_agent(
     skills=[
         '/skills'
     ],
+    interrupt_on=interrupt_config,
     middleware=[
         upload_files,
         tool_limiter,
