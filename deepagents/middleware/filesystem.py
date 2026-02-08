@@ -229,7 +229,7 @@ Examples:
 - Show matching lines: `grep(pattern="error", output_mode="content")`
 - Search for code with special chars: `grep(pattern="def __init__(self):")`"""
 
-EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 或 `uv pip` 命令（Python 版本 3.12，支持依赖管理）。
+EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 命令（Python 版本 3.12，支持依赖管理）。
 
 支持的执行格式（仅限以下两类）：
 
@@ -239,13 +239,10 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 或 `uv 
    - 执行脚本文件：python script.py
      示例：python scripts/my_script.py
 
-2. 依赖管理命令（使用 uv pip）：
-   - 安装新包：uv pip install <package>
-     示例：uv pip install numpy pandas
-   - 列出已安装包：uv pip list
-   - 查看包信息：uv pip show <package>
-     示例：uv pip show numpy
-   - 检查依赖冲突：uv pip check
+2. 依赖管理命令（使用 python -m）：
+    - python -m pip install <package>（只安装新包）
+    - python -m pip list
+    - python -m pip show <package>
 
 使用说明：
 - 如果路径包含空格，请使用双引号包裹
