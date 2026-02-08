@@ -264,9 +264,23 @@ def _execute_in_subprocess(
 
         # 添加受限的系统模块
         safe_globals['sys'] = sys
-        safe_globals['os'] = RestrictedOS()
+
+        # 创建受限的 os 模块实例
+        restricted_os = RestrictedOS()
+        safe_globals['os'] = restricted_os
+
+        # 将受限的 os 模块注入到 sys.modules，防止 import os 绕过限制
+        # 注意：这需要在当前进程中修改 sys.modules
+        import sys as _sys
+        _original_os = _sys.modules.get('os')
+        _sys.modules['os'] = restricted_os
+
+        # 同时也需要替换 pathlib 模块
         safe_globals['Path'] = _RestrictedPath
-        safe_globals['pathlib'] = RestrictedPathlib()
+        restricted_pathlib = RestrictedPathlib()
+        safe_globals['pathlib'] = restricted_pathlib
+        _original_pathlib = _sys.modules.get('pathlib')
+        _sys.modules['pathlib'] = restricted_pathlib
 
         # 设置 sys.argv
         if script_path:
@@ -303,6 +317,17 @@ def _execute_in_subprocess(
                 print("  [子进程] ✗ 执行异常: {0}".format(type(e).__name__))
                 exit_code = 1
                 traceback.print_exc()  # 输出完整堆栈
+            finally:
+                # 恢复原始的 os 和 pathlib 模块
+                if _original_os is not None:
+                    _sys.modules['os'] = _original_os
+                elif 'os' in _sys.modules:
+                    del _sys.modules['os']
+
+                if _original_pathlib is not None:
+                    _sys.modules['pathlib'] = _original_pathlib
+                elif 'pathlib' in _sys.modules:
+                    del _sys.modules['pathlib']
 
         # 获取输出
         output = output_capture.get_output()
