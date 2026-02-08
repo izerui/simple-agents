@@ -402,6 +402,39 @@ def _execute_in_subprocess(
             def __setattr__(self, name, value):
                 raise AttributeError("不能修改 os 模块")
 
+        # 导入 tarfile 模块并创建受限版本
+        import tarfile as _original_tarfile
+
+        class RestrictedTarfile:
+            """受限的 tarfile 模块，确保文件路径被重定向"""
+
+            def open(self, name, mode='r', *args, **kwargs):
+                """打开 tarfile，自动重定向路径"""
+                redirected_name = redirect_path(name)
+                return _original_tarfile.open(redirected_name, mode, *args, **kwargs)
+
+            def is_tarfile(self, name):
+                """检查文件是否是 tarfile，自动重定向路径"""
+                redirected_name = redirect_path(name)
+                return _original_tarfile.is_tarfile(redirected_name)
+
+            def TarFile(self, *args, **kwargs):
+                """创建 TarFile 对象，重定向路径"""
+                # TarFile 构造函数的第一个参数是文件名
+                if args:
+                    args = (redirect_path(args[0]),) + args[1:]
+                return _original_tarfile.TarFile(*args, **kwargs)
+
+            # TarFile 类的别名
+            TarFileCompat = TarFile
+
+            def __getattr__(self, name):
+                """其他属性和方法直接返回原始值"""
+                return getattr(_original_tarfile, name)
+
+            def __setattr__(self, name, value):
+                raise AttributeError("不能修改 tarfile 模块")
+
         safe_globals = {
             '__builtins__': builtins,
             '__name__': '__main__',
@@ -441,6 +474,12 @@ def _execute_in_subprocess(
         _original_pathlib = _sys.modules.get('pathlib')
         _sys.modules['pathlib'] = restricted_pathlib
 
+        # 注入受限的 tarfile 模块，确保文件操作被重定向
+        restricted_tarfile = RestrictedTarfile()
+        safe_globals['tarfile'] = restricted_tarfile
+        _original_tarfile_module = _sys.modules.get('tarfile')
+        _sys.modules['tarfile'] = restricted_tarfile
+
         # 设置 sys.argv
         if script_path:
             # 脚本执行：argv[0] = 脚本名，argv[1:] = 参数
@@ -477,7 +516,7 @@ def _execute_in_subprocess(
                 exit_code = 1
                 traceback.print_exc()  # 输出完整堆栈
             finally:
-                # 恢复原始的 os 和 pathlib 模块
+                # 恢复原始的 os、pathlib 和 tarfile 模块
                 if _original_os is not None:
                     _sys.modules['os'] = _original_os
                 elif 'os' in _sys.modules:
@@ -487,6 +526,11 @@ def _execute_in_subprocess(
                     _sys.modules['pathlib'] = _original_pathlib
                 elif 'pathlib' in _sys.modules:
                     del _sys.modules['pathlib']
+
+                if _original_tarfile_module is not None:
+                    _sys.modules['tarfile'] = _original_tarfile_module
+                elif 'tarfile' in _sys.modules:
+                    del _sys.modules['tarfile']
 
         # 获取输出
         output = output_capture.get_output()
