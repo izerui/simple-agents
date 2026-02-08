@@ -249,13 +249,8 @@ class CodeExecutor:
             - root_dir 将成为新的根目录 /
             - 无法访问 root_dir 外的任何文件
         """
-        if root_dir is None:
-            # 使用临时目录
-            self.root_dir = Path(tempfile.gettempdir()) / "sandbox"
-        else:
-            self.root_dir = Path(root_dir)
-
-        self.root_dir.mkdir(parents=True, exist_ok=True)
+        self.root_dir = Path(root_dir)
+        # self.root_dir.mkdir(parents=True, exist_ok=True)
         self.timeout = timeout
         self.max_output_length = max_output_length
 
@@ -315,11 +310,8 @@ class CodeExecutor:
         Returns:
             脚本内容
         """
-        script_full_path = self.root_dir / script_path
-        if not script_full_path.exists():
-            raise FileNotFoundError("脚本文件不存在: {0}".format(script_path))
 
-        return script_full_path.read_text(encoding='utf-8')
+        return script_path.read_text(encoding='utf-8')
 
     def _check_code_safety(self, code):
         """
