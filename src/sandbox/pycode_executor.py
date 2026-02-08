@@ -201,33 +201,39 @@ def _execute_in_subprocess(
             mode_str = mode if isinstance(mode, str) else 'r'
             is_writing = any(c in mode_str for c in ['w', 'a', '+', 'x'])
 
-            # 处理路径
+            # 确定最终路径
+            final_path = None
             if file_path.is_absolute():
                 resolved = file_path.resolve()
 
                 # 1. 检查是否在 root_dir 内
                 if str(resolved).startswith(str(root_path)):
-                    return original_open(file, mode, *args, **kwargs)
+                    final_path = file
 
                 # 2. 检查是否在 readable_paths 中（只读白名单）
-                for rp in readable_resolved:
-                    if str(resolved).startswith(str(rp)):
-                        if is_writing:
-                            raise PermissionError("只读路径，禁止写入: {0}".format(file))
-                        return original_open(file, mode, *args, **kwargs)
+                elif any(str(resolved).startswith(str(rp)) for rp in readable_resolved):
+                    if is_writing:
+                        raise PermissionError("只读路径，禁止写入: {0}".format(file))
+                    final_path = file
 
                 # 3. 检查是否在 writable_paths 中（读写白名单）
-                for wp in writable_resolved:
-                    if str(resolved).startswith(str(wp)):
-                        return original_open(file, mode, *args, **kwargs)
+                elif any(str(resolved).startswith(str(wp)) for wp in writable_resolved):
+                    final_path = file
 
                 # 4. 其他绝对路径：自动加 root_dir 前缀
-                new_path = root_path / file_path.relative_to(file_path.anchor)
-                return original_open(str(new_path), mode, *args, **kwargs)
+                else:
+                    final_path = str(root_path / file_path.relative_to(file_path.anchor))
             else:
                 # 相对路径：强制加 root_dir 前缀
-                new_path = root_path / file_path
-                return original_open(str(new_path), mode, *args, **kwargs)
+                final_path = str(root_path / file_path)
+
+            # 写入模式下自动创建父目录
+            if is_writing and final_path:
+                parent_dir = Path(final_path).parent
+                if not parent_dir.exists():
+                    parent_dir.mkdir(parents=True, exist_ok=True)
+
+            return original_open(final_path, mode, *args, **kwargs)
 
         # 创建受限的 Path 类
         class _RestrictedPath(Path):
@@ -513,11 +519,27 @@ def _execute_in_subprocess(
             def __setattr__(self, name, value):
                 raise AttributeError("不能修改 os 模块")
 
-        # 导入 tarfile 模块并创建受限版本
+        # 在替换 sys.modules 之前，先导入所有原始模块
+        import sys as _sys
         import tarfile as _original_tarfile
+        import zipfile as _original_zipfile
+        import io as _original_io
+
+        # 受限的 tarfile 模块
+        class _RestrictedTarFileClass(_original_tarfile.TarFile):
+            """受限的 TarFile 类，重定向路径"""
+            def __init__(self, name=None, mode='r', fileobj=None, *args, **kwargs):
+                # 重定向路径
+                if name is not None and fileobj is None:
+                    name = redirect_path(name)
+                super().__init__(name, mode, fileobj, *args, **kwargs)
 
         class RestrictedTarfile:
             """受限的 tarfile 模块，确保文件路径被重定向"""
+
+            # 将 TarFile 类作为类属性（不是方法）
+            TarFile = _RestrictedTarFileClass
+            TarFileCompat = _RestrictedTarFileClass
 
             def open(self, name, mode='r', *args, **kwargs):
                 """打开 tarfile，自动重定向路径"""
@@ -529,22 +551,56 @@ def _execute_in_subprocess(
                 redirected_name = redirect_path(name)
                 return _original_tarfile.is_tarfile(redirected_name)
 
-            def TarFile(self, *args, **kwargs):
-                """创建 TarFile 对象，重定向路径"""
-                # TarFile 构造函数的第一个参数是文件名
-                if args:
-                    args = (redirect_path(args[0]),) + args[1:]
-                return _original_tarfile.TarFile(*args, **kwargs)
-
-            # TarFile 类的别名
-            TarFileCompat = TarFile
-
             def __getattr__(self, name):
                 """其他属性和方法直接返回原始值"""
                 return getattr(_original_tarfile, name)
 
             def __setattr__(self, name, value):
                 raise AttributeError("不能修改 tarfile 模块")
+
+        # 受限的 zipfile 模块
+        class _RestrictedZipFile(_original_zipfile.ZipFile):
+            """受限的 ZipFile 类，重定向路径"""
+            def __init__(self, file, mode='r', compression=_original_zipfile.ZIP_STORED,
+                         allowZip64=True, *args, **kwargs):
+                # 重定向路径（仅当 file 是字符串路径时）
+                if isinstance(file, str):
+                    file = redirect_path(file)
+                super().__init__(file, mode, compression, allowZip64, *args, **kwargs)
+
+        class RestrictedZipfile:
+            """受限的 zipfile 模块，确保文件路径被重定向"""
+
+            # ZipFile 类作为类属性
+            ZipFile = _RestrictedZipFile
+            is_zipfile = _original_zipfile.is_zipfile
+            ZIP_STORED = _original_zipfile.ZIP_STORED
+            ZIP_DEFLATED = _original_zipfile.ZIP_DEFLATED
+            ZIP_BZIP2 = _original_zipfile.ZIP_BZIP2
+            ZIP_LZMA = _original_zipfile.ZIP_LZMA
+
+            def __getattr__(self, name):
+                """其他属性和方法直接返回原始值"""
+                return getattr(_original_zipfile, name)
+
+            def __setattr__(self, name, value):
+                raise AttributeError("不能修改 zipfile 模块")
+
+        # 受限的 io 模块（拦截 io.open）
+        class RestrictedIo:
+            """受限的 io 模块，确保 open() 使用路径重定向"""
+
+            open = restricted_open  # 使用受限的 open 函数
+            StringIO = _original_io.StringIO
+            BytesIO = _original_io.BytesIO
+            BufferedIOBase = _original_io.BufferedIOBase
+
+            def __getattr__(self, name):
+                """其他属性和方法直接返回原始值"""
+                return getattr(_original_io, name)
+
+            def __setattr__(self, name, value):
+                raise AttributeError("不能修改 io 模块")
 
         safe_globals = {
             '__builtins__': builtins,
@@ -572,24 +628,36 @@ def _execute_in_subprocess(
         restricted_os = RestrictedOS()
         safe_globals['os'] = restricted_os
 
-        # 将受限的 os 模块注入到 sys.modules，防止 import os 绕过限制
-        # 注意：这需要在当前进程中修改 sys.modules
-        import sys as _sys
-        _original_os = _sys.modules.get('os')
-        _sys.modules['os'] = restricted_os
-
         # 同时也需要替换 pathlib 模块
         safe_globals['Path'] = _RestrictedPath
         restricted_pathlib = RestrictedPathlib()
         safe_globals['pathlib'] = restricted_pathlib
+
+        # 创建受限的文件相关模块实例
+        restricted_tarfile = RestrictedTarfile()
+        restricted_zipfile = RestrictedZipfile()
+        restricted_io = RestrictedIo()
+
+        safe_globals['tarfile'] = restricted_tarfile
+        safe_globals['zipfile'] = restricted_zipfile
+        safe_globals['io'] = restricted_io
+
+        # 将受限模块注入到 sys.modules，防止 import 绕过限制
+        # 注意：这需要在当前进程中修改 sys.modules
+        _original_os = _sys.modules.get('os')
+        _sys.modules['os'] = restricted_os
+
         _original_pathlib = _sys.modules.get('pathlib')
         _sys.modules['pathlib'] = restricted_pathlib
 
-        # 注入受限的 tarfile 模块，确保文件操作被重定向
-        restricted_tarfile = RestrictedTarfile()
-        safe_globals['tarfile'] = restricted_tarfile
         _original_tarfile_module = _sys.modules.get('tarfile')
         _sys.modules['tarfile'] = restricted_tarfile
+
+        _original_zipfile_module = _sys.modules.get('zipfile')
+        _sys.modules['zipfile'] = restricted_zipfile
+
+        _original_io_module = _sys.modules.get('io')
+        _sys.modules['io'] = restricted_io
 
         # 设置 sys.argv
         if script_path:
@@ -627,7 +695,7 @@ def _execute_in_subprocess(
                 exit_code = 1
                 traceback.print_exc()  # 输出完整堆栈
             finally:
-                # 恢复原始的 os、pathlib 和 tarfile 模块
+                # 恢复原始的 os、pathlib、tarfile、zipfile、io 模块
                 if _original_os is not None:
                     _sys.modules['os'] = _original_os
                 elif 'os' in _sys.modules:
@@ -642,6 +710,16 @@ def _execute_in_subprocess(
                     _sys.modules['tarfile'] = _original_tarfile_module
                 elif 'tarfile' in _sys.modules:
                     del _sys.modules['tarfile']
+
+                if _original_zipfile_module is not None:
+                    _sys.modules['zipfile'] = _original_zipfile_module
+                elif 'zipfile' in _sys.modules:
+                    del _sys.modules['zipfile']
+
+                if _original_io_module is not None:
+                    _sys.modules['io'] = _original_io_module
+                elif 'io' in _sys.modules:
+                    del _sys.modules['io']
 
         # 获取输出
         output = output_capture.get_output()
@@ -723,6 +801,14 @@ class CodeExecutor:
         self.max_output_length = max_output_length
         self.writable_paths = [Path(p).resolve() for p in (writable_paths or [])]
         self.readable_paths = [Path(p).resolve() for p in (readable_paths or [])]
+
+        # writable_paths 添加白名单，用于解决 os.path.exists() 函数无法访问 /dev/null 等问题
+        #  Path('/var/folders'),  # macOS 临时目录父目录
+        #     Path(tempfile.gettempdir()).resolve(),  # 添加系统临时目录
+        self.writable_paths.append(Path('/var/folders'))
+        self.writable_paths.append(Path(tempfile.gettempdir()).resolve())
+        self.writable_paths.append(Path('/private/var/folders'))
+
         # readable_paths 增加 白名单，mimetypes 模块需要
         self.readable_paths.append(Path('/etc/apache2/mime.types'))
         self.readable_paths.append(Path('/etc/mime.types'))
@@ -859,8 +945,7 @@ class CodeExecutor:
                             'subprocess': ['run', 'call', 'Popen', 'check_output'],
                             'commands': ['getoutput', 'getstatusoutput'],
                             'ctypes': None,  # ctypes 模块的所有函数都危险
-                            'io': ['open', 'FileIO'],
-                            'codecs': ['open'],
+                            'codecs': ['open'],  # codecs.open 可能绕过限制（io 已实现受限版本，安全）
                         }
 
                         if module_name in dangerous_combos:
@@ -882,12 +967,12 @@ class CodeExecutor:
                 for alias in node.names:
                     module_name = alias.name
 
-                    # 危险模块列表
+                    # 危险模块列表（io, zipfile, tarfile 已实现受限版本，安全）
                     dangerous_modules = [
                         'subprocess', 'commands', 'ctypes', 'importlib',
                         'pickle', 'marshal', 'shelve',
                         'multiprocessing', 'threading', 'signal',
-                        'io', 'codecs',  # 可能绕过文件限制
+                        'codecs',  # 可能绕过文件限制
                     ]
 
                     if module_name in dangerous_modules or any(
@@ -903,12 +988,12 @@ class CodeExecutor:
                 """检查 from ... import 语句"""
                 module_name = node.module if node.module else ''
 
-                # 危险模块列表
+                # 危险模块列表（io, zipfile, tarfile 已实现受限版本，安全）
                 dangerous_modules = [
                     'subprocess', 'commands', 'ctypes', 'importlib',
                     'pickle', 'marshal', 'shelve',
                     'multiprocessing', 'threading', 'signal',
-                    'io', 'codecs',  # 可能绕过文件限制
+                    'codecs',  # 可能绕过文件限制
                     'pathlib',  # 防止导入原始 Path 绕过限制
                 ]
 
