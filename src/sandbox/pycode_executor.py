@@ -628,16 +628,17 @@ class CodeExecutor:
         # 定义禁止的危险函数调用
         # 格式: (模块名, 函数名, 错误消息)
         DANGEROUS_CALLS = [
-            ('os', 'remove', '禁止使用 os.remove() 删除文件'),
-            ('os', 'unlink', '禁止使用 os.unlink() 删除文件'),
-            ('os', 'rmdir', '禁止使用 os.rmdir() 删除目录'),
+            # ✅ 放开沙箱内安全的 os 文件操作
+            # ('os', 'remove', '禁止使用 os.remove() 删除文件'),  # ✅ 已放开
+            # ('os', 'unlink', '禁止使用 os.unlink() 删除文件'),  # ✅ 已放开
+            # ('os', 'rmdir', '禁止使用 os.rmdir() 删除目录'),  # ✅ 已放开
             ('os', 'removedirs', '禁止使用 os.removedirs() 递归删除目录'),
             ('os', 'rename', '禁止使用 os.rename() 移动或重命名文件'),
             ('os', 'replace', '禁止使用 os.replace() 替换文件'),
             ('os', 'chmod', '禁止使用 os.chmod() 修改文件权限'),
             ('os', 'chown', '禁止使用 os.chown() 修改文件所有者'),
-            ('os', 'listdir', '禁止使用 os.listdir() 列出目录'),
-            ('os', 'scandir', '禁止使用 os.scandir() 列出目录'),
+            # ('os', 'listdir', '禁止使用 os.listdir() 列出目录'),  # ✅ 已放开
+            # ('os', 'scandir', '禁止使用 os.scandir() 列出目录'),  # ✅ 已放开
             # 🚫 禁止 os 模块执行系统命令
             ('os', 'system', '禁止使用 os.system() 执行系统命令'),
             ('os', 'popen', '禁止使用 os.popen() 执行系统命令'),
