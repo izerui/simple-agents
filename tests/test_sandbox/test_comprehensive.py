@@ -227,14 +227,15 @@ def test_comprehensive():
         else:
             print("❌ 未能阻止 eval")
 
-        # 测试 15: 阻止 os.open
-        print("\n[测试 4.5] 阻止 os.open")
+        # 测试 15: os.open 被禁用
+        print("\n[测试 4.5] os.open 被禁用")
         print("-" * 80)
         result = executor.execute('python -c "import os; os.open(\'test.txt\', os.O_WRONLY)"')
-        if result.exit_code != 0:
-            print("✅ 正确阻止 os.open")
+        # os.open 在运行时被 RestrictedOS 禁用
+        if result.exit_code != 0 and ("AttributeError" in result.output or "禁用" in result.output):
+            print("✅ 正确阻止 os.open（运行时禁用）")
         else:
-            print("❌ 未能阻止 os.open")
+            print(f"❌ os.open 未被阻止: exit={result.exit_code}, output={result.output[:100]}")
 
         # 测试 16: 阻止 io 模块
         print("\n[测试 4.6] 阻止 io 模块")

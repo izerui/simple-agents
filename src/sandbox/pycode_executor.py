@@ -86,6 +86,7 @@ class OutputCapture:
 def _execute_in_subprocess(
         code,
         root_dir,
+        script_path,
         script_args,
         result_queue,
         timeout,
@@ -98,7 +99,8 @@ def _execute_in_subprocess(
     Args:
         code: 要执行的代码
         root_dir: 沙箱根目录
-        script_args: 脚本参数
+        script_path: 脚本文件名（如 'test.py'），如果是代码字符串则为 None
+        script_args: 脚本参数列表
         result_queue: 结果队列（用于传递结果回主进程）
         timeout: 超时时间（秒）
         writable_paths: 可写路径列表
@@ -267,10 +269,12 @@ def _execute_in_subprocess(
         safe_globals['pathlib'] = RestrictedPathlib()
 
         # 设置 sys.argv
-        if script_args:
-            safe_globals['sys'].argv = script_args
+        if script_path:
+            # 脚本执行：argv[0] = 脚本名，argv[1:] = 参数
+            safe_globals['sys'].argv = [script_path] + script_args
         else:
-            safe_globals['sys'].argv = ['-c']
+            # 代码字符串执行：argv[0] = '-c'
+            safe_globals['sys'].argv = ['-c'] + script_args
 
         # 创建局部命名空间
         locals_dict = safe_globals.copy()
