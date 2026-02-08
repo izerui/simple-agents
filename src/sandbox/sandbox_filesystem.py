@@ -92,16 +92,27 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
             max_file_size_mb=max_file_size_mb,
         )
 
-        self._pycode_executor = CodeExecutor(
-            root_dir=self.root_dir,
-            max_output_length=self.max_output_length,
-        )
+        # 延迟初始化执行器（避免异步方法中初始化同步对象的问题）
+        self._pycode_executor = None
+        self._dependency_executor = None
 
-        # 初始化依赖安装执行器
-        self._dependency_executor = DependencyExecutor(
-            root_dir=self.root_dir,
-            max_output_length=self.max_output_length,
-        )
+    def get_pycode_executor(self) -> CodeExecutor:
+        """获取或初始化 Python 代码执行器（延迟初始化）"""
+        if self._pycode_executor is None:
+            self._pycode_executor = CodeExecutor(
+                root_dir=self.root_dir,
+                max_output_length=self.max_output_length,
+            )
+        return self._pycode_executor
+
+    def get_dependency_executor(self) -> DependencyExecutor:
+        """获取或初始化依赖安装执行器（延迟初始化）"""
+        if self._dependency_executor is None:
+            self._dependency_executor = DependencyExecutor(
+                root_dir=self.root_dir,
+                max_output_length=self.max_output_length,
+            )
+        return self._dependency_executor
 
     def execute(self, command: str) -> ExecuteResponse:
         """执行命令（统一入口）
@@ -143,10 +154,10 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         # 判断是否是 python -m pip 命令
         if re.match(r'^python\s*-m\s+pip\s+', command, re.IGNORECASE):
             # 使用依赖安装执行器
-            return self._dependency_executor.execute(command)
+            return self.get_dependency_executor().execute(command)
         else:
             # 使用 Python 代码执行器
-            return self._pycode_executor.execute(command)
+            return self.get_pycode_executor().execute(command)
 
     # def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
     #     # 如果是pdf文件

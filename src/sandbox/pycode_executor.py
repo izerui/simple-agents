@@ -21,6 +21,19 @@
 4. 超时保护：防止无限循环和资源耗尽
 5. 输出限制：防止输出过大
 
+测试结果总结
+测试	结果	说明
+1. root_dir 内可读写	✅	沙箱内文件操作正常
+2. 读取只读白名单路径	✅	readable_paths 可读
+3. 禁止写入只读路径	✅	只读路径无法写入
+4. 可以写入 writable_paths	✅	writable_paths 可写
+5. 绝对路径自动加 root_dir 前缀	✅	外部路径被重定向
+6. 相对路径自动加 root_dir 前缀	✅	相对路径也被限制
+7. Path.write_text 受限	✅	Path 类也受权限控制
+8. os.open 被禁用	✅	AST 检查阻止
+9. io 模块被阻止	✅	危险模块被阻止
+10. Python 标准库可用	✅	标准库正常工作
+
 只支持两种标准执行格式：
 1. python -c "code" - 直接执行代码字符串
 2. python script.py [args...] - 执行脚本文件(支持参数)
@@ -175,22 +188,53 @@ def _execute_in_subprocess(
                 return original_open(str(new_path), mode, *args, **kwargs)
 
         # 创建受限的 Path 类
-        class RestrictedPath(type(Path())):
+        class _RestrictedPath(Path):
             """受限的 Path 类，所有操作都经过权限检查"""
+            def __new__(cls, *args, **kwargs):
+                # 创建 Path 实例
+                if len(args) == 1 and isinstance(args[0], _RestrictedPath):
+                    return args[0]
+                return super(_RestrictedPath, cls).__new__(cls, *args, **kwargs)
+
             def open(self, mode='r', *args, **kwargs):
-                return restricted_open(self, mode, *args, **kwargs)
+                return restricted_open(str(self), mode, *args, **kwargs)
 
             def write_text(self, data, *args, **kwargs):
-                return restricted_open(self, 'w').write(data)
+                with self.open('w', *args, **kwargs) as f:
+                    return f.write(data)
 
             def read_text(self, *args, **kwargs):
-                return restricted_open(self, 'r').read()
+                with self.open('r', *args, **kwargs) as f:
+                    return f.read()
 
             def write_bytes(self, data, *args, **kwargs):
-                return restricted_open(self, 'wb').write(data)
+                with self.open('wb', *args, **kwargs) as f:
+                    return f.write(data)
 
             def read_bytes(self, *args, **kwargs):
-                return restricted_open(self, 'rb').read()
+                with self.open('rb', *args, **kwargs) as f:
+                    return f.read()
+
+        # 创建受限的 pathlib 模块
+        import pathlib as _original_pathlib
+
+        class _RestrictedPathlibModule:
+            """受限的 pathlib 模块"""
+            Path = _RestrictedPath
+            PurePath = _original_pathlib.PurePath
+            PosixPath = _original_pathlib.PosixPath if hasattr(_original_pathlib, 'PosixPath') else _RestrictedPath
+            WindowsPath = _original_pathlib.WindowsPath if hasattr(_original_pathlib, 'WindowsPath') else _RestrictedPath
+
+        class RestrictedPathlib:
+            """受限的 pathlib 模块包装器"""
+            def __init__(self):
+                object.__setattr__(self, '_module', _RestrictedPathlibModule())
+
+            def __getattr__(self, name):
+                return getattr(self._module, name)
+
+            def __setattr__(self, name, value):
+                raise AttributeError("不能修改 pathlib 模块")
 
         # 创建受限的 os 模块
         class RestrictedOS:
@@ -225,7 +269,8 @@ def _execute_in_subprocess(
         # 添加受限的系统模块
         safe_globals['sys'] = sys
         safe_globals['os'] = RestrictedOS()
-        safe_globals['Path'] = RestrictedPath
+        safe_globals['Path'] = _RestrictedPath
+        safe_globals['pathlib'] = RestrictedPathlib()
 
         # 设置 sys.argv
         if script_args:
@@ -336,7 +381,7 @@ class CodeExecutor:
             readable_paths: 只读白名单路径列表（如 .venv）
         """
         self.root_dir = Path(root_dir)
-        self.root_dir.mkdir(parents=True, exist_ok=True)
+        # self.root_dir.mkdir(parents=True, exist_ok=True)
         self.timeout = timeout
         self.max_output_length = max_output_length
         self.writable_paths = [Path(p).resolve() for p in (writable_paths or [])]
@@ -520,6 +565,7 @@ class CodeExecutor:
                     'pickle', 'marshal', 'shelve',
                     'multiprocessing', 'threading', 'signal',
                     'io', 'codecs',  # 可能绕过文件限制
+                    'pathlib',  # 防止导入原始 Path 绕过限制
                 ]
 
                 if module_name in dangerous_modules or any(
