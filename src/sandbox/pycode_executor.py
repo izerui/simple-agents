@@ -618,6 +618,10 @@ def _execute_in_subprocess(
             def __setattr__(self, name, value):
                 raise AttributeError("不能修改 io 模块")
 
+        # 替换 builtins.open，让所有第三方库都使用受限的 open 函数
+        _original_builtins_open = builtins.open
+        builtins.open = restricted_open
+
         safe_globals = {
             '__builtins__': builtins,
             '__name__': '__main__',
@@ -711,7 +715,10 @@ def _execute_in_subprocess(
                 exit_code = 1
                 traceback.print_exc()  # 输出完整堆栈
             finally:
-                # 恢复原始的 os、pathlib、tarfile、zipfile、io 模块
+                # 恢复原始的 builtins.open
+                builtins.open = _original_builtins_open
+
+                # 恢复原始的 os、pathlib、tarfile、zipfile、io、docx 模块
                 if _original_os is not None:
                     _sys.modules['os'] = _original_os
                 elif 'os' in _sys.modules:
