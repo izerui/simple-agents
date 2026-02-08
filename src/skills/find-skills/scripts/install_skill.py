@@ -20,10 +20,10 @@ Features:
 - Supports multiple package formats
 
 Usage:
-    python install_skill.py <package_name>
-    python install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
-    python install_skill.py -s "react performance"
-    python install_skill.py -l
+    python3 /skills/find-skills/scripts/install_skill.py <package_name>
+    python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+    python3 /skills/find-skills/scripts/install_skill.py -s "react performance"
+    python3 /skills/find-skills/scripts/install_skill.py -l
 """
 
 import argparse
@@ -32,6 +32,7 @@ import hashlib
 import json
 import os
 import re
+import ssl
 import sys
 import tarfile
 import tempfile
@@ -233,7 +234,18 @@ class NPXStyleInstaller:
         """
         try:
             print_info(f"Downloading from: {url}")
-            with urllib.request.urlopen(url, timeout=timeout) as response:
+            # 创建不验证 SSL 的上下文
+            ssl_context = ssl._create_unverified_context()
+
+            # 确保目标目录存在
+            dest_dir = os.path.dirname(dest_path)
+            if dest_dir:
+                try:
+                    os.makedirs(dest_dir, exist_ok=True)
+                except FileExistsError:
+                    pass
+
+            with urllib.request.urlopen(url, timeout=timeout, context=ssl_context) as response:
                 # 使用 open() 写入，会被沙箱拦截
                 with open(dest_path, 'wb') as f:
                     # 分块写入，避免大文件内存问题
@@ -291,12 +303,15 @@ class NPXStyleInstaller:
         Returns:
             Package metadata dict or None
         """
+        # 创建不验证 SSL 的上下文
+        ssl_context = ssl._create_unverified_context()
+
         for registry in self.npm_mirrors:
             try:
                 url = f"{registry}/{package_name}"
                 print_info(f"Querying registry: {registry}")
 
-                with urllib.request.urlopen(url, timeout=10) as response:
+                with urllib.request.urlopen(url, timeout=10, context=ssl_context) as response:
                     data = json.loads(response.read().decode('utf-8'))
                     return data
             except Exception as e:
@@ -825,35 +840,35 @@ def main():
         epilog="""
 Examples:
   # Install from npm registry
-  python install_skill.py create-react-app
+  python3 /skills/find-skills/scripts/install_skill.py create-react-app
 
   # Install specific version from npm
-  python install_skill.py create-react-app@5.0.1
+  python3 /skills/find-skills/scripts/install_skill.py create-react-app@5.0.1
 
   # Install from GitHub
-  python install_skill.py vercel-labs/agent-skills
+  python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills
 
   # Install from GitHub with specific tag
-  python install_skill.py vercel-labs/agent-skills@v1.0.0
+  python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@v1.0.0
 
   # Install skill subdirectory from GitHub
-  python install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+  python3 /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
 
   # Install from direct URL
-  python install_skill.py https://example.com/skill.tar.gz
+  python3 /skills/find-skills/scripts/install_skill.py https://example.com/skill.tar.gz
 
   # Install from local tarball file
-  python install_skill.py /path/to/skill.tar.gz
-  python install_skill.py ./my-skill.tgz
+  python3 /skills/find-skills/scripts/install_skill.py /path/to/skill.tar.gz
+  python3 /skills/find-skills/scripts/install_skill.py ./my-skill.tgz
 
   # Search for skills
-  python install_skill.py -s "react performance"
+  python3 /skills/find-skills/scripts/install_skill.py -s "react performance"
 
   # List installed skills
-  python install_skill.py -l
+  python3 /skills/find-skills/scripts/install_skill.py -l
 
   # Install to custom directory
-  python install_skill.py -d /path/to/skills <package>
+  python3 /skills/find-skills/scripts/install_skill.py -d /path/to/skills <package>
         """
     )
 
