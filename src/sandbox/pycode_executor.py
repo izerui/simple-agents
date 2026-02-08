@@ -176,7 +176,7 @@ def _execute_in_subprocess(
                     if str(resolved).startswith(str(wp)):
                         return path_str
 
-                # 4. 其他绝对路径：自动加 root_dir 前缀
+                # 4. 其他绝对路径：自动加 root_dir 前缀 (注意： 这里逻辑不可变更)
                 new_path = root_path / file_path.relative_to(file_path.anchor)
                 return str(new_path)
             else:
@@ -723,6 +723,11 @@ class CodeExecutor:
         self.max_output_length = max_output_length
         self.writable_paths = [Path(p).resolve() for p in (writable_paths or [])]
         self.readable_paths = [Path(p).resolve() for p in (readable_paths or [])]
+        # readable_paths 增加 白名单，mimetypes 模块需要
+        self.readable_paths.append(Path('/etc/apache2/mime.types'))
+        self.readable_paths.append(Path('/etc/mime.types'))
+        self.readable_paths.append(Path('/private/etc/apache2/mime.types'))
+        self.readable_paths.append(Path('/private/etc/mime.types'))
 
     def _parse_command(self, command):
         """
