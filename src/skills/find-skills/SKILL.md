@@ -180,32 +180,39 @@ GET https://registry.npmjs.org/<package>
 → Returns JSON with versions and tarball URL
 ```
 
-**2. Download Tarball:**
+**2. Download Tarball to /tmp/:**
 ```python
-urllib.request.urlretrieve(tarball_url, temp_path)
-→ Downloads .tgz file via HTTP
+with urllib.request.urlopen(tarball_url) as response:
+    with open('/tmp/skill_install/package.tgz', 'wb') as f:
+        shutil.copyfileobj(response, f)
+→ Downloads .tgz file to /tmp/ directory
 ```
 
-**3. Extract Tarball (Pure Python):**
+**3. Extract in /tmp/:**
 ```python
-tarfile.open(tarball_path, 'r:gz').extractall(dest_dir)
-→ Extracts .tgz files using Python's tarfile module
-→ No external commands (tar, gzip) required
+with gzip.open('/tmp/skill_install/package.tgz', 'rb') as gz:
+    with tarfile.open(fileobj=gz, mode='r:gz') as tar:
+        tar.extractall(path='/tmp/skill_install/extracted')
+→ Extracts to /tmp/ directory
 ```
 
-**4. Install to Skills Directory:**
+**4. Install to /skills/:**
 ```python
-shutil.copytree(extracted_dir, skills_dir/package_name)
-→ Copies extracted files to /skills/<package-name>/
-→ Uses Python's shutil for file operations
+shutil.copytree('/tmp/skill_install/extracted/package', '/skills/package-name')
+→ Copies from /tmp/ to /skills/ directory
 ```
 
 **5. Anti-Overwrite Protection:**
 ```python
-if target_dir.exists():
+if /skills/<package>/ exists:
     ⚠ Skip installation (NEVER overwrites)
 else:
     ✓ Install fresh copy
+```
+
+**Workflow Summary:**
+```
+Registry → Download to /tmp/ → Extract in /tmp/ → Install to /skills/
 ```
 
 All operations use **only Python standard library** - no external commands required.

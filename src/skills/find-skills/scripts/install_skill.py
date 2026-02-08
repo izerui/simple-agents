@@ -6,6 +6,12 @@ Skills Installation Script - npx-like Implementation
 This script implements npx-like functionality to download and install agent skills
 directly via HTTP to your sandbox's /skills/ directory.
 
+Installation Workflow:
+1. Download tarball to /tmp/skill_install/
+2. Extract in /tmp/skill_install/
+3. Install to /skills/ (copy from /tmp/)
+4. Cleanup /tmp/ directory
+
 Features:
 - Download from npm registry (like npx)
 - Download from GitHub repositories
@@ -85,7 +91,9 @@ class NPXStyleInstaller:
             skills_dir: Target directory for skills (default: /skills/)
         """
         self.skills_dir = Path(skills_dir)
-        self.temp_dir = Path(tempfile.mkdtemp(prefix="skill_install_"))
+        # Use /tmp/ for downloads and extraction
+        self.temp_dir = Path("/tmp/skill_install")
+        self.temp_dir.mkdir(exist_ok=True)
 
         # npm registry configuration
         self.npm_registry = "https://registry.npmjs.org"
@@ -100,9 +108,10 @@ class NPXStyleInstaller:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # Cleanup temp directory
-        if self.temp_dir.exists():
-            shutil.rmtree(self.temp_dir, ignore_errors=True)
+        # Cleanup temp directory in /tmp/
+        temp_path = Path("/tmp/skill_install")
+        if temp_path.exists():
+            shutil.rmtree(temp_path, ignore_errors=True)
 
     def _download_file(self, url: str, dest_path: Path, timeout: int = 30) -> bool:
         """
