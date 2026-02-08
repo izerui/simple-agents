@@ -687,50 +687,54 @@ class NPXStyleInstaller:
 
     def _search_npm(self, query: str) -> bool:
         """
-        Search npm registry for packages
+        搜索 npm registry 中的包
 
         Args:
-            query: Search query
+            query: 搜索关键词
 
         Returns:
-            bool: True if successful
+            bool: 是否成功
         """
         print_header(f"🔍 Searching npm registry for: {query}")
 
         try:
-            # npm registry search API (deprecated but still works)
-            # Alternatively, we can suggest manual search
+            # 使用 npm registry 的搜索 API
+            url = f"https://registry.npmjs.org/-/v1/search?text={urllib.parse.quote(query)}&size=10"
+
+            print_info(f"Querying: {url}\n")
+
+            with urllib.request.urlopen(url, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+                if data.get('objects'):
+                    print_info(f"Found {len(data['objects'])} packages:\n")
+                    for pkg in data['objects'][:10]:
+                        name = pkg['package']['name']
+                        version = pkg['package'].get('version', 'N/A')
+                        desc = pkg['package'].get('description', 'No description')
+                        desc_short = (desc[:80] + '...') if len(desc) > 80 else desc
+
+                        print(f"  {Colors.GREEN}•{Colors.RESET} {name}@{version}")
+                        print(f"    {desc_short}")
+                        print(f"    📦 Install: python3 install_skill.py {name}")
+                        print()
+                else:
+                    print_warning("No packages found")
+                    return True
+
+            # 提供手动搜索链接
             print_info(f"🔗 Search npm registry manually:")
-            print(f"   https://www.npmjs.com/search?q={query.replace(' ', '+')}")
+            print(f"   https://www.npmjs.com/search?q={urllib.parse.quote(query)}")
             print()
-
-            # Try to get some suggestions based on common patterns
-            suggestions = {
-                'react': ['create-react-app', 'react-scripts', '@react-skills/core'],
-                'typescript': ['typescript', 'ts-node', '@types/node'],
-                'testing': ['jest', 'playwright', 'cypress', 'vitest'],
-                'test': ['jest', 'playwright', 'cypress', 'vitest'],
-                'deploy': ['vercel', 'netlify-cli', 'serverless'],
-                'docs': ['documentation.js', 'jsdoc', 'typedoc'],
-                'documentation': ['documentation.js', 'jsdoc', 'typedoc'],
-            }
-
-            query_lower = query.lower()
-            found_packages = set()
-            for key, packages in suggestions.items():
-                if key in query_lower:
-                    for pkg in packages:
-                        found_packages.add(pkg)
-
-            if found_packages:
-                print_info(f"Suggested npm packages:")
-                for pkg in sorted(found_packages):
-                    print(f"  {Colors.GREEN}•{Colors.RESET} {pkg}")
-                    print(f"    📦 Install: python3 install_skill.py {pkg}")
-                print()
 
             return True
 
+        except urllib.error.HTTPError as e:
+            print_error(f"HTTP Error {e.code}: {e.reason}")
+            return False
+        except urllib.error.URLError as e:
+            print_error(f"URL Error: {e.reason}")
+            return False
         except Exception as e:
             print_error(f"npm search failed: {e}")
             return False
