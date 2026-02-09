@@ -258,7 +258,7 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 命令�
 - 返回 stdout/stderr 合并输出及退出码
 - 如果输出过大，可能会被截断
 - 多行代码建议使用 heredoc 方式
-- 执行脚本生成的文件路径在 `outputs` 目录下
+- 建议执行脚本放到 `scripts` 目录下，其生成的文件放在 `outputs` 目录下
 """
 
 FILESYSTEM_SYSTEM_PROMPT = """## Filesystem Tools `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`
