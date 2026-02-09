@@ -118,7 +118,6 @@ def _execute_in_subprocess(
     try:
         # 切换工作目录
         os.chdir(root_dir)
-        print("  [子进程] 工作目录: {0}".format(os.getcwd()))
 
         # 设置超时信号
         def timeout_handler(signum, frame):
@@ -130,7 +129,6 @@ def _execute_in_subprocess(
         # 编译代码
         try:
             compiled_code = compile(code, '<sandbox>', 'exec')
-            print("  [子进程] 代码编译成功")
         except SyntaxError as e:
             print("  [子进程] ✗ 代码编译失败")
             result_queue.put(ExecuteResult(
@@ -698,7 +696,6 @@ def _execute_in_subprocess(
         locals_dict = safe_globals.copy()
 
         # 执行代码
-        print("  [子进程] 执行代码")
         with OutputCapture() as output_capture:
             exit_code = 0
             try:
@@ -755,7 +752,6 @@ def _execute_in_subprocess(
         output = output_capture.get_output()
 
         # 发送结果
-        print("  [子进程] 发送结果")
         result_queue.put(ExecuteResult(
             output=output,
             exit_code=exit_code
@@ -968,7 +964,6 @@ class CodeExecutor:
         Raises:
             SyntaxError: 如果代码不安全
         """
-        print("→ 安全检查")
         try:
             tree = ast.parse(code)
         except SyntaxError as e:
@@ -1085,12 +1080,9 @@ class CodeExecutor:
 
         # 报告安全问题
         if checker.unsafe_calls or checker.unsafe_imports:
-            print("✗ 安全检查失败")
             error_msg = "安全检查失败，发现以下危险操作：\n"
             error_msg += "\n".join(checker.unsafe_calls + checker.unsafe_imports)
             raise SyntaxError(error_msg)
-
-        print("✓ 安全检查通过")
 
     def execute(self, command):
         """
@@ -1102,12 +1094,10 @@ class CodeExecutor:
         Returns:
             ExecuteResponse 包含输出、退出码和截断标志
         """
-        print("═ 执行命令")
         try:
             # 步骤 1: 解析命令
             try:
                 code, script_path, script_args = self._parse_command(command)
-                print("→ 解析命令: {0}".format("脚本文件" if script_path else "代码字符串"))
             except ValueError as e:
                 print("✗ 命令格式错误")
                 return ExecuteResponse(
@@ -1156,7 +1146,6 @@ class CodeExecutor:
                 )
 
             # 步骤 4: 创建子进程执行代码
-            print("→ 启动子进程")
             result_queue = Queue()
             process = Process(
                 target=_execute_in_subprocess,
@@ -1195,7 +1184,6 @@ class CodeExecutor:
                 )
 
             # 获取执行结果
-            print("→ 获取执行结果")
             if not result_queue.empty():
                 result = result_queue.get()
             else:
@@ -1208,7 +1196,6 @@ class CodeExecutor:
                 )
 
             # 步骤 5: 检查输出长度并截断
-            print("→ 处理输出")
             output = result.output
             truncated = False
 
@@ -1217,7 +1204,6 @@ class CodeExecutor:
                 truncated = True
                 output += "\n\n... [输出被截断，超过最大长度限制] ..."
 
-            print("✓ 执行完成 (退出码: {0})".format(result.exit_code))
             return ExecuteResponse(
                 output=output,
                 exit_code=result.exit_code,
