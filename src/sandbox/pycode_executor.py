@@ -41,6 +41,7 @@ heredoc 格式优势：
 import sys
 import io
 import os
+import re
 import ast
 import signal
 import traceback
