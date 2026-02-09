@@ -870,7 +870,9 @@ class CodeExecutor:
         command = command.strip()
 
         # 检查是否是 heredoc 格式: python << 'EOF' 或 python << "EOF"
-        heredoc_match = re.match(r'^python\s*<<\s*[\'"]?(\w+)[\'"]?\s*$', command, re.IGNORECASE)
+        # 只检查第一行
+        first_line = command.split('\n')[0] if '\n' in command else command
+        heredoc_match = re.match(r'^python\s*<<\s*[\'"]?(\w+)[\'"]?\s*$', first_line, re.IGNORECASE)
         if heredoc_match:
             # 对于真正的 heredoc，我们期望在后续行中找到代码
             # 但这里我们实际上接收到的是完整的命令字符串
