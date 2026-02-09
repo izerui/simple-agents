@@ -58,9 +58,10 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
     - root_dir 内：允许读写
     - root_dir 外：只允许临时目录读写
 
-    只支持两种标准执行格式：
+    支持三种标准执行格式：
     1. python -c "code" - 直接执行代码字符串
     2. python script.py - 执行脚本文件
+    3. python << 'EOF' - 使用 heredoc 执行多行代码（推荐，支持多行）
     """
 
     def __init__(
@@ -131,6 +132,7 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         CodeExecutor 支持的命令：
         - python -c "code" - 执行代码字符串
         - python script.py - 执行脚本文件
+        - python << 'EOF' - 使用 heredoc 执行多行代码（推荐，支持多行）
 
         ⚠️ 重要说明：
         针对文件和目录相关操作，请使用以下内置工具方法，不要使用 execute：

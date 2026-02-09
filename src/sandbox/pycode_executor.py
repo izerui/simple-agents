@@ -28,9 +28,15 @@
 ✅ 可用：os.remove, os.rmdir, os.mkdir, os.listdir, os.path.exists 等
 ❌ 禁用：os.open, os.write, os.fdopen（使用内置 open() 代替）
 
-只支持两种标准执行格式：
+支持三种标准执行格式：
 1. python -c "code" - 直接执行代码字符串
 2. python script.py [args...] - 执行脚本文件(支持参数)
+3. python << 'EOF' - 使用 heredoc 执行多行代码（推荐）
+
+heredoc 格式优势：
+- 支持多行代码，无需所有代码写在同一行
+- 代码中可直接使用单引号、双引号，无需转义
+- 代码可读性更好
 """
 import sys
 import io
@@ -852,6 +858,7 @@ class CodeExecutor:
         支持格式：
         1. python -c "code" - 执行代码字符串
         2. python script.py [args...] - 执行脚本文件
+        3. python << 'EOF' - 使用 heredoc 执行多行代码
 
         Returns:
             (code, script_path, script_args)
@@ -859,7 +866,32 @@ class CodeExecutor:
             - script_path: 脚本路径（如果是代码字符串，为 None）
             - script_args: 脚本参数列表
         """
-        parts = command.strip().split()
+        command = command.strip()
+
+        # 检查是否是 heredoc 格式: python << 'EOF' 或 python << "EOF"
+        heredoc_match = re.match(r'^python\s*<<\s*[\'"]?(\w+)[\'"]?\s*$', command, re.IGNORECASE)
+        if heredoc_match:
+            # 对于真正的 heredoc，我们期望在后续行中找到代码
+            # 但这里我们实际上接收到的是完整的命令字符串
+            # 如果命令中包含换行符和 EOF 标记，则解析
+            if '\n' in command:
+                delimiter = heredoc_match.group(1)
+                # 查找分隔符位置
+                delimiter_pattern = rf'^{re.escape(delimiter)}\s*$'
+                lines = command.split('\n', 1)  # 分割第一行和剩余内容
+                if len(lines) == 2:
+                    content = lines[1]
+                    # 查找结束标记
+                    for i, line in enumerate(content.split('\n')):
+                        if re.match(delimiter_pattern, line):
+                            # 找到结束标记
+                            code = '\n'.join(content.split('\n')[:i])
+                            return code.strip(), None, []
+                    # 没有找到结束标记，整个内容都是代码
+                    return content.strip(), None, []
+
+        # 标准的简单命令解析
+        parts = command.split()
 
         if not parts or parts[0] != 'python':
             raise ValueError("命令必须以 'python' 开头")
