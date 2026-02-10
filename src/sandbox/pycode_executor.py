@@ -130,7 +130,6 @@ def _execute_in_subprocess(
         try:
             compiled_code = compile(code, '<sandbox>', 'exec')
         except SyntaxError as e:
-            print("  [子进程] ✗ 代码编译失败")
             result_queue.put(ExecuteResult(
                 output="语法错误: {0}".format(str(e)),
                 exit_code=-1,
@@ -700,22 +699,22 @@ def _execute_in_subprocess(
             exit_code = 0
             try:
                 exec(compiled_code, locals_dict, locals_dict)
-                print("  [子进程] ✓ 代码执行完成")
+                print("✓ 代码执行完成")
             except SystemExit as e:
                 # 正常退出
                 exit_code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
-                print("  [子进程] SystemExit: {0}".format(exit_code))
+                print("SystemExit: {0}".format(exit_code))
             except MemoryError:
-                print("  [子进程] ✗ 内存错误")
+                print("✗ 内存错误")
                 exit_code = -1
                 traceback.print_exc()  # 输出完整堆栈
             except RecursionError:
-                print("  [子进程] ✗ 递归错误")
+                print("✗ 递归错误")
                 exit_code = -1
                 traceback.print_exc()  # 输出完整堆栈
             except Exception as e:
                 # 执行错误
-                print("  [子进程] ✗ 执行异常: {0}".format(type(e).__name__))
+                print("✗ 执行异常: {0}".format(type(e).__name__))
                 exit_code = 1
                 traceback.print_exc()  # 输出完整堆栈
             finally:
@@ -758,7 +757,7 @@ def _execute_in_subprocess(
         ))
 
     except TimeoutError as e:
-        print("  [子进程] ✗ 超时")
+        print("✗ 超时")
         tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
             output="执行超时: {0}\n\n{1}".format(str(e), tb_str),
@@ -766,7 +765,7 @@ def _execute_in_subprocess(
             error=str(e)
         ))
     except MemoryError as e:
-        print("  [子进程] ✗ 内存错误")
+        print("✗ 内存错误")
         tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
             output="错误: 内存使用超过限制\n\n{0}".format(tb_str),
@@ -774,7 +773,7 @@ def _execute_in_subprocess(
             error=str(e)
         ))
     except RecursionError as e:
-        print("  [子进程] ✗ 递归错误")
+        print("✗ 递归错误")
         tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
             output="错误: 递归深度超过限制（可能导致无限递归）\n\n{0}".format(tb_str),
@@ -782,7 +781,7 @@ def _execute_in_subprocess(
             error=str(e)
         ))
     except Exception as e:
-        print("  [子进程] ✗ 未预期异常")
+        print("✗ 未预期异常")
         tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
             output="执行错误:\n{0}: {1}\n{2}".format(type(e).__name__, str(e), tb_str),
@@ -1099,7 +1098,6 @@ class CodeExecutor:
             try:
                 code, script_path, script_args = self._parse_command(command)
             except ValueError as e:
-                print("✗ 命令格式错误")
                 return ExecuteResponse(
                     output="命令格式错误:\n{0}".format(str(e)),
                     exit_code=-1,
@@ -1170,7 +1168,6 @@ class CodeExecutor:
             # 检查子进程状态
             if process.is_alive():
                 # 子进程超时，强制终止
-                print("✗ 执行超时")
                 process.terminate()
                 process.join(timeout=2)
                 if process.is_alive():
@@ -1188,7 +1185,7 @@ class CodeExecutor:
                 result = result_queue.get()
             else:
                 # 子进程异常退出但没有返回结果
-                print("✗ 子进程异常退出")
+                print("✗ 进程异常退出")
                 return ExecuteResponse(
                     output="错误: 子进程异常退出，没有返回结果",
                     exit_code=-1,
