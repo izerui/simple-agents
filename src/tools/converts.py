@@ -27,7 +27,7 @@ def convert_to_markdown(
     启用公式识别的时机：当用户问题涉及数学公式、方程、不等式、符号、微积分、数学表达式、化学方程式、物理公式等内容时，应将 do_formula_enrichment 设为 True
 
     支持的文件格式：
-    - PDF、DOC、DOCX、XLSX、PPTX、PNG、JPG、JPEG、GIF、BMP、AsciiDoc
+    - PDF、DOC、DOCX、PPTX、PNG、JPG、JPEG、GIF、BMP、AsciiDoc
     - 所有格式都支持图片提取和公式识别功能
 
     Args:

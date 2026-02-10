@@ -22,7 +22,7 @@
 ### 优先使用 convert_to_markdown
 
 **支持的文件格式**（优先使用 `convert_to_markdown` 工具转换）：
-- **文档类**：PDF、DOC、DOCX、XLSX、PPTX、AsciiDoc
+- **文档类**：PDF、DOC、DOCX、PPTX、AsciiDoc
 - **图片类**：PNG、JPG、JPEG、GIF、BMP
 
 **工具参数说明**：
