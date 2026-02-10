@@ -48,7 +48,7 @@ def copytree_hardlink(src, dst):
     # 如果都失败，使用普通复制
     if not success:
         logger.warning("⚠️ 硬链接方法失败，使用普通复制 skills")
-        shutil.copytree(src, dst)
+        shutil.copytree(src, dst, dirs_exist_ok=True)
 
 
 class AttachmentExtractMiddleware(AgentMiddleware):
