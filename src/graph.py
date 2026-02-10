@@ -12,18 +12,16 @@ from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
 from langchain_core.stores import InMemoryStore
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph_sdk import Auth
 
 from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
-from src.prompts import CONVERT_AGENT_INSTRUCTIONS, RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
+from src.prompts import RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_markdown
 from src.tools.think import think_tool
 from src.utils._library_download import install_pip_if_needed
 from src.utils.util import get_backend_per_thread
-
 
 # Model Claude 4.5
 chat_model = init_chat_model(
@@ -42,6 +40,7 @@ def cus_tool_limiter(tool_name: str, run_limit: int) -> ToolCallLimitMiddleware:
         exit_behavior="continue"  # 强制终止并返回当前结果
     )
 
+
 # skills_copier = SkillsToSandboxMiddleware(backend_factory=get_backend_per_thread)
 
 upload_files = AttachmentExtractMiddleware(backend_factory=get_backend_per_thread)
@@ -50,18 +49,6 @@ upload_files = AttachmentExtractMiddleware(backend_factory=get_backend_per_threa
 tool_limiter = ToolCallLimitMiddleware(
     run_limit=50,
     exit_behavior="continue"  # 达到 50 次后，强制终止并返回当前结果
-)
-
-# 创建文件处理子智能体
-convert_agent = SubAgent(
-    name="文件转换子代理",
-    description="用于将用户的源文件 PDF, DOCX, XLSX, PPTX, AsciiDoc 文件转换为 Markdown 格式以便研究，每次仅限一个文件。",
-    system_prompt=CONVERT_AGENT_INSTRUCTIONS,
-    tools=[convert_to_markdown],
-    middleware=[
-        tool_limiter,
-        # create_duplicate_call_prevention(get_backend_per_thread),
-    ],  # 完整的中间件配置
 )
 
 # 创建研究子智能体
@@ -152,5 +139,6 @@ async def authenticate(headers: dict) -> Auth.types.MinimalUserDict:
         "org_id": "feike"
 
     }
+
 
 install_pip_if_needed()

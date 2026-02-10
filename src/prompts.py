@@ -50,8 +50,5 @@ RESEARCH_AGENT_INSTRUCTIONS = load_prompt_from_file(
     COMMON_TOOL_USAGE_RULE=COMMON_TOOL_USAGE_RULE
 )
 
-# ============ 文件转换子代理提示词 ============
-CONVERT_AGENT_INSTRUCTIONS = load_prompt_from_file("prompt/convert_agent_prompt.md")
-
 # ============ VLLM提示词 ============
 VLLM_INSTRUCTIONS = load_prompt_from_file("prompt/vllm_prompt.md")

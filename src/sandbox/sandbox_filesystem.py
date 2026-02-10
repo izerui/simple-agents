@@ -13,7 +13,7 @@ from deepagents.backends.protocol import SandboxBackendProtocol, ExecuteResponse
 from src.sandbox.dependency_executor import DependencyExecutor
 from src.sandbox.pycode_executor import CodeExecutor
 
-# 无法直接读取需要转换的文件类型 PDF、DOCX、XLSX、PPTX、
+# 无法直接读取需要转换的文件类型 PDF、DOCX、PPTX、
 CONVERT_FILE_TYPES = [
     '.pdf',
     '.doc',
