@@ -1,6 +1,7 @@
 """
 获取网页内容 - 增强反爬虫版本（两层降级策略）
 """
+import asyncio
 import random
 import re
 import time
@@ -648,8 +649,54 @@ def fetch_web_content(url: str) -> dict[str, Any]:
         return local_result
 
 
+def _fetch_url_sync(url: str, force_method: Optional[str] = None) -> dict[str, Any]:
+    """同步版本的 fetch_url 内部实现。
+
+    这是实际的同步实现，包含所有阻塞 I/O 操作（网络请求、time.sleep 等）。
+    通过 asyncio.to_thread() 在单独的线程中执行，避免阻塞事件循环。
+
+    Args:
+        url: 要获取的网页地址
+        force_method: 强制使用特定方法
+
+    Returns:
+        包含获取结果的字典
+    """
+    # 检查 web-reader 依赖是否可用
+    if not WEB_READER_AVAILABLE:
+        return {
+            "success": False,
+            "error": "Web Reader 功能需要安装依赖：pip install requests beautifulsoup4 playwright",
+            "url": url
+        }
+
+    try:
+        # 如果指定了强制方法
+        if force_method:
+            if force_method == 'local':
+                return fetch_with_local_parser(url)
+            elif force_method == 'browser':
+                return fetch_with_playwright(url)
+            else:
+                return {
+                    "success": False,
+                    "error": f"无效的强制方法: {force_method}。可选值：'local', 'browser'",
+                    "url": url
+                }
+
+        # 使用智能降级策略
+        return fetch_web_content(url)
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"获取网页内容时发生异常: {str(e)}",
+            "url": url
+        }
+
+
 @tool(parse_docstring=True)
-def fetch_url(url: str, force_method: Optional[str] = None) -> dict[str, Any]:
+async def fetch_url(url: str, force_method: Optional[str] = None) -> dict[str, Any]:
     """获取网页内容并转换为易读的 Markdown 格式。
 
     这是一个智能网页抓取工具，可以自动处理各种网站，包括有反爬虫保护的网站。
@@ -685,35 +732,12 @@ def fetch_url(url: str, force_method: Optional[str] = None) -> dict[str, Any]:
     3. 用清晰、自然的语言总结和呈现给用户
     4. 不要直接展示原始 Markdown 代码，除非用户明确要求
     5. 如果内容很长，提取关键信息进行总结
+
+    技术说明：
+    此函数为异步实现，内部使用 asyncio.to_thread() 在单独的线程中执行同步 I/O 操作，
+    避免阻塞 LangGraph 的异步事件循环。所有阻塞操作（网络请求、time.sleep 等）都在
+    工作线程中执行。
     """
-    # 检查 web-reader 依赖是否可用
-    if not WEB_READER_AVAILABLE:
-        return {
-            "success": False,
-            "error": "Web Reader 功能需要安装依赖：pip install requests beautifulsoup4 playwright",
-            "url": url
-        }
-
-    try:
-        # 如果指fetch_web_content定了强制方法
-        if force_method:
-            if force_method == 'local':
-                return fetch_with_local_parser(url)
-            elif force_method == 'browser':
-                return fetch_with_playwright(url)
-            else:
-                return {
-                    "success": False,
-                    "error": f"无效的强制方法: {force_method}。可选值：'local', 'browser'",
-                    "url": url
-                }
-
-        # 使用智能降级策略
-        return fetch_web_content(url)
-
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"获取网页内容时发生异常: {str(e)}",
-            "url": url
-        }
+    # 使用 asyncio.to_thread 在单独的线程中执行同步操作
+    # 这避免了阻塞调用警告（BlockingCallInsideAsyncContextWarning）
+    return await asyncio.to_thread(_fetch_url_sync, url, force_method)
