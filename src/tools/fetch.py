@@ -578,6 +578,10 @@ def fetch_web_content(url: str) -> dict[str, Any]:
     """
     智能获取网页内容（两层降级策略：本地解析 → Playwright 浏览器）
 
+    这是内部函数，实现核心的两层降级逻辑：
+    1. 首先尝试本地解析器（快速，资源占用少）
+    2. 如果失败且需要浏览器模式，则使用 Playwright
+
     Args:
         url: 要获取的URL
 
@@ -615,65 +619,41 @@ def fetch_web_content(url: str) -> dict[str, Any]:
 
 @tool(parse_docstring=True)
 def fetch_url(url: str, force_method: Optional[str] = None) -> dict[str, Any]:
-    """智能获取网页内容并转换为 Markdown 格式（两层降级策略 + 反爬虫增强 + playwright-stealth）。
+    """获取网页内容并转换为易读的 Markdown 格式。
 
-    该工具实现了强大的网页内容获取功能，支持两层智能降级策略：
-    1. **本地解析器** - 首选方案，快速处理普通HTML页面（模拟真实浏览器请求）
-    2. **Playwright 浏览器** - 备选方案，突破 Cloudflare 等访问限制（playwright-stealth 完美隐藏指纹）
+    这是一个智能网页抓取工具，可以自动处理各种网站，包括有反爬虫保护的网站。
+    工具会自动选择最佳方法获取内容，并将结果转换为清晰的 Markdown 格式供你阅读和使用。
 
-    反爬虫特性：
-    - 🎭 随机 User-Agent 池（模拟 Chrome/Safari/Firefox 等浏览器）
-    - 🔐 完整的浏览器请求头（Sec-Fetch-* 系列头）
-    - ⏱️ 随机请求延迟（模拟人类操作节奏）
-    - 🍪 会话管理（支持 Cookie 和连接复用）
-    - 🛡️ playwright-stealth 插件（完美抹除浏览器指纹，可选）
-    - 🖱️ 浏览器指纹模拟（隐藏 webdriver 特征，未安装 stealth 时使用）
+    何时使用此工具：
+    - 用户要求获取、总结或分析某个网页的内容
+    - 需要提取网页中的特定信息（如文章、新闻、数据等）
+    - 用户提供的 URL 需要访问并获取内容
+    - 需要查看动态加载的页面内容
 
-    playwright-stealth 功能（需额外安装）：
-    - ✅ 完美隐藏 navigator.webdriver
-    - ✅ 伪装 Chrome DevTools Protocol
-    - ✅ 模拟真实浏览器插件和权限
-    - ✅ 隐藏自动化特征
-    - ✅ 绕过大部分反爬检测
-
-    支持的受限网站类型：
-    - ✅ 微信公众号文章
-    - ✅ 时代杂志、纽约时报等付费墙
-    - ✅ Cloudflare 保护网站
-    - ✅ 需要 JavaScript 渲染的页面
-    - ✅ 有验证码/人机验证的网站（配合 stealth 效果更佳）
+    工作方式：
+    1. 首先尝试快速获取（本地解析器）
+    2. 如果遇到反爬虫保护，自动切换到浏览器模式
+    3. 自动处理验证码、Cloudflare 保护等
 
     Args:
-        url: 要获取的 URL（必须是有效的 HTTP/HTTPS URL）
-        force_method: 强制使用特定方法，可选值：'local', 'browser'（默认为 None，使用智能降级）
+        url: 要获取的网页地址（必须是 http:// 或 https:// 开头的有效 URL）
+        force_method: 可选参数，强制使用特定方法。可用值：local（本地解析器，快速）、browser（浏览器模式，适合动态页面）
 
     Returns:
-        包含以下内容的字典：
-        - success: 请求是否成功
-        - url: 获取的 URL
+        包含网页信息的字典，主要字段：
+        - success: 是否成功获取内容（True/False）
+        - markdown_content: 网页内容的 Markdown 格式文本（这是你最需要的字段）
         - title: 网页标题
-        - markdown_content: 转换为 Markdown 的页面内容
-        - status_code: HTTP 状态码（如果可用）
-        - content_length: Markdown 内容的字符长度
-        - method: 使用的解析方法（'local-parser', 'playwright-browser'）
-        - fetched_at: 获取时间
-        - message: 结果消息
-        - error: 错误信息（如果失败）
+        - url: 最终访问的 URL
+        - method: 使用的方法（local-parser 或 playwright-browser）
+        - error: 失败时的错误信息（如果 success 为 False）
 
-    重要提示：
-    1. 使用此工具后，通读 Markdown 内容并提取相关信息
-    2. 将信息综合成清晰的自然语言响应给用户
-    3. 除非明确要求，否则绝不向用户展示原始 Markdown
-
-    安装说明：
-    - 基础功能：pip install requests beautifulsoup4 playwright && playwright install chromium
-    - 增强反爬：pip install playwright-stealth（可选，强烈推荐）
-
-    依赖要求（非全部必需，缺少时会自动跳过对应方法）：
-    - requests >= 2.28.0
-    - beautifulsoup4 >= 4.11.0
-    - playwright >= 1.40.0
-    - playwright-stealth >= 2.0.0（可选，增强反爬效果）
+    使用指南：
+    1. 获取内容后，仔细阅读 markdown_content 字段
+    2. 提取用户需要的信息
+    3. 用清晰、自然的语言总结和呈现给用户
+    4. 不要直接展示原始 Markdown 代码，除非用户明确要求
+    5. 如果内容很长，提取关键信息进行总结
     """
     # 检查 web-reader 依赖是否可用
     if not WEB_READER_AVAILABLE:
@@ -684,7 +664,7 @@ def fetch_url(url: str, force_method: Optional[str] = None) -> dict[str, Any]:
         }
 
     try:
-        # 如果指定了强制方法
+        # 如果指fetch_web_content定了强制方法
         if force_method:
             if force_method == 'local':
                 return fetch_with_local_parser(url)
