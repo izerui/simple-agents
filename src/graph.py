@@ -18,7 +18,7 @@ from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
 from src.prompts import RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
-from src.tools.fetch import fetch_markdown
+from src.tools.fetch import fetch_url
 from src.tools.think import think_tool
 from src.utils._library_download import install_pip_if_needed
 from src.utils.util import get_backend_per_thread
@@ -56,7 +56,7 @@ research_agent = SubAgent(
     name="研究子代理",
     description="用于研究委托任务的研究员，每次仅限一个主题。",
     system_prompt=RESEARCH_AGENT_INSTRUCTIONS,
-    tools=[fetch_markdown],
+    tools=[fetch_url],
     middleware=[
         tool_limiter,
         # create_duplicate_call_prevention(get_backend_per_thread),
@@ -81,7 +81,7 @@ interrupt_config = {
 agent = create_deep_agent(
     name="主代理",
     model=chat_model,  # 使用模型实例
-    tools=[think_tool, fetch_markdown, convert_to_markdown],
+    tools=[think_tool, fetch_url, convert_to_markdown],
     store=my_store,
     backend=get_backend_per_thread,
     system_prompt=MAIN_AGENT_INSTRUCTIONS,
