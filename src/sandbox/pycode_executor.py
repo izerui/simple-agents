@@ -834,11 +834,15 @@ class CodeExecutor:
         self.writable_paths.append(Path(tempfile.gettempdir()).resolve())
         self.writable_paths.append(Path('/private/var/folders'))
 
-        # readable_paths 增加 白名单，mimetypes 模块需要
+        # readable_paths 增加白名单，mimetypes 模块需要
         self.readable_paths.append(Path('/etc/apache2/mime.types'))
         self.readable_paths.append(Path('/etc/mime.types'))
         self.readable_paths.append(Path('/private/etc/apache2/mime.types'))
         self.readable_paths.append(Path('/private/etc/mime.types'))
+
+        # 动态添加当前 Python 环境的 lib 目录到白名单
+        import sys
+        self.readable_paths.append(Path(sys.prefix))
 
         # 添加 .venv 到只读白名单，python-pptx 等库需要访问模板文件
         # .venv 在项目根目录下，而不是在沙箱 root_dir 下
