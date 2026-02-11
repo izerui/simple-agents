@@ -127,8 +127,7 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         return {
             "success": False,
             "error": "Playwright 未安装，如需使用浏览器模式请运行: pip install playwright && playwright install chromium",
-            "url": url,
-            "method": "playwright-browser"
+            "url": url
         }
 
     if not is_valid_url(url):
@@ -298,10 +297,9 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                     "title": title,
                     "markdown_content": cleaned_content,
                     "content_length": len(cleaned_content),
-                    "method": "playwright-browser",
                     "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "url_capture": f"/{screenshot_filename}",
-                    "message": f"已经使用 Playwright 浏览器成功获取 {url} 的内容。"
+                    "message": f"已经成功获取 {url} 的内容。"
                 }
 
             finally:
@@ -311,8 +309,7 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         return {
             "success": False,
             "error": f"Playwright获取失败: {str(e)}",
-            "url": url,
-            "method": "playwright-browser"
+            "url": url
         }
 
 
@@ -344,7 +341,10 @@ def fetch_url(url: str) -> dict[str, Any]:
         - markdown_content: 网页内容的 Markdown 格式文本（这是你最需要的字段）
         - title: 网页标题
         - url: 最终访问的 URL
+        - content_length: Markdown 内容的字符长度
+        - fetched_at: 内容获取时间（格式：YYYY-MM-DD HH:MM:SS）
         - url_capture: 网页截图路径
+        - message: 操作结果消息
         - error: 失败时的错误信息（如果 success 为 False）
 
     使用指南：
