@@ -12,9 +12,10 @@ from httpx import Timeout
 from langchain_core.tools import tool
 from markdownify import markdownify
 
-# web-reader 相关依赖（需要安装：requests, beautifulsoup4, playwright）
+# web-reader 相关依赖（需要安装：requests, beautifulsoup4, playwright, playwright-stealth）
 WEB_READER_AVAILABLE = True
 PLAYWRIGHT_AVAILABLE = True
+PLAYWRIGHT_STEALTH_AVAILABLE = False
 
 try:
     import requests
@@ -30,6 +31,13 @@ try:
     from playwright.sync_api import sync_playwright
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
+
+try:
+    from playwright_stealth import Stealth
+    PLAYWRIGHT_STEALTH_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_STEALTH_AVAILABLE = False
+    Stealth = None
 
 
 @tool(parse_docstring=True)
@@ -471,12 +479,12 @@ def fetch_with_local_parser(url: str, use_session: bool = True) -> dict[str, Any
 
 def fetch_with_playwright(url: str) -> dict[str, Any]:
     """
-    使用Playwright获取网页内容（增强反爬虫版本）
+    使用Playwright获取网页内容（增强反爬虫版本 + playwright-stealth）
 
     模拟真实浏览器行为，包括：
     - 随机视口大小
     - 逼真的User-Agent
-    - 完整的浏览器指纹
+    - 完整的浏览器指纹（使用 playwright-stealth）
     - 模拟人类操作延迟
     """
     if not PLAYWRIGHT_AVAILABLE:
@@ -523,6 +531,11 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                     user_agent=user_agent
                 )
 
+                # 使用 playwright-stealth 隐藏浏览器指纹
+                if PLAYWRIGHT_STEALTH_AVAILABLE:
+                    stealth = Stealth()
+                    stealth.apply_stealth_sync(page)
+
                 # 设置额外的请求头
                 headers = get_realistic_headers(url)
                 page.set_extra_http_headers({
@@ -530,36 +543,37 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                     if k not in ['User-Agent', 'Accept-Encoding']  # 避免重复
                 })
 
-                # 注入脚本隐藏webdriver特征
-                page.add_init_script("""
-                    // 覆盖navigator.webdriver
-                    Object.defineProperty(navigator, 'webdriver', {
-                        get: () => undefined
-                    });
+                # 如果没有 playwright-stealth，使用自定义脚本
+                if not PLAYWRIGHT_STEALTH_AVAILABLE:
+                    page.add_init_script("""
+                        // 覆盖navigator.webdriver
+                        Object.defineProperty(navigator, 'webdriver', {
+                            get: () => undefined
+                        });
 
-                    // 覆盖chrome对象
-                    window.chrome = {
-                        runtime: {}
-                    };
+                        // 覆盖chrome对象
+                        window.chrome = {
+                            runtime: {}
+                        };
 
-                    // 覆盖permissions
-                    const originalQuery = window.navigator.permissions.query;
-                    window.navigator.permissions.query = (parameters) => (
-                        parameters.name === 'notifications' ?
-                            Promise.resolve({ state: Notification.permission }) :
-                            originalQuery(parameters)
-                    );
+                        // 覆盖permissions
+                        const originalQuery = window.navigator.permissions.query;
+                        window.navigator.permissions.query = (parameters) => (
+                            parameters.name === 'notifications' ?
+                                Promise.resolve({ state: Notification.permission }) :
+                                originalQuery(parameters)
+                        );
 
-                    // 覆盖plugins
-                    Object.defineProperty(navigator, 'plugins', {
-                        get: () => [1, 2, 3, 4, 5]
-                    });
+                        // 覆盖plugins
+                        Object.defineProperty(navigator, 'plugins', {
+                            get: () => [1, 2, 3, 4, 5]
+                        });
 
-                    // 覆盖languages
-                    Object.defineProperty(navigator, 'languages', {
-                        get: () => ['zh-CN', 'zh', 'en']
-                    });
-                """)
+                        // 覆盖languages
+                        Object.defineProperty(navigator, 'languages', {
+                            get: () => ['zh-CN', 'zh', 'en']
+                        });
+                    """)
 
                 # 选择性加载资源（提高速度，但保持一些必要的资源）
                 def route_handler(route):
@@ -711,27 +725,35 @@ def fetch_web_content(url: str, prefer_jina: bool = True) -> dict[str, Any]:
 
 @tool(parse_docstring=True)
 def fetch_url(url: str, prefer_jina: bool = True, force_method: Optional[str] = None) -> dict[str, Any]:
-    """智能获取网页内容并转换为 Markdown 格式（三层降级策略 + 反爬虫增强）。
+    """智能获取网页内容并转换为 Markdown 格式（三层降级策略 + 反爬虫增强 + playwright-stealth）。
 
     该工具实现了强大的网页内容获取功能，支持三层智能降级策略：
     1. **Jina Reader API** - 最优选择，处理复杂网页和受限网站（带重试机制）
     2. **本地解析器** - 备选方案，处理普通HTML页面（模拟真实浏览器请求）
-    3. **Playwright 浏览器** - 最后手段，突破 Cloudflare 等访问限制（完整浏览器指纹）
+    3. **Playwright 浏览器** - 最后手段，突破 Cloudflare 等访问限制（playwright-stealth 完美隐藏指纹）
 
     反爬虫特性：
     - 🎭 随机 User-Agent 池（模拟 Chrome/Safari/Firefox 等浏览器）
     - 🔐 完整的浏览器请求头（Sec-Fetch-* 系列头）
     - ⏱️ 随机请求延迟（模拟人类操作节奏）
     - 🍪 会话管理（支持 Cookie 和连接复用）
-    - 🖱️ 浏览器指纹模拟（隐藏 webdriver 特征）
+    - 🛡️ playwright-stealth 插件（完美抹除浏览器指纹，可选）
+    - 🖱️ 浏览器指纹模拟（隐藏 webdriver 特征，未安装 stealth 时使用）
     - 🔄 自动重试机制（处理临时网络问题）
+
+    playwright-stealth 功能（需额外安装）：
+    - ✅ 完美隐藏 navigator.webdriver
+    - ✅ 伪装 Chrome DevTools Protocol
+    - ✅ 模拟真实浏览器插件和权限
+    - ✅ 隐藏自动化特征
+    - ✅ 绕过大部分反爬检测
 
     支持的受限网站类型：
     - ✅ 微信公众号文章
     - ✅ 时代杂志、纽约时报等付费墙
     - ✅ Cloudflare 保护网站
     - ✅ 需要 JavaScript 渲染的页面
-    - ⚠️ 有验证码/人机验证的网站（部分支持）
+    - ✅ 有验证码/人机验证的网站（配合 stealth 效果更佳）
 
     Args:
         url: 要获取的 URL（必须是有效的 HTTP/HTTPS URL）
@@ -755,12 +777,16 @@ def fetch_url(url: str, prefer_jina: bool = True, force_method: Optional[str] = 
     1. 使用此工具后，通读 Markdown 内容并提取相关信息
     2. 将信息综合成清晰的自然语言响应给用户
     3. 除非明确要求，否则绝不向用户展示原始 Markdown
-    4. 如需使用 Playwright 浏览器模式，请确保已安装：pip install playwright && playwright install chromium
+
+    安装说明：
+    - 基础功能：pip install requests beautifulsoup4 playwright && playwright install chromium
+    - 增强反爬：pip install playwright-stealth（可选，强烈推荐）
 
     依赖要求（非全部必需，缺少时会自动跳过对应方法）：
     - requests >= 2.28.0
     - beautifulsoup4 >= 4.11.0
-    - playwright >= 1.30.0
+    - playwright >= 1.40.0
+    - playwright-stealth >= 2.0.0（可选，增强反爬效果）
     """
     # 检查 web-reader 依赖是否可用
     if not WEB_READER_AVAILABLE:
