@@ -219,13 +219,11 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                         });
                     """)
 
-                # 选择性加载资源（提高速度，但保持一些必要的资源）
+                # 加载所有资源，仅阻止媒体文件（视频/音频）
                 def route_handler(route):
                     resource_type = route.request.resource_type
-                    # 阻止图片、字体、媒体（大文件）
-                    if resource_type in ['image', 'font', 'media']:
+                    if resource_type == 'media':
                         route.abort()
-                    # 允许其他资源
                     else:
                         route.continue_()
 
