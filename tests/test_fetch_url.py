@@ -1,10 +1,10 @@
 """
-测试 _fetch_url_sync 工具方法的完整测试脚本
+测试 fetch_url 工具方法的完整测试脚本
 """
 
 import json
 import sys
-from src.tools.fetch import _fetch_url_sync, WEB_READER_AVAILABLE
+from src.tools.fetch import fetch_url, WEB_READER_AVAILABLE
 
 
 def print_separator(title: str = ""):
@@ -82,7 +82,7 @@ def test_invalid_url():
 
     for url in test_urls:
         print(f"\n测试 URL: {url}")
-        result = _fetch_url_sync.invoke({"url": url})
+        result = fetch_url.invoke({"url": url})
         print(f"   Success: {result.get('success')}")
         print(f"   Error: {result.get('error', 'N/A')}")
 
@@ -91,7 +91,7 @@ def test_simple_website():
     """测试 3: 简单网站（使用智能降级）"""
     print_separator("测试 3: 简单网站 - Example.com")
 
-    result = _fetch_url_sync.invoke({"url": "https://example.com"})
+    result = fetch_url.invoke({"url": "https://example.com"})
     print_result(result, show_content=True)
     return result.get('success', False)
 
@@ -100,7 +100,7 @@ def test_local_parser():
     """测试 4: 强制使用本地解析器"""
     print_separator("测试 4: 强制使用本地解析器")
 
-    result = _fetch_url_sync.invoke({
+    result = fetch_url.invoke({
         "url": "https://example.com",
         "force_method": "local"
     })
@@ -112,7 +112,7 @@ def test_force_browser():
     """测试 5: 强制使用浏览器模式"""
     print_separator("测试 5: 强制使用浏览器模式 (Playwright)")
 
-    result = _fetch_url_sync.invoke({
+    result = fetch_url.invoke({
         "url": "https://example.com",
         "force_method": "browser"
     })
@@ -124,7 +124,7 @@ def test_chinese_website():
     """测试 6: 中文网站"""
     print_separator("测试 6: 中文网站 - 百度首页")
 
-    result = _fetch_url_sync.invoke({
+    result = fetch_url.invoke({
         "url": "https://www.baidu.com"
     })
     print_result(result)
@@ -141,7 +141,7 @@ def test_real_world_site():
 
     for site in test_sites:
         print(f"\n测试站点: {site}")
-        result = _fetch_url_sync.invoke({
+        result = fetch_url.invoke({
             "url": site
         })
         print_result(result)
@@ -155,7 +155,7 @@ def test_invalid_force_method():
     """测试 8: 无效的强制方法"""
     print_separator("测试 8: 无效的强制方法参数")
 
-    result = _fetch_url_sync.invoke({
+    result = fetch_url.invoke({
         "url": "https://example.com",
         "force_method": "invalid_method"
     })
@@ -177,7 +177,7 @@ def test_hanspub_search_with_verification():
     print()
 
     # 使用浏览器模式（唯一能绕过验证码的方法）
-    result = _fetch_url_sync.invoke({
+    result = fetch_url.invoke({
         "url": url,
         "force_method": "browser"
     })
@@ -219,7 +219,7 @@ def run_all_tests():
     """运行所有测试"""
     print("\n")
     print("╔" + "=" * 78 + "╗")
-    print("║" + " " * 20 + "_fetch_url_sync 工具方法完整测试套件" + " " * 26 + "║")
+    print("║" + " " * 20 + "fetch_url 工具方法完整测试套件" + " " * 26 + "║")
     print("╚" + "=" * 78 + "╝")
 
     results = {

@@ -2125,6 +2125,18 @@ wheels = [
 ]
 
 [[package]]
+name = "playwright-stealth"
+version = "2.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "playwright" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/65/f4/57d20b4c26b8639d87a72f241e7d3279ff627554d95fd1ff42f87db3c2f3/playwright_stealth-2.0.1.tar.gz", hash = "sha256:a36f735d61469c12bda179b58d5fc4228bbee61c9cf5b1343b1497a5fd51ec1a", size = 24897, upload-time = "2026-01-17T05:06:35.924Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4e/0a/1c4a6677dcf05daf28a911ecefedba33187c45a712409fc1474f38bfe724/playwright_stealth-2.0.1-py3-none-any.whl", hash = "sha256:3905776f45f175057dd9d7d1639280b8d639822580f15a01a2f9e7c35bff40af", size = 33206, upload-time = "2026-01-17T05:06:35.088Z" },
+]
+
+[[package]]
 name = "pluggy"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3062,6 +3074,7 @@ dependencies = [
     { name = "openpyxl" },
     { name = "pandas" },
     { name = "playwright" },
+    { name = "playwright-stealth" },
     { name = "requests" },
     { name = "rich" },
     { name = "sse-starlette" },
@@ -3098,6 +3111,7 @@ requires-dist = [
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "playwright", specifier = ">=1.58.0" },
+    { name = "playwright-stealth", specifier = ">=2.0.1" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "rich", specifier = ">=14.2.0" },
     { name = "sse-starlette", specifier = ">=2.1.0,<2.2.0" },

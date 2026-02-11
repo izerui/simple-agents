@@ -556,11 +556,8 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
 
                 # 截图功能 - 使用 backend._resolve_path 获取路径并直接写入
                 screenshot_uuid = str(uuid.uuid4())
-                screenshot_filename = f"fetch_url_capture/{screenshot_uuid}.png"
+                screenshot_filename = f".capture/{screenshot_uuid}.png"
                 screenshot_path = backend._resolve_path(screenshot_filename)
-
-                # 确保目录存在
-                screenshot_path.parent.mkdir(parents=True, exist_ok=True)
 
                 # 截图并写入文件
                 screenshot_bytes = page.screenshot(full_page=True)
