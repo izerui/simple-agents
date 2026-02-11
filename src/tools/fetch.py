@@ -1,12 +1,18 @@
 """
-获取网页内容 - 使用 Playwright 浏览器模式
+获取网页内容 - 使用 Playwright 异步浏览器模式
+
+使用 asyncio 隔离 Playwright 操作，避免与 greenlet/gevent 冲突。
+全局维护独立的异步 browser 实例，支持高并发。
 """
+import asyncio
 import random
 import re
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Optional
 
+import aiofiles
 from langchain_core.tools import tool
 from markdownify import markdownify
 
@@ -17,49 +23,63 @@ PLAYWRIGHT_AVAILABLE = True
 PLAYWRIGHT_STEALTH_AVAILABLE = False
 
 try:
-    from playwright.sync_api import sync_playwright
+    from playwright.async_api import async_playwright, Browser
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
-    sync_playwright = None
-
-# 全局 Playwright 和浏览器实例
-_playwright_context = None
-_browser = None
+    async_playwright = None
+    Browser = None
 
 
-def get_browser():
-    """获取全局浏览器实例（单例模式）"""
-    global _playwright_context, _browser
+# ==================== 异步 Playwright 管理 ====================
+
+# 全局异步 browser 实例
+_playwright_obj = None
+_browser: Optional[Browser] = None
+_lock = asyncio.Lock()
+_lock_initialized = False
+
+
+async def get_browser() -> Optional[Browser]:
+    """获取全局异步浏览器实例（单例模式）"""
+    global _playwright_obj, _browser, _lock_initialized
     if not PLAYWRIGHT_AVAILABLE:
         return None
-    if _playwright_context is None:
-        _playwright_context = sync_playwright().start()
+
     if _browser is None:
-        _browser = _playwright_context.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-features=IsolateOrigins,site-per-process',
-                '--disable-site-isolation-trials',
-                '--disable-web-security',
-                '--disable-features=VizDisplayCompositor',
-            ]
-        )
+        async with _lock:
+            if _browser is None:  # 双重检查
+                # 使用 async with 获取 Playwright 对象，并存储引用
+                async with async_playwright() as p:
+                    _playwright_obj = p
+                    _browser = await p.chromium.launch(
+                        headless=True,
+                        args=[
+                            '--no-sandbox',
+                            '--disable-dev-shm-usage',
+                            '--disable-blink-features=AutomationControlled',
+                            '--disable-features=IsolateOrigins,site-per-process',
+                            '--disable-site-isolation-trials',
+                            '--disable-web-security',
+                            '--disable-features=VizDisplayCompositor',
+                        ]
+                    )
+                # 注意：不在这里退出 async with，保持 _playwright_obj 引用有效
+                # 这样浏览器会在 cleanup_browser() 时才关闭
     return _browser
 
 
-def cleanup_playwright():
+async def cleanup_browser():
     """清理 Playwright 和浏览器资源"""
-    global _playwright_context, _browser
+    global _playwright_obj, _browser
     if _browser is not None:
-        _browser.close()
+        await _browser.close()
         _browser = None
-    if _playwright_context is not None:
-        _playwright_context.stop()
-        _playwright_context = None
+    if _playwright_obj is not None:
+        await _playwright_obj.stop()
+        _playwright_obj = None
 
+
+# 检查异步 playwright-stealth
 try:
     from playwright_stealth import Stealth
     PLAYWRIGHT_STEALTH_AVAILABLE = True
@@ -151,7 +171,7 @@ def is_valid_url(url: str) -> bool:
         return False
 
 
-def fetch_with_playwright(url: str) -> dict[str, Any]:
+async def fetch_with_playwright(url: str) -> dict[str, Any]:
     """
     使用Playwright获取网页内容（增强反爬虫版本 + playwright-stealth）
 
@@ -178,7 +198,7 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
     backend = get_backend_per_thread({})
 
     try:
-        browser = get_browser()
+        browser = await get_browser()
         if browser is None:
             return {
                 "success": False,
@@ -203,30 +223,30 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         page = None
         try:
             # 创建独立的浏览器上下文（类似隐身模式，完全隔离）
-            context = browser.new_context(
+            context = await browser.new_context(
                 viewport=viewport,
                 user_agent=user_agent,
                 locale='zh-CN',
                 timezone_id='Asia/Shanghai',
             )
             # 从上下文创建新页面
-            page = context.new_page()
+            page = await context.new_page()
 
             # 使用 playwright-stealth 隐藏浏览器指纹
             if PLAYWRIGHT_STEALTH_AVAILABLE:
                 stealth = Stealth()
-                stealth.apply_stealth_sync(page)
+                await stealth.apply_stealth_async(page)
 
             # 设置额外的请求头
             headers = get_realistic_headers(url)
-            page.set_extra_http_headers({
+            await page.set_extra_http_headers({
                 k: v for k, v in headers.items()
                 if k not in ['User-Agent', 'Accept-Encoding']  # 避免重复
             })
 
             # 如果没有 playwright-stealth，使用自定义脚本
             if not PLAYWRIGHT_STEALTH_AVAILABLE:
-                page.add_init_script("""
+                await page.add_init_script("""
                     // 覆盖navigator.webdriver
                     Object.defineProperty(navigator, 'webdriver', {
                         get: () => undefined
@@ -264,33 +284,37 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 else:
                     route.continue_()
 
-            page.route("**/*", route_handler)
+            await page.route("**/*", route_handler)
 
             # 导航到页面（30秒超时）
-            page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
 
             # 随机等待时间，模拟人类阅读
-            page.wait_for_timeout(random.randint(1500, 3000))
+            await page.wait_for_timeout(random.randint(1500, 3000))
 
             # 模拟鼠标移动（可选，增加真实性）
             try:
-                page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+                await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
             except Exception:
                 pass
 
             # 获取页面标题
-            title = page.title() or "无标题"
+            title = await page.title() or "无标题"
 
             # 先截图（此时页面完整，包含 header 等所有元素）
             screenshot_uuid = str(uuid.uuid4())
             screenshot_filename = f".capture/{screenshot_uuid}.png"
             screenshot_path = backend._resolve_path(screenshot_filename)
-            screenshot_bytes = page.screenshot(full_page=True)
-            with open(screenshot_path, 'wb') as f:
-                f.write(screenshot_bytes)
+            screenshot_bytes = await page.screenshot(full_page=True)
+            # 确保目录存在（完全异步，在线程池中执行）
+            screenshot_dir = Path(screenshot_path).parent
+            await asyncio.to_thread(screenshot_dir.mkdir, parents=True, exist_ok=True)
+            # 使用 aiofiles 异步写入，避免阻塞事件循环
+            async with aiofiles.open(screenshot_path, 'wb') as f:
+                await f.write(screenshot_bytes)
 
             # 移除不需要的元素（仅影响文本提取，不影响截图）
-            page.evaluate("""
+            await page.evaluate("""
                 () => {
                     const elementsToRemove = document.querySelectorAll(
                         'script, style, nav, header, footer, aside, .advertisement, .ads, .sidebar, .comments, .social-share'
@@ -300,7 +324,7 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
             """)
 
             # 获取主要内容
-            main_content_html = page.evaluate("""
+            main_content_html = await page.evaluate("""
                 () => {
                     const mainContent =
                         document.querySelector('main') ||
@@ -337,9 +361,9 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
 
         finally:
             if page is not None:
-                page.close()
+                await page.close()
             if context is not None:
-                context.close()
+                await context.close()
 
     except Exception as e:
         return {
@@ -350,7 +374,7 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
 
 
 @tool(parse_docstring=True)
-def fetch_url(url: str) -> dict[str, Any]:
+async def fetch_url(url: str) -> dict[str, Any]:
     """获取网页内容并转换为易读的 Markdown 格式（使用 Playwright）。
 
     这是一个网页抓取工具，使用浏览器模式获取内容，可以处理各种网站，
@@ -390,4 +414,5 @@ def fetch_url(url: str) -> dict[str, Any]:
     4. 不要直接展示原始 Markdown 代码，除非用户明确要求
     5. 如果内容很长，提取关键信息进行总结
     """
-    return fetch_with_playwright(url)
+    # 使用异步 Playwright，支持高并发且避免与 greenlet/gevent 冲突
+    return await fetch_with_playwright(url)
