@@ -348,6 +348,16 @@ def fetch_with_local_parser(url: str, use_session: bool = True) -> dict[str, Any
         cleaned_content = re.sub(r'^\s+$/gm', '', cleaned_content)
         cleaned_content = cleaned_content.strip()
 
+        # 检查内容是否为空（可能是动态加载的页面）
+        if not cleaned_content or len(cleaned_content) < 10:
+            return {
+                "success": False,
+                "error": "页面内容为空或过短，可能是动态加载的页面。建议使用浏览器模式（force_method='browser'）重新获取。",
+                "url": url,
+                "method": "local-parser",
+                "suggest_browser": True
+            }
+
         return {
             "success": True,
             "url": url,
@@ -601,7 +611,13 @@ def fetch_web_content(url: str) -> dict[str, Any]:
         return local_result
 
     # 判断是否需要使用浏览器模式
-    if should_use_browser(local_result.get("error", "")):
+    # 检查 suggest_browser 标志或错误消息
+    need_browser = (
+        local_result.get("suggest_browser", False) or
+        should_use_browser(local_result.get("error", ""))
+    )
+
+    if need_browser:
         # 第二层：使用Playwright浏览器（处理动态页面和反爬）
         browser_result = fetch_with_playwright(url)
         if browser_result["success"]:
