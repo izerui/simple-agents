@@ -12,9 +12,27 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     poppler-data \
     poppler-utils \
+    # -- playwright
+    libnss3 \
+    libxkbcommon0 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
+# playwright 依赖:
+#┌───────────────────────────┬─────────────────────────────────────────────────────┐
+#│           组件             │                      安装命令                        │
+#├───────────────────────────┼─────────────────────────────────────────────────────┤
+#│ Playwright Python         │ pip install playwright                              │
+#├───────────────────────────┼─────────────────────────────────────────────────────┤
+#│ Chromium 浏览器            │ playwright install chromium                         │
+#├───────────────────────────┼─────────────────────────────────────────────────────┤
+#│ 系统依赖（CentOS/RedHat）   │ yum install -y nss libX11 libxkbcommon alsa-lib     │
+#├───────────────────────────┼─────────────────────────────────────────────────────┤
+#│ 系统依赖（Ubuntu/Debian）   │ apt-get install -y libnss3 libxkbcommon0 libasound2 │
+#└───────────────────────────┴─────────────────────────────────────────────────────┘
 
+# 安装 Playwright 浏览器
+RUN playwright install chromium
 
 # -- Adding local package . --
 ADD . /deps/simple-agents
