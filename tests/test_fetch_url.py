@@ -192,6 +192,56 @@ def test_without_jina_preference():
     return result.get('success', False)
 
 
+def test_hanspub_search_with_verification():
+    """测试 11: 汉斯出版社搜索页面（带验证码，使用浏览器模式）"""
+    print_separator("测试 11: 汉斯出版社搜索 - 反爬虫测试")
+
+    # 汉斯出版社搜索URL - 神经网络分支动力学分析
+    url = "https://www.hanspub.org/journal/articles?searchcode=%e7%a5%9e%e7%bb%8f%e7%bd%91%e7%bb%9c%e5%88%86%e5%b2%94%e5%8a%a8%e5%8a%9b%e5%ad%a6%e5%88%86%e6%9e%90&searchfield=all&page=1"
+
+    print(f"测试 URL: {url}")
+    print(f"搜索关键词: 神经网络分支动力学分析")
+    print()
+
+    # 使用浏览器模式（唯一能绕过验证码的方法）
+    result = fetch_url.invoke({
+        "url": url,
+        "force_method": "browser"
+    })
+
+    print_result(result)
+
+    if result.get('success'):
+        content = result.get('markdown_content', '')
+
+        # 检查是否成功绕过验证码
+        if '验证' in content or 'captcha' in content.lower() or 'verify' in content.lower():
+            print("⚠️  内容仍包含验证码页面")
+            return False
+
+        # 提取文章数量
+        import re
+        article_links = re.findall(r'//www\.hanspub\.org/journal/paperinformation\?paperid=\d+', content)
+        article_count = len(article_links)
+
+        print(f"\n📊 解析结果:")
+        print(f"   找到文章数: {article_count}")
+
+        # 检查是否包含相关关键词
+        has_keywords = any(keyword in content for keyword in ['神经网络', '动力学', '神经'])
+        print(f"   包含相关关键词: {'是' if has_keywords else '否'}")
+
+        if article_count >= 5 and has_keywords:
+            print("\n✅ 成功绕过验证码，获取到搜索结果！")
+            return True
+        else:
+            print(f"\n⚠️  获取的内容可能不完整（文章数: {article_count}, 关键词: {has_keywords}）")
+            return False
+    else:
+        print(f"\n❌ 获取失败: {result.get('error')}")
+        return False
+
+
 def run_all_tests():
     """运行所有测试"""
     print("\n")
@@ -207,12 +257,13 @@ def run_all_tests():
         "force_browser": None,
         "chinese_website": None,
         "without_jina": None,
+        "hanspub_search": None,
     }
 
     # 测试 1: 依赖检查
     if not test_dependencies():
         print("\n❌ 依赖检查失败，请先安装必要的依赖包")
-        print("pip install requests beautifulsoup4 playwright")
+        print("pip install requests beautifulsoup4 playwright playwright-stealth")
         print("playwright install chromium")
         return
 
@@ -244,6 +295,9 @@ def run_all_tests():
 
     # 测试 10: 不优先使用 Jina
     results["without_jina"] = test_without_jina_preference()
+
+    # 测试 11: 汉斯出版社搜索（反爬虫测试）
+    results["hanspub_search"] = test_hanspub_search_with_verification()
 
     # 打印测试总结
     print_separator("测试总结")
