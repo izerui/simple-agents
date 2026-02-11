@@ -4,12 +4,15 @@
 import random
 import re
 import time
+import uuid
 from typing import Any, Optional
 
 import httpx
 from httpx import Timeout
 from langchain_core.tools import tool
 from markdownify import markdownify
+
+from src.utils.util import get_backend_per_thread
 
 # web-reader 相关依赖（需要安装：requests, beautifulsoup4, playwright, playwright-stealth）
 WEB_READER_AVAILABLE = True
@@ -407,6 +410,8 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
             "method": "playwright-browser"
         }
 
+    backend = get_backend_per_thread({})
+
     try:
         with sync_playwright() as p:
             # 获取随机User-Agent
@@ -549,7 +554,20 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 cleaned_content = re.sub(r'^\s+$/gm', '', cleaned_content)
                 cleaned_content = cleaned_content.strip()
 
-                return {
+                # 截图功能 - 使用 backend 上传
+                screenshot_uuid = str(uuid.uuid4())
+                screenshot_filename = f"fetch_url_capture/{screenshot_uuid}.png"
+                screenshot_bytes = page.screenshot(full_page=True)
+
+                # 使用 backend.upload_files 上传截图
+                upload_responses = backend.upload_files([(screenshot_filename, screenshot_bytes)])
+                upload_response = upload_responses[0] if upload_responses else None
+
+                url_capture = None
+                if upload_response and upload_response.error is None:
+                    url_capture = upload_response.path
+
+                result = {
                     "success": True,
                     "url": url,
                     "title": title,
@@ -559,6 +577,12 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                     "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "message": f"已经使用 Playwright 浏览器成功获取 {url} 的内容。"
                 }
+
+                # 只有在上传成功时才添加 url_capture 字段
+                if url_capture:
+                    result["url_capture"] = url_capture
+
+                return result
 
             finally:
                 browser.close()
