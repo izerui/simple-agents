@@ -22,6 +22,44 @@ except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None
 
+# 全局 Playwright 和浏览器实例
+_playwright_context = None
+_browser = None
+
+
+def get_browser():
+    """获取全局浏览器实例（单例模式）"""
+    global _playwright_context, _browser
+    if not PLAYWRIGHT_AVAILABLE:
+        return None
+    if _playwright_context is None:
+        _playwright_context = sync_playwright().start()
+    if _browser is None:
+        _browser = _playwright_context.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-blink-features=AutomationControlled',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-site-isolation-trials',
+                '--disable-web-security',
+                '--disable-features=VizDisplayCompositor',
+            ]
+        )
+    return _browser
+
+
+def cleanup_playwright():
+    """清理 Playwright 和浏览器资源"""
+    global _playwright_context, _browser
+    if _browser is not None:
+        _browser.close()
+        _browser = None
+    if _playwright_context is not None:
+        _playwright_context.stop()
+        _playwright_context = None
+
 try:
     from playwright_stealth import Stealth
     PLAYWRIGHT_STEALTH_AVAILABLE = True
@@ -140,166 +178,168 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
     backend = get_backend_per_thread({})
 
     try:
-        with sync_playwright() as p:
-            # 获取随机User-Agent
-            user_agent = get_random_user_agent()
+        browser = get_browser()
+        if browser is None:
+            return {
+                "success": False,
+                "error": "Playwright 未初始化",
+                "url": url
+            }
 
-            # 随机视口大小（常见分辨率）
-            viewports = [
-                {"width": 1920, "height": 1080},
-                {"width": 1680, "height": 1050},
-                {"width": 1440, "height": 900},
-                {"width": 1366, "height": 768},
-                {"width": 1536, "height": 864},
-            ]
-            viewport = random.choice(viewports)
+        # 获取随机User-Agent
+        user_agent = get_random_user_agent()
 
-            # 启动浏览器（更多反检测参数）
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-features=IsolateOrigins,site-per-process',
-                    '--disable-site-isolation-trials',
-                    '--disable-web-security',
-                    '--disable-features=VizDisplayCompositor',
-                ]
+        # 随机视口大小（常见分辨率）
+        viewports = [
+            {"width": 1920, "height": 1080},
+            {"width": 1680, "height": 1050},
+            {"width": 1440, "height": 900},
+            {"width": 1366, "height": 768},
+            {"width": 1536, "height": 864},
+        ]
+        viewport = random.choice(viewports)
+
+        context = None
+        page = None
+        try:
+            # 创建独立的浏览器上下文（类似隐身模式，完全隔离）
+            context = browser.new_context(
+                viewport=viewport,
+                user_agent=user_agent,
+                locale='zh-CN',
+                timezone_id='Asia/Shanghai',
             )
+            # 从上下文创建新页面
+            page = context.new_page()
 
+            # 使用 playwright-stealth 隐藏浏览器指纹
+            if PLAYWRIGHT_STEALTH_AVAILABLE:
+                stealth = Stealth()
+                stealth.apply_stealth_sync(page)
+
+            # 设置额外的请求头
+            headers = get_realistic_headers(url)
+            page.set_extra_http_headers({
+                k: v for k, v in headers.items()
+                if k not in ['User-Agent', 'Accept-Encoding']  # 避免重复
+            })
+
+            # 如果没有 playwright-stealth，使用自定义脚本
+            if not PLAYWRIGHT_STEALTH_AVAILABLE:
+                page.add_init_script("""
+                    // 覆盖navigator.webdriver
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
+
+                    // 覆盖chrome对象
+                    window.chrome = {
+                        runtime: {}
+                    };
+
+                    // 覆盖permissions
+                    const originalQuery = window.navigator.permissions.query;
+                    window.navigator.permissions.query = (parameters) => (
+                        parameters.name === 'notifications' ?
+                            Promise.resolve({ state: Notification.permission }) :
+                            originalQuery(parameters)
+                    );
+
+                    // 覆盖plugins
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => [1, 2, 3, 4, 5]
+                    });
+
+                    // 覆盖languages
+                    Object.defineProperty(navigator, 'languages', {
+                        get: () => ['zh-CN', 'zh', 'en']
+                    });
+                """)
+
+            # 加载所有资源，仅阻止媒体文件（视频/音频）
+            def route_handler(route):
+                resource_type = route.request.resource_type
+                if resource_type == 'media':
+                    route.abort()
+                else:
+                    route.continue_()
+
+            page.route("**/*", route_handler)
+
+            # 导航到页面（30秒超时）
+            page.goto(url, timeout=30000, wait_until="domcontentloaded")
+
+            # 随机等待时间，模拟人类阅读
+            page.wait_for_timeout(random.randint(1500, 3000))
+
+            # 模拟鼠标移动（可选，增加真实性）
             try:
-                # 创建新页面
-                page = browser.new_page(
-                    viewport=viewport,
-                    user_agent=user_agent
-                )
+                page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+            except Exception:
+                pass
 
-                # 使用 playwright-stealth 隐藏浏览器指纹
-                if PLAYWRIGHT_STEALTH_AVAILABLE:
-                    stealth = Stealth()
-                    stealth.apply_stealth_sync(page)
+            # 获取页面标题
+            title = page.title() or "无标题"
 
-                # 设置额外的请求头
-                headers = get_realistic_headers(url)
-                page.set_extra_http_headers({
-                    k: v for k, v in headers.items()
-                    if k not in ['User-Agent', 'Accept-Encoding']  # 避免重复
-                })
+            # 先截图（此时页面完整，包含 header 等所有元素）
+            screenshot_uuid = str(uuid.uuid4())
+            screenshot_filename = f".capture/{screenshot_uuid}.png"
+            screenshot_path = backend._resolve_path(screenshot_filename)
+            screenshot_bytes = page.screenshot(full_page=True)
+            with open(screenshot_path, 'wb') as f:
+                f.write(screenshot_bytes)
 
-                # 如果没有 playwright-stealth，使用自定义脚本
-                if not PLAYWRIGHT_STEALTH_AVAILABLE:
-                    page.add_init_script("""
-                        // 覆盖navigator.webdriver
-                        Object.defineProperty(navigator, 'webdriver', {
-                            get: () => undefined
-                        });
-
-                        // 覆盖chrome对象
-                        window.chrome = {
-                            runtime: {}
-                        };
-
-                        // 覆盖permissions
-                        const originalQuery = window.navigator.permissions.query;
-                        window.navigator.permissions.query = (parameters) => (
-                            parameters.name === 'notifications' ?
-                                Promise.resolve({ state: Notification.permission }) :
-                                originalQuery(parameters)
-                        );
-
-                        // 覆盖plugins
-                        Object.defineProperty(navigator, 'plugins', {
-                            get: () => [1, 2, 3, 4, 5]
-                        });
-
-                        // 覆盖languages
-                        Object.defineProperty(navigator, 'languages', {
-                            get: () => ['zh-CN', 'zh', 'en']
-                        });
-                    """)
-
-                # 加载所有资源，仅阻止媒体文件（视频/音频）
-                def route_handler(route):
-                    resource_type = route.request.resource_type
-                    if resource_type == 'media':
-                        route.abort()
-                    else:
-                        route.continue_()
-
-                page.route("**/*", route_handler)
-
-                # 导航到页面（30秒超时）
-                page.goto(url, timeout=30000, wait_until="domcontentloaded")
-
-                # 随机等待时间，模拟人类阅读
-                page.wait_for_timeout(random.randint(1500, 3000))
-
-                # 模拟鼠标移动（可选，增加真实性）
-                try:
-                    page.mouse.move(random.randint(100, 500), random.randint(100, 500))
-                except Exception:
-                    pass
-
-                # 获取页面标题
-                title = page.title() or "无标题"
-
-                # 先截图（此时页面完整，包含 header 等所有元素）
-                screenshot_uuid = str(uuid.uuid4())
-                screenshot_filename = f".capture/{screenshot_uuid}.png"
-                screenshot_path = backend._resolve_path(screenshot_filename)
-                screenshot_bytes = page.screenshot(full_page=True)
-                with open(screenshot_path, 'wb') as f:
-                    f.write(screenshot_bytes)
-
-                # 移除不需要的元素（仅影响文本提取，不影响截图）
-                page.evaluate("""
-                    () => {
-                        const elementsToRemove = document.querySelectorAll(
-                            'script, style, nav, header, footer, aside, .advertisement, .ads, .sidebar, .comments, .social-share'
-                        );
-                        elementsToRemove.forEach(el => el.remove());
-                    }
-                """)
-
-                # 获取主要内容
-                main_content_html = page.evaluate("""
-                    () => {
-                        const mainContent =
-                            document.querySelector('main') ||
-                            document.querySelector('article') ||
-                            document.querySelector('[role="main"]') ||
-                            document.querySelector('.content') ||
-                            document.querySelector('#content') ||
-                            document.querySelector('.post') ||
-                            document.querySelector('.entry-content') ||
-                            document.body;
-
-                        return mainContent ? mainContent.innerHTML : document.body.innerHTML;
-                    }
-                """)
-
-                # 转换为Markdown
-                markdown_content = markdownify(main_content_html)
-
-                # 清理内容
-                cleaned_content = re.sub(r'\n{3,}', '\n\n', markdown_content)
-                cleaned_content = re.sub(r'^\s+$/gm', '', cleaned_content)
-                cleaned_content = cleaned_content.strip()
-
-                return {
-                    "success": True,
-                    "url": url,
-                    "title": title,
-                    "markdown_content": cleaned_content,
-                    "content_length": len(cleaned_content),
-                    "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "url_capture": f"/{screenshot_filename}",
-                    "message": f"已经成功获取 {url} 的内容。"
+            # 移除不需要的元素（仅影响文本提取，不影响截图）
+            page.evaluate("""
+                () => {
+                    const elementsToRemove = document.querySelectorAll(
+                        'script, style, nav, header, footer, aside, .advertisement, .ads, .sidebar, .comments, .social-share'
+                    );
+                    elementsToRemove.forEach(el => el.remove());
                 }
+            """)
 
-            finally:
-                browser.close()
+            # 获取主要内容
+            main_content_html = page.evaluate("""
+                () => {
+                    const mainContent =
+                        document.querySelector('main') ||
+                        document.querySelector('article') ||
+                        document.querySelector('[role="main"]') ||
+                        document.querySelector('.content') ||
+                        document.querySelector('#content') ||
+                        document.querySelector('.post') ||
+                        document.querySelector('.entry-content') ||
+                        document.body;
+
+                    return mainContent ? mainContent.innerHTML : document.body.innerHTML;
+                }
+            """)
+
+            # 转换为Markdown
+            markdown_content = markdownify(main_content_html)
+
+            # 清理内容
+            cleaned_content = re.sub(r'\n{3,}', '\n\n', markdown_content)
+            cleaned_content = re.sub(r'^\s+$/gm', '', cleaned_content)
+            cleaned_content = cleaned_content.strip()
+
+            return {
+                "success": True,
+                "url": url,
+                "title": title,
+                "markdown_content": cleaned_content,
+                "content_length": len(cleaned_content),
+                "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "url_capture": f"/{screenshot_filename}",
+                "message": f"已经成功获取 {url} 的内容。"
+            }
+
+        finally:
+            if page is not None:
+                page.close()
+            if context is not None:
+                context.close()
 
     except Exception as e:
         return {
