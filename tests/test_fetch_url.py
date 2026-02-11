@@ -96,21 +96,9 @@ def test_simple_website():
     return result.get('success', False)
 
 
-def test_jina_reader():
-    """测试 4: 强制使用 Jina Reader"""
-    print_separator("测试 4: 强制使用 Jina Reader")
-
-    result = fetch_url.invoke({
-        "url": "https://example.com",
-        "force_method": "jina"
-    })
-    print_result(result, show_content=True)
-    return result.get('success', False)
-
-
 def test_local_parser():
-    """测试 5: 强制使用本地解析器"""
-    print_separator("测试 5: 强制使用本地解析器")
+    """测试 4: 强制使用本地解析器"""
+    print_separator("测试 4: 强制使用本地解析器")
 
     result = fetch_url.invoke({
         "url": "https://example.com",
@@ -121,8 +109,8 @@ def test_local_parser():
 
 
 def test_force_browser():
-    """测试 6: 强制使用浏览器模式"""
-    print_separator("测试 6: 强制使用浏览器模式 (Playwright)")
+    """测试 5: 强制使用浏览器模式"""
+    print_separator("测试 5: 强制使用浏览器模式 (Playwright)")
 
     result = fetch_url.invoke({
         "url": "https://example.com",
@@ -133,20 +121,19 @@ def test_force_browser():
 
 
 def test_chinese_website():
-    """测试 7: 中文网站"""
-    print_separator("测试 7: 中文网站 - 百度首页")
+    """测试 6: 中文网站"""
+    print_separator("测试 6: 中文网站 - 百度首页")
 
     result = fetch_url.invoke({
-        "url": "https://www.baidu.com",
-        "prefer_jina": True
+        "url": "https://www.baidu.com"
     })
     print_result(result)
     return result.get('success', False)
 
 
 def test_real_world_site():
-    """测试 8: 真实新闻网站"""
-    print_separator("测试 8: 新闻网站测试")
+    """测试 7: 真实新闻网站"""
+    print_separator("测试 7: 新闻网站测试")
 
     test_sites = [
         "https://news.ycombinator.com/",  # Hacker News
@@ -155,8 +142,7 @@ def test_real_world_site():
     for site in test_sites:
         print(f"\n测试站点: {site}")
         result = fetch_url.invoke({
-            "url": site,
-            "prefer_jina": True
+            "url": site
         })
         print_result(result)
         if result.get('success'):
@@ -166,8 +152,8 @@ def test_real_world_site():
 
 
 def test_invalid_force_method():
-    """测试 9: 无效的强制方法"""
-    print_separator("测试 9: 无效的强制方法参数")
+    """测试 8: 无效的强制方法"""
+    print_separator("测试 8: 无效的强制方法参数")
 
     result = fetch_url.invoke({
         "url": "https://example.com",
@@ -179,22 +165,9 @@ def test_invalid_force_method():
     print("✅ 正确处理无效的强制方法参数")
 
 
-def test_without_jina_preference():
-    """测试 10: 不优先使用 Jina"""
-    print_separator("测试 10: 不优先使用 Jina Reader")
-
-    result = fetch_url.invoke({
-        "url": "https://example.com",
-        "prefer_jina": False
-    })
-    print_result(result, show_content=True)
-    print(f"使用的方法: {result.get('method')}")
-    return result.get('success', False)
-
-
 def test_hanspub_search_with_verification():
-    """测试 11: 汉斯出版社搜索页面（带验证码，使用浏览器模式）"""
-    print_separator("测试 11: 汉斯出版社搜索 - 反爬虫测试")
+    """测试 9: 汉斯出版社搜索页面（带验证码，使用浏览器模式）"""
+    print_separator("测试 9: 汉斯出版社搜索 - 反爬虫测试")
 
     # 汉斯出版社搜索URL - 神经网络分支动力学分析
     url = "https://www.hanspub.org/journal/articles?searchcode=%e7%a5%9e%e7%bb%8f%e7%bd%91%e7%bb%9c%e5%88%86%e5%b2%94%e5%8a%a8%e5%8a%9b%e5%ad%a6%e5%88%86%e6%9e%90&searchfield=all&page=1"
@@ -252,11 +225,9 @@ def run_all_tests():
     results = {
         "dependency_check": None,
         "simple_website": None,
-        "jina_reader": None,
         "local_parser": None,
         "force_browser": None,
         "chinese_website": None,
-        "without_jina": None,
         "hanspub_search": None,
     }
 
@@ -275,28 +246,22 @@ def run_all_tests():
     # 测试 3: 简单网站
     results["simple_website"] = test_simple_website()
 
-    # 测试 4: 强制使用 Jina Reader
-    results["jina_reader"] = test_jina_reader()
-
-    # 测试 5: 强制使用本地解析器
+    # 测试 4: 强制使用本地解析器
     results["local_parser"] = test_local_parser()
 
-    # 测试 6: 强制使用浏览器
+    # 测试 5: 强制使用浏览器
     results["force_browser"] = test_force_browser()
 
-    # 测试 7: 中文网站
+    # 测试 6: 中文网站
     results["chinese_website"] = test_chinese_website()
 
-    # 测试 8: 真实网站
+    # 测试 7: 真实网站
     test_real_world_site()
 
-    # 测试 9: 无效参数
+    # 测试 8: 无效参数
     test_invalid_force_method()
 
-    # 测试 10: 不优先使用 Jina
-    results["without_jina"] = test_without_jina_preference()
-
-    # 测试 11: 汉斯出版社搜索（反爬虫测试）
+    # 测试 9: 汉斯出版社搜索（反爬虫测试）
     results["hanspub_search"] = test_hanspub_search_with_verification()
 
     # 打印测试总结

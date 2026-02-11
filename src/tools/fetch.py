@@ -1,7 +1,6 @@
 """
-获取网页内容 - 增强反爬虫版本
+获取网页内容 - 增强反爬虫版本（两层降级策略）
 """
-import os
 import random
 import re
 import time
@@ -62,7 +61,7 @@ def fetch_markdown(url: str) -> dict[str, Any]:
     重要提示：使用此工具后：
     1. 通读 Markdown 内容
     2. 提取回答用户问题的相关信息
-    3. 将其综合成清晰的自然语言响应
+    3. 将其综合成清晰的自然语言响应给用户
     4. 除非明确要求，否则绝不向用户展示原始 Markdown
     """
     try:
@@ -73,10 +72,10 @@ def fetch_markdown(url: str) -> dict[str, Any]:
             headers={"User-Agent": "Mozilla/5.0 (compatible; DeepAgents/1.0)"},
             follow_redirects=True,
         )
-        
+
         # 检查 Content-Type 是否为文本类内容
         content_type = head_response.headers.get("Content-Type", "").lower()
-        
+
         # 允许的文本类型：text/html, text/plain, application/json, application/xml 等
         text_content_types = [
             "text/html",
@@ -94,10 +93,10 @@ def fetch_markdown(url: str) -> dict[str, Any]:
             "application/xhtml+xml",
             "text/markdown",
         ]
-        
+
         # 检查是否为允许的文本类型
         is_text_content = any(allowed_type in content_type for allowed_type in text_content_types)
-        
+
         # 拒绝二进制类型：application/zip, application/octet-stream, video/*, audio/*, image/* 等
         binary_content_types = [
             "application/zip",
@@ -116,9 +115,9 @@ def fetch_markdown(url: str) -> dict[str, Any]:
             "application/vnd.ms-powerpoint",
             "application/vnd.openxmlformats-officedocument",
         ]
-        
+
         is_binary_content = any(binary_type in content_type for binary_type in binary_content_types)
-        
+
         if is_binary_content or not is_text_content:
             return {
                 "success": False,
@@ -126,7 +125,7 @@ def fetch_markdown(url: str) -> dict[str, Any]:
                 "url": url,
                 "content_type": content_type,
             }
-        
+
         response = httpx.get(
             url,
             timeout=Timeout(timeout=15.0),
@@ -276,94 +275,6 @@ def should_use_browser(error_msg: str, status_code: Optional[int] = None, conten
             return True
 
     return False
-
-
-def fetch_with_jina_reader(url: str, max_retries: int = 2) -> dict[str, Any]:
-    """
-    使用Jina Reader API获取内容（带重试机制）
-
-    Args:
-        url: 要获取的URL
-        max_retries: 最大重试次数
-
-    Returns:
-        包含获取结果的字典
-    """
-    for attempt in range(max_retries + 1):
-        try:
-            # Jina Reader API URL
-            jina_url = f"https://r.jina.ai/{url}"
-
-            # 设置请求头
-            headers = {
-                "Accept": "text/markdown",
-                "User-Agent": get_random_user_agent()
-            }
-
-            # 获取API密钥（如果配置了）
-            api_key = os.environ.get("JINA_READER_API_KEY")
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-
-            # 添加随机延迟（重试时）
-            if attempt > 0:
-                delay = random.uniform(1, 3) * attempt
-                time.sleep(delay)
-
-            # 发送请求（30秒超时）
-            response = requests.get(jina_url, headers=headers, timeout=30)
-            response.raise_for_status()
-
-            markdown_content = response.text
-
-            # 从Markdown中提取标题（通常是第一个#标题）
-            title_match = re.search(r'^#\\s+(.+)$', markdown_content, re.MULTILINE)
-            title = title_match.group(1) if title_match else "无标题"
-
-            return {
-                "success": True,
-                "url": url,
-                "title": title,
-                "markdown_content": markdown_content,
-                "status_code": response.status_code,
-                "content_length": len(markdown_content),
-                "method": "jina-reader",
-                "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "message": f"已经使用 Jina Reader 成功获取 {url} 的内容。"
-            }
-
-        except requests.exceptions.Timeout:
-            if attempt == max_retries:
-                return {
-                    "success": False,
-                    "error": f"Jina Reader请求超时（{30 + attempt * 10}秒）",
-                    "url": url,
-                    "method": "jina-reader"
-                }
-        except requests.exceptions.RequestException as e:
-            if attempt == max_retries:
-                return {
-                    "success": False,
-                    "error": f"Jina Reader获取失败: {str(e)}",
-                    "url": url,
-                    "method": "jina-reader"
-                }
-        except Exception as e:
-            if attempt == max_retries:
-                return {
-                    "success": False,
-                    "error": f"Jina Reader获取失败: {str(e)}",
-                    "url": url,
-                    "method": "jina-reader"
-                }
-
-    # 不应该到达这里
-    return {
-        "success": False,
-        "error": "Jina Reader获取失败：未知错误",
-        "url": url,
-        "method": "jina-reader"
-    }
 
 
 def fetch_with_local_parser(url: str, use_session: bool = True) -> dict[str, Any]:
@@ -663,13 +574,12 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         }
 
 
-def fetch_web_content(url: str, prefer_jina: bool = True) -> dict[str, Any]:
+def fetch_web_content(url: str) -> dict[str, Any]:
     """
-    智能获取网页内容（三层降级策略：Jina → 本地 → Playwright）
+    智能获取网页内容（两层降级策略：本地解析 → Playwright 浏览器）
 
     Args:
         url: 要获取的URL
-        prefer_jina: 是否优先使用Jina Reader
 
     Returns:
         包含获取结果的字典
@@ -681,56 +591,35 @@ def fetch_web_content(url: str, prefer_jina: bool = True) -> dict[str, Any]:
             "url": url
         }
 
-    if prefer_jina:
-        # 第一层：尝试Jina Reader
-        jina_result = fetch_with_jina_reader(url)
-        if jina_result["success"]:
-            return jina_result
+    # 第一层：尝试本地解析器（快速，资源占用少）
+    local_result = fetch_with_local_parser(url)
+    if local_result["success"]:
+        return local_result
 
-        # 第二层：尝试本地解析
-        local_result = fetch_with_local_parser(url)
-        if local_result["success"]:
-            return local_result
-
-        # 判断是否需要使用浏览器模式
-        if (should_use_browser(jina_result.get("error", "")) or
-            should_use_browser(local_result.get("error", ""))):
-            # 第三层：使用Playwright浏览器
-            browser_result = fetch_with_playwright(url)
-            if browser_result["success"]:
-                return browser_result
-            else:
-                return {
-                    "success": False,
-                    "error": f"所有方法都失败了。Jina: {jina_result.get('error')}, 本地: {local_result.get('error')}, 浏览器: {browser_result.get('error')}",
-                    "url": url
-                }
+    # 判断是否需要使用浏览器模式
+    if should_use_browser(local_result.get("error", "")):
+        # 第二层：使用Playwright浏览器（处理动态页面和反爬）
+        browser_result = fetch_with_playwright(url)
+        if browser_result["success"]:
+            return browser_result
         else:
             return {
                 "success": False,
-                "error": f"Jina和本地解析都失败了。Jina: {jina_result.get('error')}, 本地: {local_result.get('error')}",
+                "error": f"所有方法都失败了。本地: {local_result.get('error')}, 浏览器: {browser_result.get('error')}",
                 "url": url
             }
     else:
-        # 如果不优先使用Jina，直接从本地解析开始
-        local_result = fetch_with_local_parser(url)
-        if local_result["success"]:
-            return local_result
-
-        if should_use_browser(local_result.get("error", "")):
-            return fetch_with_playwright(url)
-        else:
-            return local_result
+        # 本地解析失败，且不需要浏览器模式
+        return local_result
 
 
 @tool(parse_docstring=True)
-def fetch_url(url: str, prefer_jina: bool = True, force_method: Optional[str] = None) -> dict[str, Any]:
-    """智能获取网页内容并转换为 Markdown 格式（三层降级策略 + 反爬虫增强 + playwright-stealth）。
+def fetch_url(url: str, force_method: Optional[str] = None) -> dict[str, Any]:
+    """智能获取网页内容并转换为 Markdown 格式（两层降级策略 + 反爬虫增强 + playwright-stealth）。
 
-    该工具实现了强大的网页内容获取功能，支持三层智能降级策略：
-    1. **Jina Reader API** - 最优选择，处理复杂网页和受限网站（带重试机制）
-    2. **本地解析器** - 备选方案，处理普通HTML页面（模拟真实浏览器请求）
-    3. **Playwright 浏览器** - 最后手段，突破 Cloudflare 等访问限制（playwright-stealth 完美隐藏指纹）
+    该工具实现了强大的网页内容获取功能，支持两层智能降级策略：
+    1. **本地解析器** - 首选方案，快速处理普通HTML页面（模拟真实浏览器请求）
+    2. **Playwright 浏览器** - 备选方案，突破 Cloudflare 等访问限制（playwright-stealth 完美隐藏指纹）
 
     反爬虫特性：
     - 🎭 随机 User-Agent 池（模拟 Chrome/Safari/Firefox 等浏览器）
@@ -739,7 +628,6 @@ def fetch_url(url: str, prefer_jina: bool = True, force_method: Optional[str] = 
     - 🍪 会话管理（支持 Cookie 和连接复用）
     - 🛡️ playwright-stealth 插件（完美抹除浏览器指纹，可选）
     - 🖱️ 浏览器指纹模拟（隐藏 webdriver 特征，未安装 stealth 时使用）
-    - 🔄 自动重试机制（处理临时网络问题）
 
     playwright-stealth 功能（需额外安装）：
     - ✅ 完美隐藏 navigator.webdriver
@@ -757,8 +645,7 @@ def fetch_url(url: str, prefer_jina: bool = True, force_method: Optional[str] = 
 
     Args:
         url: 要获取的 URL（必须是有效的 HTTP/HTTPS URL）
-        prefer_jina: 是否优先使用 Jina Reader（默认为 True）
-        force_method: 强制使用特定方法，可选值：'jina', 'local', 'browser'（默认为 None，使用智能降级）
+        force_method: 强制使用特定方法，可选值：'local', 'browser'（默认为 None，使用智能降级）
 
     Returns:
         包含以下内容的字典：
@@ -768,7 +655,7 @@ def fetch_url(url: str, prefer_jina: bool = True, force_method: Optional[str] = 
         - markdown_content: 转换为 Markdown 的页面内容
         - status_code: HTTP 状态码（如果可用）
         - content_length: Markdown 内容的字符长度
-        - method: 使用的解析方法（'jina-reader', 'local-parser', 'playwright-browser'）
+        - method: 使用的解析方法（'local-parser', 'playwright-browser'）
         - fetched_at: 获取时间
         - message: 结果消息
         - error: 错误信息（如果失败）
@@ -799,21 +686,19 @@ def fetch_url(url: str, prefer_jina: bool = True, force_method: Optional[str] = 
     try:
         # 如果指定了强制方法
         if force_method:
-            if force_method == 'jina':
-                return fetch_with_jina_reader(url)
-            elif force_method == 'local':
+            if force_method == 'local':
                 return fetch_with_local_parser(url)
             elif force_method == 'browser':
                 return fetch_with_playwright(url)
             else:
                 return {
                     "success": False,
-                    "error": f"无效的强制方法: {force_method}。可选值：'jina', 'local', 'browser'",
+                    "error": f"无效的强制方法: {force_method}。可选值：'local', 'browser'",
                     "url": url
                 }
 
         # 使用智能降级策略
-        return fetch_web_content(url, prefer_jina)
+        return fetch_web_content(url)
 
     except Exception as e:
         return {
