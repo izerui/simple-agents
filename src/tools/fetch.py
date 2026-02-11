@@ -623,10 +623,25 @@ def fetch_web_content(url: str) -> dict[str, Any]:
         if browser_result["success"]:
             return browser_result
         else:
+            # 构建更详细的错误信息
+            errors = []
+            if local_result.get("error"):
+                errors.append(f"本地解析器: {local_result.get('error')}")
+            if browser_result.get("error"):
+                errors.append(f"浏览器模式: {browser_result.get('error')}")
+
+            error_msg = "无法获取页面内容。" + " ".join(errors)
+
             return {
                 "success": False,
-                "error": f"所有方法都失败了。本地: {local_result.get('error')}, 浏览器: {browser_result.get('error')}",
-                "url": url
+                "error": error_msg,
+                "url": url,
+                "suggestions": [
+                    "检查 URL 是否正确",
+                    "确认网站是否可访问",
+                    "某些网站可能需要登录或有访问限制",
+                    "如果是动态页面，请尝试强制使用浏览器模式: force_method='browser'"
+                ]
             }
     else:
         # 本地解析失败，且不需要浏览器模式
