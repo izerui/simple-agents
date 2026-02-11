@@ -244,7 +244,15 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 # 获取页面标题
                 title = page.title() or "无标题"
 
-                # 移除不需要的元素
+                # 先截图（此时页面完整，包含 header 等所有元素）
+                screenshot_uuid = str(uuid.uuid4())
+                screenshot_filename = f".capture/{screenshot_uuid}.png"
+                screenshot_path = backend._resolve_path(screenshot_filename)
+                screenshot_bytes = page.screenshot(full_page=True)
+                with open(screenshot_path, 'wb') as f:
+                    f.write(screenshot_bytes)
+
+                # 移除不需要的元素（仅影响文本提取，不影响截图）
                 page.evaluate("""
                     () => {
                         const elementsToRemove = document.querySelectorAll(
@@ -278,16 +286,6 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 cleaned_content = re.sub(r'\n{3,}', '\n\n', markdown_content)
                 cleaned_content = re.sub(r'^\s+$/gm', '', cleaned_content)
                 cleaned_content = cleaned_content.strip()
-
-                # 截图功能 - 使用 backend._resolve_path 获取路径并直接写入
-                screenshot_uuid = str(uuid.uuid4())
-                screenshot_filename = f".capture/{screenshot_uuid}.png"
-                screenshot_path = backend._resolve_path(screenshot_filename)
-
-                # 截图并写入文件
-                screenshot_bytes = page.screenshot(full_page=True)
-                with open(screenshot_path, 'wb') as f:
-                    f.write(screenshot_bytes)
 
                 return {
                     "success": True,
