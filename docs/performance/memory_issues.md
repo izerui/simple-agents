@@ -72,7 +72,8 @@
 from src.tools.fetch import fetch_url
 
 result = fetch_url("https://example.com")
-print(result["markdown_content"])
+# 内容已保存到文件，请读取 file_path 指定的文件
+print(f"内容已保存到: {result['file_path']}")
 
 # 手动获取浏览器池状态
 from src.tools.fetch import get_global_browser_pool
@@ -127,7 +128,11 @@ def test_browser_pool_basic():
 def test_fetch_with_pool():
     result = fetch_with_playwright("https://example.com")
     assert result["success"] is True
-    assert "markdown_content" in result
+    assert "file_path" in result
+    # 内容已保存到文件，可以验证文件存在
+    import os
+    file_path = result["file_path"].lstrip("/")
+    assert os.path.exists(file_path)
 ```
 
 **监控和日志**:

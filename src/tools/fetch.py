@@ -996,15 +996,34 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         cleaned_content = re.sub(r'^\s+$/gm', '', cleaned_content)
         cleaned_content = cleaned_content.strip()
 
+        # 创建 fetch_markdown 目录
+        markdown_dir = backend._resolve_path("fetch_markdown")
+        os.makedirs(markdown_dir, exist_ok=True)
+
+        # 生成文件名：title + 5位随机字符串
+        # 清理 title，移除不适合文件名的字符
+        safe_title = re.sub(r'[<>:"/\\|?*]', '_', title)
+        safe_title = re.sub(r'\s+', '_', safe_title)
+        random_suffix = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=5))
+        markdown_filename = f"{safe_title}_{random_suffix}.md"
+        markdown_file_path = os.path.join(markdown_dir, markdown_filename)
+
+        # 将 markdown 内容写入文件
+        with open(markdown_file_path, 'w', encoding='utf-8') as f:
+            f.write(cleaned_content)
+
+        # 计算相对路径用于返回
+        relative_file_path = f"/fetch_markdown/{markdown_filename}"
+
         return {
             "success": True,
             "url": url,
             "title": title,
-            "markdown_content": cleaned_content,
+            "file_path": relative_file_path,
             "content_length": len(cleaned_content),
             "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "url_capture": f"/{screenshot_filename}",
-            "message": f"已经成功获取 {url} 的内容。"
+            "message": f"已成功获取 {url} 的内容，并保存到 {relative_file_path}"
         }
 
     except RuntimeError as e:
@@ -1108,11 +1127,10 @@ def fetch_url(url: str) -> dict[str, Any]:
     4. 截图并提取内容
 
     使用指南：
-    1. 获取内容后，仔细阅读 markdown_content 字段
-    2. 提取用户需要的信息
-    3. 用清晰、自然的语言总结和呈现给用户
-    4. 不要直接展示原始 Markdown 代码，除非用户明确要求
-    5. 如果内容很长，提取关键信息进行总结
+    1. 获取内容后，根据 file_path 字段读取保存的 markdown 文件
+    2. 提取用户需要的信息，用清晰、自然的语言总结和呈现给用户
+    3. 不要直接展示原始 Markdown 代码，除非用户明确要求
+    4. 如果内容很长，提取关键信息进行总结
 
     Args:
         url: 要获取的网页地址（必须是 http:// 或 https:// 开头的有效 URL）
@@ -1120,7 +1138,7 @@ def fetch_url(url: str) -> dict[str, Any]:
     Returns:
         包含网页信息的字典，主要字段：
         - success: 是否成功获取内容（True/False）
-        - markdown_content: 网页内容的 Markdown 格式文本（这是你最需要的字段）
+        - file_path: markdown 文件的路径（内容已保存到此文件，请使用 read_tool 读取）
         - title: 网页标题
         - url: 最终访问的 URL
         - content_length: Markdown 内容的字符长度

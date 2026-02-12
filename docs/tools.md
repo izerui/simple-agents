@@ -56,7 +56,7 @@ def think_tool(reflection: str) -> str:
 | **函数签名** | `fetch_markdown(url: str, timeout: int = 30) -> dict[str, Any]` |
 | **装饰器** | `@tool(parse_docstring=True, return_direct=True)` |
 | **参数** | - `url` (str)：要获取的 URL<br>- `timeout` (int)：请求超时时间（秒），默认 30 |
-| **返回值** | `dict`：<br>- `success`: 请求是否成功<br>- `url`: 重定向后的最终 URL<br>- `markdown_content`: 转换后的 Markdown 内容<br>- `status_code`: HTTP 状态码<br>- `content_length`: Markdown 内容字符长度 |
+| **返回值** | `dict`：<br>- `success`: 请求是否成功<br>- `url`: 重定向后的最终 URL<br>- `file_path`: markdown 文件路径（内容已保存到此文件）<br>- `title`: 网页标题<br>- `status_code`: HTTP 状态码<br>- `content_length`: Markdown 内容字符长度 |
 | **特性** | - 自动跟随重定向<br>- 使用 User-Agent 伪装<br>- 支持 HTML 转 Markdown |
 | **传递方式** | 通过 `create_deep_agent(tools=[fetch_markdown, ...])` 显式传递 |
 

@@ -25,16 +25,23 @@ def print_result(result: dict, show_content: bool = False):
     print(f"📏 Content Length: {result.get('content_length', 'N/A')} chars")
     print(f"⏰ Fetched At: {result.get('fetched_at', 'N/A')}")
     print(f"💬 Message: {result.get('message', 'N/A')}")
+    print(f"📁 File Path: {result.get('file_path', 'N/A')}")
 
     if not result.get('success'):
         print(f"❌ Error: {result.get('error', 'Unknown error')}")
 
-    if show_content and result.get('markdown_content'):
-        content = result['markdown_content']
-        print(f"\n📄 Content Preview (first 300 chars):")
-        print("-" * 40)
-        print(content[:300] + "..." if len(content) > 300 else content)
-        print("-" * 40)
+    if show_content and result.get('file_path'):
+        # 读取文件内容
+        file_path = result['file_path'].lstrip('/')
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            print(f"\n📄 Content Preview (first 300 chars):")
+            print("-" * 40)
+            print(content[:300] + "..." if len(content) > 300 else content)
+            print("-" * 40)
+        except Exception as e:
+            print(f"\n❌ 无法读取文件: {e}")
 
 
 def test_dependencies():
@@ -185,7 +192,14 @@ def test_hanspub_search_with_verification():
     print_result(result)
 
     if result.get('success'):
-        content = result.get('markdown_content', '')
+        # 从文件中读取内容
+        file_path = result.get('file_path', '').lstrip('/')
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception as e:
+            print(f"❌ 无法读取文件: {e}")
+            return False
 
         # 检查是否成功绕过验证码
         if '验证' in content or 'captcha' in content.lower() or 'verify' in content.lower():
