@@ -907,17 +907,43 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
 
         # 只等待DOM加载完成
         page.goto(url, wait_until="domcontentloaded", timeout=15000)
-        
-        # 短暂等待确保JS开始执行
-        page.wait_for_timeout(1000)  # 只等1秒
 
-        # 模拟鼠标移动（可选，增加真实性）
+        # 随机等待时间，模拟人类行为
+        random_wait = random.uniform(1.5, 3.0)
+        page.wait_for_timeout(int(random_wait * 1000))
+
+        # 检测是否遇到 CAPTCHA 验证页面
+        page_content = page.content()
+        if "请解决以下难题以继续" in page_content or "Please verify" in page_content:
+            logger.warning(f"检测到 CAPTCHA 验证页面: {url}")
+            return {
+                "success": False,
+                "error": "Bing 触发了人机验证（CAPTCHA），请稍后重试或使用其他搜索方式",
+                "url": url,
+                "is_captcha": True,
+                "captcha_detected": True
+            }
+
+        # 模拟人类鼠标移动行为
         try:
-            page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+            # 多次随机鼠标移动
+            for _ in range(random.randint(2, 4)):
+                page.mouse.move(random.randint(50, 800), random.randint(50, 600))
+                page.wait_for_timeout(random.randint(50, 150))
         except Exception:
             pass
 
-        # 再次检查页面是否完全加载（避免截图时页面还在渲染）
+        # 等待页面内容稳定后再截图（通用处理）
+        # 模拟滚动以触发懒加载内容
+        try:
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+            page.wait_for_timeout(300)
+            page.evaluate("window.scrollTo(0, 0)")
+            page.wait_for_timeout(300)
+        except Exception:
+            pass
+
+        # 等待图片加载完成
         try:
             page.wait_for_function(
                 """() => {
@@ -925,11 +951,14 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                     const loadingImgs = Array.from(imgs).filter(img => !img.complete);
                     return loadingImgs.length === 0;
                 }""",
-                timeout=1000
+                timeout=2000
             )
         except Exception:
             logger.debug("图片加载检查超时，继续执行")
-        
+
+        # 额外等待确保页面稳定
+        page.wait_for_timeout(1000)
+
         # 获取页面标题
         title = page.title() or "无标题"
         
