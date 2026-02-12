@@ -920,16 +920,16 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 "captcha_detected": True
             }
 
-        # 模拟人类鼠标移动行为（1秒内随机移动多次）
+        # 模拟人类鼠标移动行为（0.5秒内随机移动多次）
         try:
-            # 在1秒内进行多次随机鼠标移动
-            end_time = time.time() + 1.0
+            # 在0.5秒内进行多次随机鼠标移动
+            end_time = time.time() + 0.5
             move_count = 0
             while time.time() < end_time:
                 page.mouse.move(random.randint(50, 800), random.randint(50, 600))
                 move_count += 1
-                # 每次移动后短暂随机延迟（50-150ms）
-                page.wait_for_timeout(random.randint(50, 150))
+                # 每次移动后短暂随机延迟（30-80ms）
+                page.wait_for_timeout(random.randint(30, 80))
             logger.debug(f"鼠标移动完成，共移动 {move_count} 次")
         except Exception:
             pass
@@ -938,9 +938,9 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         # 模拟滚动以触发懒加载内容
         try:
             page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(100)
             page.evaluate("window.scrollTo(0, 0)")
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(100)
         except Exception:
             pass
 
@@ -952,7 +952,7 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                     const loadingImgs = Array.from(imgs).filter(img => !img.complete);
                     return loadingImgs.length === 0;
                 }""",
-                timeout=2000
+                timeout=500
             )
         except Exception:
             logger.debug("图片加载检查超时，继续执行")
@@ -1113,10 +1113,6 @@ def fetch_url(url: str) -> dict[str, Any]:
     3. 用清晰、自然的语言总结和呈现给用户
     4. 不要直接展示原始 Markdown 代码，除非用户明确要求
     5. 如果内容很长，提取关键信息进行总结
-
-    搜索功能：
-    当用户需要进行搜索时，参考 /skills/bing-search/SKILL.md 技能文档
-    构建 Bing 搜索 URL，然后使用此工具获取搜索结果。
 
     Args:
         url: 要获取的网页地址（必须是 http:// 或 https:// 开头的有效 URL）
