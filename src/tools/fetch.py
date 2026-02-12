@@ -927,6 +927,7 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         except Exception:
             logger.warning("网络未完全空闲，但继续执行")
         
+
         # 模拟鼠标移动（可选，增加真实性）
         try:
             page.mouse.move(random.randint(100, 500), random.randint(100, 500))
@@ -941,27 +942,17 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                     const loadingImgs = Array.from(imgs).filter(img => !img.complete);
                     return loadingImgs.length === 0;
                 }""",
-                timeout=5000
+                timeout=3000
             )
         except Exception:
             logger.debug("图片加载检查超时，继续执行")
         
         # 额外等待确保页面稳定
-        page.wait_for_timeout(1000)
+        page.wait_for_timeout(500)
 
         # 获取页面标题
         title = page.title() or "无标题"
         
-        # 检查页面内容是否为空或异常
-        page_content = page.content()
-        if len(page_content) < 1000:
-            logger.warning(f"页面内容过短 ({len(page_content)} 字符)，可能未完全加载")
-            # 重试等待并重新获取内容
-            page.wait_for_timeout(3000)
-            page_content = page.content()
-            if len(page_content) < 1000:
-                logger.error(f"页面内容仍然过短 ({len(page_content)} 字符)，可能存在加载问题")
-
         # 智能截图：控制截图大小
         screenshot_uuid = str(uuid.uuid4())
         screenshot_filename = f".capture/{screenshot_uuid}.png"
@@ -987,7 +978,6 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         del screenshot_bytes
         screenshot_bytes = None  # noqa: F841 - 有意设置为 None 以帮助垃圾回收
 
-        # 移除不需要的元素（仅影响文本提取，不影响截图）
         # 先等待页面稳定
         page.wait_for_timeout(1000)
         
