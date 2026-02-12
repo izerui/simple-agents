@@ -908,10 +908,6 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         # 只等待DOM加载完成
         page.goto(url, wait_until="domcontentloaded", timeout=15000)
 
-        # 随机等待时间，模拟人类行为
-        random_wait = random.uniform(1.5, 3.0)
-        page.wait_for_timeout(int(random_wait * 1000))
-
         # 检测是否遇到 CAPTCHA 验证页面
         page_content = page.content()
         if "请解决以下难题以继续" in page_content or "Please verify" in page_content:
@@ -924,12 +920,17 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 "captcha_detected": True
             }
 
-        # 模拟人类鼠标移动行为
+        # 模拟人类鼠标移动行为（1秒内随机移动多次）
         try:
-            # 多次随机鼠标移动
-            for _ in range(random.randint(2, 4)):
+            # 在1秒内进行多次随机鼠标移动
+            end_time = time.time() + 1.0
+            move_count = 0
+            while time.time() < end_time:
                 page.mouse.move(random.randint(50, 800), random.randint(50, 600))
+                move_count += 1
+                # 每次移动后短暂随机延迟（50-150ms）
                 page.wait_for_timeout(random.randint(50, 150))
+            logger.debug(f"鼠标移动完成，共移动 {move_count} 次")
         except Exception:
             pass
 
@@ -955,9 +956,6 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
             )
         except Exception:
             logger.debug("图片加载检查超时，继续执行")
-
-        # 额外等待确保页面稳定
-        page.wait_for_timeout(1000)
 
         # 获取页面标题
         title = page.title() or "无标题"
