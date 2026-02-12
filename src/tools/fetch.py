@@ -1,18 +1,12 @@
 """
-获取网页内容 - 使用 Playwright 异步浏览器模式
-
-使用 asyncio 隔离 Playwright 操作，避免与 greenlet/gevent 冲突。
-全局维护独立的异步 browser 实例，支持高并发。
+获取网页内容 - 使用 Playwright 浏览器模式
 """
-import asyncio
 import random
 import re
 import time
 import uuid
-from pathlib import Path
 from typing import Any, Optional
 
-import aiofiles
 from langchain_core.tools import tool
 from markdownify import markdownify
 
@@ -23,63 +17,11 @@ PLAYWRIGHT_AVAILABLE = True
 PLAYWRIGHT_STEALTH_AVAILABLE = False
 
 try:
-    from playwright.async_api import async_playwright, Browser
+    from playwright.sync_api import sync_playwright
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
-    async_playwright = None
-    Browser = None
+    sync_playwright = None
 
-
-# ==================== 异步 Playwright 管理 ====================
-
-# 全局异步 browser 实例
-_playwright_obj = None
-_browser: Optional[Browser] = None
-_lock = asyncio.Lock()
-_lock_initialized = False
-
-
-async def get_browser() -> Optional[Browser]:
-    """获取全局异步浏览器实例（单例模式）"""
-    global _playwright_obj, _browser, _lock_initialized
-    if not PLAYWRIGHT_AVAILABLE:
-        return None
-
-    if _browser is None:
-        async with _lock:
-            if _browser is None:  # 双重检查
-                # 使用 async with 获取 Playwright 对象，并存储引用
-                async with async_playwright() as p:
-                    _playwright_obj = p
-                    _browser = await p.chromium.launch(
-                        headless=True,
-                        args=[
-                            '--no-sandbox',
-                            '--disable-dev-shm-usage',
-                            '--disable-blink-features=AutomationControlled',
-                            '--disable-features=IsolateOrigins,site-per-process',
-                            '--disable-site-isolation-trials',
-                            '--disable-web-security',
-                            '--disable-features=VizDisplayCompositor',
-                        ]
-                    )
-                # 注意：不在这里退出 async with，保持 _playwright_obj 引用有效
-                # 这样浏览器会在 cleanup_browser() 时才关闭
-    return _browser
-
-
-async def cleanup_browser():
-    """清理 Playwright 和浏览器资源"""
-    global _playwright_obj, _browser
-    if _browser is not None:
-        await _browser.close()
-        _browser = None
-    if _playwright_obj is not None:
-        await _playwright_obj.stop()
-        _playwright_obj = None
-
-
-# 检查异步 playwright-stealth
 try:
     from playwright_stealth import Stealth
     PLAYWRIGHT_STEALTH_AVAILABLE = True
@@ -171,7 +113,7 @@ def is_valid_url(url: str) -> bool:
         return False
 
 
-async def fetch_with_playwright(url: str) -> dict[str, Any]:
+def fetch_with_playwright(url: str) -> dict[str, Any]:
     """
     使用Playwright获取网页内容（增强反爬虫版本 + playwright-stealth）
 
@@ -198,172 +140,180 @@ async def fetch_with_playwright(url: str) -> dict[str, Any]:
     backend = get_backend_per_thread({})
 
     try:
-        browser = await get_browser()
-        if browser is None:
-            return {
-                "success": False,
-                "error": "Playwright 未初始化",
-                "url": url
-            }
+        with sync_playwright() as p:
+            # 获取随机User-Agent
+            user_agent = get_random_user_agent()
 
-        # 获取随机User-Agent
-        user_agent = get_random_user_agent()
+            # 随机视口大小（常见分辨率）
+            viewports = [
+                {"width": 1920, "height": 1080},
+                {"width": 1680, "height": 1050},
+                {"width": 1440, "height": 900},
+                {"width": 1366, "height": 768},
+                {"width": 1536, "height": 864},
+            ]
+            viewport = random.choice(viewports)
 
-        # 随机视口大小（常见分辨率）
-        viewports = [
-            {"width": 1920, "height": 1080},
-            {"width": 1680, "height": 1050},
-            {"width": 1440, "height": 900},
-            {"width": 1366, "height": 768},
-            {"width": 1536, "height": 864},
-        ]
-        viewport = random.choice(viewports)
-
-        context = None
-        page = None
-        try:
-            # 创建独立的浏览器上下文（类似隐身模式，完全隔离）
-            context = await browser.new_context(
-                viewport=viewport,
-                user_agent=user_agent,
-                locale='zh-CN',
-                timezone_id='Asia/Shanghai',
+            # 启动浏览器（更多反检测参数）
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--disable-site-isolation-trials',
+                    '--disable-web-security',
+                    '--disable-features=VizDisplayCompositor',
+                ]
             )
-            # 从上下文创建新页面
-            page = await context.new_page()
 
-            # 使用 playwright-stealth 隐藏浏览器指纹
-            if PLAYWRIGHT_STEALTH_AVAILABLE:
-                stealth = Stealth()
-                await stealth.apply_stealth_async(page)
+            context = None
+            page = None
+            try:
+                # 创建浏览器上下文（更好的资源隔离和管理）
+                context = browser.new_context(
+                    viewport=viewport,
+                    user_agent=user_agent,
+                    # 禁用一些不必要的功能以减少内存占用
+                    service_workers="block",
+                    bypass_csp=True
+                )
 
-            # 设置额外的请求头
-            headers = get_realistic_headers(url)
-            await page.set_extra_http_headers({
-                k: v for k, v in headers.items()
-                if k not in ['User-Agent', 'Accept-Encoding']  # 避免重复
-            })
+                # 在上下文中创建新页面
+                page = context.new_page()
 
-            # 如果没有 playwright-stealth，使用自定义脚本
-            if not PLAYWRIGHT_STEALTH_AVAILABLE:
-                await page.add_init_script("""
-                    // 覆盖navigator.webdriver
-                    Object.defineProperty(navigator, 'webdriver', {
-                        get: () => undefined
-                    });
+                # 使用 playwright-stealth 隐藏浏览器指纹
+                if PLAYWRIGHT_STEALTH_AVAILABLE:
+                    stealth = Stealth()
+                    stealth.apply_stealth_sync(page)
 
-                    // 覆盖chrome对象
-                    window.chrome = {
-                        runtime: {}
-                    };
+                # 设置额外的请求头
+                headers = get_realistic_headers(url)
+                page.set_extra_http_headers({
+                    k: v for k, v in headers.items()
+                    if k not in ['User-Agent', 'Accept-Encoding']  # 避免重复
+                })
 
-                    // 覆盖permissions
-                    const originalQuery = window.navigator.permissions.query;
-                    window.navigator.permissions.query = (parameters) => (
-                        parameters.name === 'notifications' ?
-                            Promise.resolve({ state: Notification.permission }) :
-                            originalQuery(parameters)
-                    );
+                # 如果没有 playwright-stealth，使用自定义脚本
+                if not PLAYWRIGHT_STEALTH_AVAILABLE:
+                    page.add_init_script("""
+                        // 覆盖navigator.webdriver
+                        Object.defineProperty(navigator, 'webdriver', {
+                            get: () => undefined
+                        });
 
-                    // 覆盖plugins
-                    Object.defineProperty(navigator, 'plugins', {
-                        get: () => [1, 2, 3, 4, 5]
-                    });
+                        // 覆盖chrome对象
+                        window.chrome = {
+                            runtime: {}
+                        };
 
-                    // 覆盖languages
-                    Object.defineProperty(navigator, 'languages', {
-                        get: () => ['zh-CN', 'zh', 'en']
-                    });
+                        // 覆盖permissions
+                        const originalQuery = window.navigator.permissions.query;
+                        window.navigator.permissions.query = (parameters) => (
+                            parameters.name === 'notifications' ?
+                                Promise.resolve({ state: Notification.permission }) :
+                                originalQuery(parameters)
+                        );
+
+                        // 覆盖plugins
+                        Object.defineProperty(navigator, 'plugins', {
+                            get: () => [1, 2, 3, 4, 5]
+                        });
+
+                        // 覆盖languages
+                        Object.defineProperty(navigator, 'languages', {
+                            get: () => ['zh-CN', 'zh', 'en']
+                        });
+                    """)
+
+                # 加载所有资源，仅阻止媒体文件（视频/音频）
+                def route_handler(route):
+                    resource_type = route.request.resource_type
+                    if resource_type == 'media':
+                        route.abort()
+                    else:
+                        route.continue_()
+
+                page.route("**/*", route_handler)
+
+                # 导航到页面（30秒超时）
+                page.goto(url, timeout=30000, wait_until="domcontentloaded")
+
+                # 随机等待时间，模拟人类阅读
+                page.wait_for_timeout(random.randint(1500, 3000))
+
+                # 模拟鼠标移动（可选，增加真实性）
+                try:
+                    page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+                except Exception:
+                    pass
+
+                # 获取页面标题
+                title = page.title() or "无标题"
+
+                # 先截图（此时页面完整，包含 header 等所有元素）
+                screenshot_uuid = str(uuid.uuid4())
+                screenshot_filename = f".capture/{screenshot_uuid}.png"
+                screenshot_path = backend._resolve_path(screenshot_filename)
+                screenshot_bytes = page.screenshot(full_page=True)
+                with open(screenshot_path, 'wb') as f:
+                    f.write(screenshot_bytes)
+
+                # 移除不需要的元素（仅影响文本提取，不影响截图）
+                page.evaluate("""
+                    () => {
+                        const elementsToRemove = document.querySelectorAll(
+                            'script, style, nav, header, footer, aside, .advertisement, .ads, .sidebar, .comments, .social-share'
+                        );
+                        elementsToRemove.forEach(el => el.remove());
+                    }
                 """)
 
-            # 加载所有资源，仅阻止媒体文件（视频/音频）
-            def route_handler(route):
-                resource_type = route.request.resource_type
-                if resource_type == 'media':
-                    route.abort()
-                else:
-                    route.continue_()
+                # 获取主要内容
+                main_content_html = page.evaluate("""
+                    () => {
+                        const mainContent =
+                            document.querySelector('main') ||
+                            document.querySelector('article') ||
+                            document.querySelector('[role="main"]') ||
+                            document.querySelector('.content') ||
+                            document.querySelector('#content') ||
+                            document.querySelector('.post') ||
+                            document.querySelector('.entry-content') ||
+                            document.body;
 
-            await page.route("**/*", route_handler)
+                        return mainContent ? mainContent.innerHTML : document.body.innerHTML;
+                    }
+                """)
 
-            # 导航到页面（30秒超时）
-            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+                # 转换为Markdown
+                markdown_content = markdownify(main_content_html)
 
-            # 随机等待时间，模拟人类阅读
-            await page.wait_for_timeout(random.randint(1500, 3000))
+                # 清理内容
+                cleaned_content = re.sub(r'\n{3,}', '\n\n', markdown_content)
+                cleaned_content = re.sub(r'^\s+$/gm', '', cleaned_content)
+                cleaned_content = cleaned_content.strip()
 
-            # 模拟鼠标移动（可选，增加真实性）
-            try:
-                await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
-            except Exception:
-                pass
-
-            # 获取页面标题
-            title = await page.title() or "无标题"
-
-            # 先截图（此时页面完整，包含 header 等所有元素）
-            screenshot_uuid = str(uuid.uuid4())
-            screenshot_filename = f".capture/{screenshot_uuid}.png"
-            screenshot_path = backend._resolve_path(screenshot_filename)
-            screenshot_bytes = await page.screenshot(full_page=True)
-            # 确保目录存在（完全异步，在线程池中执行）
-            screenshot_dir = Path(screenshot_path).parent
-            await asyncio.to_thread(screenshot_dir.mkdir, parents=True, exist_ok=True)
-            # 使用 aiofiles 异步写入，避免阻塞事件循环
-            async with aiofiles.open(screenshot_path, 'wb') as f:
-                await f.write(screenshot_bytes)
-
-            # 移除不需要的元素（仅影响文本提取，不影响截图）
-            await page.evaluate("""
-                () => {
-                    const elementsToRemove = document.querySelectorAll(
-                        'script, style, nav, header, footer, aside, .advertisement, .ads, .sidebar, .comments, .social-share'
-                    );
-                    elementsToRemove.forEach(el => el.remove());
+                return {
+                    "success": True,
+                    "url": url,
+                    "title": title,
+                    "markdown_content": cleaned_content,
+                    "content_length": len(cleaned_content),
+                    "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "url_capture": f"/{screenshot_filename}",
+                    "message": f"已经成功获取 {url} 的内容。"
                 }
-            """)
 
-            # 获取主要内容
-            main_content_html = await page.evaluate("""
-                () => {
-                    const mainContent =
-                        document.querySelector('main') ||
-                        document.querySelector('article') ||
-                        document.querySelector('[role="main"]') ||
-                        document.querySelector('.content') ||
-                        document.querySelector('#content') ||
-                        document.querySelector('.post') ||
-                        document.querySelector('.entry-content') ||
-                        document.body;
-
-                    return mainContent ? mainContent.innerHTML : document.body.innerHTML;
-                }
-            """)
-
-            # 转换为Markdown
-            markdown_content = markdownify(main_content_html)
-
-            # 清理内容
-            cleaned_content = re.sub(r'\n{3,}', '\n\n', markdown_content)
-            cleaned_content = re.sub(r'^\s+$/gm', '', cleaned_content)
-            cleaned_content = cleaned_content.strip()
-
-            return {
-                "success": True,
-                "url": url,
-                "title": title,
-                "markdown_content": cleaned_content,
-                "content_length": len(cleaned_content),
-                "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "url_capture": f"/{screenshot_filename}",
-                "message": f"已经成功获取 {url} 的内容。"
-            }
-
-        finally:
-            if page is not None:
-                await page.close()
-            if context is not None:
-                await context.close()
+            finally:
+                # 关闭上下文会自动关闭所有页面，释放内存
+                if context is not None:
+                    try:
+                        context.close()
+                    except Exception:
+                        pass
+                browser.close()
 
     except Exception as e:
         return {
@@ -374,7 +324,7 @@ async def fetch_with_playwright(url: str) -> dict[str, Any]:
 
 
 @tool(parse_docstring=True)
-async def fetch_url(url: str) -> dict[str, Any]:
+def fetch_url(url: str) -> dict[str, Any]:
     """获取网页内容并转换为易读的 Markdown 格式（使用 Playwright）。
 
     这是一个网页抓取工具，使用浏览器模式获取内容，可以处理各种网站，
@@ -414,5 +364,4 @@ async def fetch_url(url: str) -> dict[str, Any]:
     4. 不要直接展示原始 Markdown 代码，除非用户明确要求
     5. 如果内容很长，提取关键信息进行总结
     """
-    # 使用异步 Playwright，支持高并发且避免与 greenlet/gevent 冲突
-    return await fetch_with_playwright(url)
+    return fetch_with_playwright(url)
