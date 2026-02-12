@@ -945,11 +945,11 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         # 再次检查页面是否完全加载（避免截图时页面还在渲染）
         try:
             page.wait_for_function(
-                "() => {
+                """() => {
                     const imgs = document.querySelectorAll('img');
                     const loadingImgs = Array.from(imgs).filter(img => !img.complete);
                     return loadingImgs.length === 0;
-                }",
+                }""",
                 timeout=5000
             )
         except Exception:

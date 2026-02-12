@@ -231,22 +231,27 @@ Examples:
 
 EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 命令（Python 版本 3.12，支持依赖管理）。
 
-支持的执行格式：
+执行方式优先级（必须严格遵守）：
 
-1. Python 代码执行（三种方式）：
-   - 推荐：使用 heredoc 执行多行代码（支持多行、无需转义引号）
-     示例：
-     ```python
-     python << 'EOF'
-     print("Hello World")
-     for i in range(3):
-         print(f"Number: {i}")
-     EOF
-     ```
-   - 直接执行代码字符串：python -c "code"
-     示例：python -c "print('Hello World')"
-   - 执行脚本文件：python script.py [args...]（支持传递参数）
-     示例：python scripts/my_script.py input.txt output.txt
+🥇 **第一优先级：使用 skill 提供的脚本**
+当使用 skill 技能时，如果 skill 文档中明确建议使用技能内的 script.py 脚本，必须优先直接调用。
+示例：python /skills/skill_name/scripts/script.py [args...]
+
+🥈 **第二优先级：使用 heredoc 执行多行代码**
+当没有合适的 skill 脚本可用时，优先使用 heredoc 方式执行多行代码（支持多行、无需转义引号）。
+示例：
+```python
+python << 'EOF'
+print("Hello World")
+for i in range(3):
+    print(f"Number: {i}")
+EOF
+```
+
+🥉 **第三优先级：其他方式**
+仅在上述方式不适用时使用：
+- python -c "code"：执行简短的单行代码
+- python script.py [args...]：执行自建脚本文件
 
 2. 依赖管理命令（使用 python -m）：
    - python -m pip install <package>（只安装新包）
@@ -257,7 +262,6 @@ EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 命令�
 - 命令在隔离的沙箱环境中运行
 - 返回 stdout/stderr 合并输出及退出码
 - 如果输出过大，可能会被截断
-- 多行代码建议使用 heredoc 方式
 - 建议执行脚本放到 `scripts` 目录下，其生成的文件放在 `outputs` 目录下
 """
 
