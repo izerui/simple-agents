@@ -828,10 +828,9 @@ class CodeExecutor:
         self.readable_paths = [Path(p).resolve() for p in (readable_paths or [])]
 
         # writable_paths 添加白名单，用于解决 os.path.exists() 函数无法访问 /dev/null 等问题
-        #  Path('/var/folders'),  # macOS 临时目录父目录
-        #     Path(tempfile.gettempdir()).resolve(),  # 添加系统临时目录
+        # 注意: 系统路径已经是绝对路径，不需要调用 resolve() 以避免阻塞调用
         self.writable_paths.append(Path('/var/folders'))
-        self.writable_paths.append(Path(tempfile.gettempdir()).resolve())
+        self.writable_paths.append(Path(tempfile.gettempdir()))  # tempfile.gettempdir() 返回绝对路径
         self.writable_paths.append(Path('/private/var/folders'))
 
         # readable_paths 增加白名单，mimetypes 模块需要
@@ -846,7 +845,8 @@ class CodeExecutor:
 
         # 添加 .venv 到只读白名单，python-pptx 等库需要访问模板文件
         # .venv 在项目根目录下，而不是在沙箱 root_dir 下
-        project_root = Path(__file__).parent.parent.parent.resolve()
+        # 注意: 使用 absolute() 而不是 resolve() 以避免阻塞调用
+        project_root = Path(__file__).parent.parent.parent.absolute()
         venv_path = project_root / '.venv'
         if venv_path.exists():
             self.readable_paths.append(venv_path)
