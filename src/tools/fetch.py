@@ -1073,7 +1073,6 @@ def fetch_url(url: str) -> dict[str, Any]:
     - 需要提取网页中的特定信息（如文章、新闻、数据等）
     - 用户提供的 URL 需要访问并获取内容
     - 需要查看动态加载的页面内容
-    - 需要进行搜索时（可使用 Bing 搜索 URL）
 
     工作方式：
     1. 使用浏览器模式加载页面
@@ -1088,39 +1087,9 @@ def fetch_url(url: str) -> dict[str, Any]:
     4. 不要直接展示原始 Markdown 代码，除非用户明确要求
     5. 如果内容很长，提取关键信息进行总结
 
-    搜索结果处理（重要）：
-    当使用 Bing 搜索 URL 获取搜索结果页面时：
-    1. 搜索结果列表中的链接是用来进一步访问和研究用的
-    2. 不要只停留在搜索结果页面，必须继续访问相关链接获取详细信息
-    3. **自行判断结果优先级**：根据标题、摘要、来源权威性判断优先级
-    4. 优先级判断标准：
-       - 来源权威性：官方网站、知名媒体、学术机构优先
-       - 内容相关性：标题和摘要与问题匹配度高优先
-       - 时效性：新闻类问题优先选择最新发布的内容
-       - 内容深度：优先选择看起来有详细内容的页面
-    5. 按优先级依次访问 3-5 个最相关的链接
-    6. 综合多个来源的信息，给出全面准确的回答
-
-    Bing 搜索 URL 拼接说明：
-    当用户需要进行搜索时，可以使用 Bing 搜索 URL：
-
-    基础搜索格式：
-    - 网页搜索: https://www.bing.com/search?q=搜索关键词
-    - 图片搜索: https://www.bing.com/images/search?q=搜索关键词
-    - 视频搜索: https://www.bing.com/videos/search?q=搜索关键词
-    - 新闻搜索: https://www.bing.com/news/search?q=搜索关键词
-    - 地图搜索: https://www.bing.com/maps/search?q=搜索关键词
-
-    注意事项：
-    - 搜索关键词必须进行 URL 编码（使用 urllib.parse.quote）
-    - 只有 q 参数是必需的
-    - form、sp、ghc 等参数是可选的，通常不需要手动添加
-    - **当 Bing 搜索不可用时（如被封锁、加载失败），使用 /skills/tavily-search 技能代替**
-
-    Python 示例：
-    from urllib.parse import quote
-    keyword = "人工智能"
-    url = f"https://www.bing.com/search?q={quote(keyword)}"
+    搜索功能：
+    当用户需要进行搜索时，参考 /skills/bing-search/SKILL.md 技能文档
+    构建 Bing 搜索 URL，然后使用此工具获取搜索结果。
 
     Args:
         url: 要获取的网页地址（必须是 http:// 或 https:// 开头的有效 URL）
