@@ -72,7 +72,7 @@ services:
 
     # 独立的浏览器抓取服务
     browser-service:
-        image: serv999.com/hub/izerui/simple-agents:latest
+        image: serv999.com/hub/izerui/browser-fetch:latest
         ports:
             - "2025:2025"
         environment:
@@ -80,7 +80,6 @@ services:
             BROWSER_SERVICE_HOST: 0.0.0.0
             HEADLESS: "true"
             MAX_CONCURRENT_PAGES: "10"
-        command: ["python", "src/browser_service.py"]
         restart: unless-stopped
         healthcheck:
             test: ["CMD", "curl", "-f", "http://localhost:2025/health"]
