@@ -47,485 +47,571 @@ BROWSER_POOL_MAX_REUSE = int(os.getenv('BROWSER_POOL_MAX_REUSE', '10'))  # 浏�
 
 
 class BrowserPool:
+    """
+    Playwright 浏览器连接池，用于复用浏览器实例以提高性能并减少内存占用。
+
+    功能特性：
+    - 支持多个浏览器实例的池化管理
+    - 自动清理闲置的浏览器实例
+    - 限制每个实例的最大复用次数，防止状态污染
+    - 线程安全
+    - 自动清理资源
+    """
+
+    def __init__(self, pool_size: int = BROWSER_POOL_SIZE, idle_timeout: int = BROWSER_IDLE_TIMEOUT):
+        """初始化浏览器连接池。
+
+        Args:
+            pool_size: 池中浏览器实例的最大数量
+            idle_timeout: 浏览器实例闲置超时时间（秒）
         """
-        Playwright 浏览器连接池，用于复用浏览器实例以提高性能并减少内存占用。
+        import threading
+        import queue
+
+        self.pool_size = pool_size
+        self.idle_timeout = idle_timeout
+        self._playwright = None
+        self._browser_queue: queue.Queue = queue.Queue(maxsize=pool_size)
+        self._browser_info: dict = {}  # 存储浏览器实例的元信息 {browser_id: info}
+        self._lock = threading.Lock()
+        self._cleanup_thread = None
+        self._running = False
+        self._browser_id_counter = 0
+        self._playwright_context = None
+        self._playwright_lock = threading.Lock()  # 用于保护 Playwright 上下文初始化
     
-        功能特性：
-        - 支持多个浏览器实例的池化管理
-        - 自动清理闲置的浏览器实例
-        - 限制每个实例的最大复用次数，防止状态污染
-        - 线程安全
-        - 自动清理资源
+    def _init_playwright(self):
+        """初始化 Playwright 上下文（延迟初始化）。"""
+        with self._playwright_lock:
+            if self._playwright is not None:
+                return  # 已经初始化过了
+            
+            if not PLAYWRIGHT_AVAILABLE:
+                raise RuntimeError("Playwright 未安装，无法初始化浏览器池")
+        
+            # 类型断言：确保 sync_playwright 不是 None
+            assert sync_playwright is not None, "sync_playwright should not be None"
+            
+            self._playwright_context = sync_playwright()
+            self._playwright = self._playwright_context.__enter__()
+    
+    def _create_browser_instance(self):
+        """创建新的浏览器实例。
+
+        Returns:
+            Browser 实例及其 ID
         """
-    
-        def __init__(self, pool_size: int = BROWSER_POOL_SIZE, idle_timeout: int = BROWSER_IDLE_TIMEOUT):
-            """初始化浏览器连接池。
-
-            Args:
-                pool_size: 池中浏览器实例的最大数量
-                idle_timeout: 浏览器实例闲置超时时间（秒）
-            """
-            import threading
-            import queue
-
-            self.pool_size = pool_size
-            self.idle_timeout = idle_timeout
-            self._playwright = None
-            self._browser_queue: queue.Queue = queue.Queue(maxsize=pool_size)
-            self._browser_info: dict = {}  # 存储浏览器实例的元信息 {browser_id: info}
-            self._lock = threading.Lock()
-            self._cleanup_thread = None
-            self._running = False
-            self._browser_id_counter = 0
-            self._playwright_context = None
-            self._playwright_lock = threading.Lock()  # 用于保护 Playwright 上下文初始化
-    
-        def _init_playwright(self):
-            """初始化 Playwright 上下文（延迟初始化）。"""
-            with self._playwright_lock:
-                if self._playwright is not None:
-                    return  # 已经初始化过了
-                
-                if not PLAYWRIGHT_AVAILABLE:
-                    raise RuntimeError("Playwright 未安装，无法初始化浏览器池")
-            
-                # 类型断言：确保 sync_playwright 不是 None
-                assert sync_playwright is not None, "sync_playwright should not be None"
-                
-                self._playwright_context = sync_playwright()
-                self._playwright = self._playwright_context.__enter__()
-    
-        def _create_browser_instance(self):
-            """创建新的浏览器实例。
-
-            Returns:
-                Browser 实例及其 ID
-            """
-            # 确保 Playwright 已初始化
-            if self._playwright is None:
-                self._init_playwright()
-            
-            # 检查 Playwright 是否成功初始化
-            if self._playwright is None:
-                raise RuntimeError("Failed to initialize Playwright")
+        # 确保 Playwright 已初始化
+        if self._playwright is None:
+            self._init_playwright()
         
-            # 获取随机User-Agent
-            user_agent = get_random_user_agent()
+        # 检查 Playwright 是否成功初始化
+        if self._playwright is None:
+            raise RuntimeError("Failed to initialize Playwright")
+    
+        # 获取随机User-Agent
+        user_agent = get_random_user_agent()
         
-            # 随机视口大小（常见分辨率）
-            viewports = [
-                {"width": 1920, "height": 1080},
-                {"width": 1680, "height": 1050},
-                {"width": 1440, "height": 900},
-                {"width": 1366, "height": 768},
-                {"width": 1536, "height": 864},
+        # 随机视口大小（常见分辨率）
+        viewports = [
+            {"width": 1920, "height": 1080},
+            {"width": 1680, "height": 1050},
+            {"width": 1440, "height": 900},
+            {"width": 1366, "height": 768},
+            {"width": 1536, "height": 864},
+        ]
+        viewport = random.choice(viewports)
+    
+        # 启动浏览器（优化后的参数，减少内存占用）
+        browser = self._playwright.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-blink-features=AutomationControlled',
+                # 内存管理相关参数
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--disable-extensions',
+                '--disable-background-networking',
+                '--disable-default-apps',
+                '--disable-sync',
+                '--metrics-recording-only',
+                '--no-first-run',
+                '--safebrowsing-disable-auto-update',
+                '--disable-setuid-sandbox',
+                '--disable-logging',
+                '--disable-hang-monitor',
+                '--disable-prompt-on-repost',
+                '--disable-breakpad',
+                '--disable-client-side-phishing-detection',
+                '--disable-component-update',
+                '--disable-domain-reliability',
             ]
-            viewport = random.choice(viewports)
-        
-            # 启动浏览器（优化后的参数，减少内存占用）
-            browser = self._playwright.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-blink-features=AutomationControlled',
-                    # 内存管理相关参数
-                    '--disable-gpu',
-                    '--disable-software-rasterizer',
-                    '--disable-extensions',
-                    '--disable-background-networking',
-                    '--disable-default-apps',
-                    '--disable-sync',
-                    '--metrics-recording-only',
-                    '--no-first-run',
-                    '--safebrowsing-disable-auto-update',
-                    '--disable-setuid-sandbox',
-                    '--disable-logging',
-                    '--disable-hang-monitor',
-                    '--disable-prompt-on-repost',
-                    '--disable-breakpad',
-                    '--disable-client-side-phishing-detection',
-                    '--disable-component-update',
-                    '--disable-domain-reliability',
-                ]
-            )
-        
-            # 创建默认上下文
-            context = browser.new_context(
-                viewport={"width": viewport["width"], "height": viewport["height"]},
-                user_agent=user_agent,
-                service_workers="block",
-                bypass_csp=True
-            )
-        
-            with self._lock:
-                self._browser_id_counter += 1
-                browser_id = self._browser_id_counter
-            
-                self._browser_info[browser_id] = {
-                    'browser': browser,
-                    'context': context,
-                    'created_at': time.time(),
-                    'last_used': time.time(),
-                    'usage_count': 0,
-                    'user_agent': user_agent
-                }
-        
-            return context, browser_id
+        )
     
-        def acquire(self) -> tuple[Any, int]:
-            """从池中获取一个浏览器上下文。
-
-            Returns:
-                (BrowserContext, browser_id) 元组
-            
-            Raises:
-                RuntimeError: 如果等待超时
-            """
-            with self._lock:
-                current_pool_size = len(self._browser_info)
-            
-            logger.debug(f"Acquiring browser from pool (current size: {current_pool_size}/{self.pool_size})")
-            
-            # 尝试从队列中获取可用的浏览器
-            browser_id = None
-            try:
-                browser_id = self._browser_queue.get(block=False)
-                logger.debug(f"Got browser {browser_id} from queue")
-            except Exception:
-                # 队列为空
-                logger.debug("Browser queue is empty, will create new instance or wait")
-                browser_id = None
-            
-            # 如果获取到浏览器，验证并返回
-            if browser_id is not None:
-                with self._lock:
-                    info = self._browser_info.get(browser_id)
-                
-                if not info:
-                    # 如果浏览器信息不存在，创建新的
-                    logger.warning(f"Browser {browser_id} not found in info dict, creating new instance")
-                    return self._create_browser_instance()
-            
-                # 检查是否超过最大复用次数
-                if info['usage_count'] >= BROWSER_POOL_MAX_REUSE:
-                    # 关闭旧浏览器
-                    logger.info(f"Browser {browser_id} reached max reuse count ({info['usage_count']}), creating new instance")
-                    self._close_browser(browser_id)
-                    # 创建新的
-                    return self._create_browser_instance()
-            
-                # 更新使用信息
-                with self._lock:
-                    info['last_used'] = time.time()
-                    info['usage_count'] += 1
-                
-                logger.debug(f"Browser {browser_id} stats: usage_count={info['usage_count']}, idle_time={time.time() - info['last_used']:.2f}s")
-            
-                # 检查上下文是否仍然有效
-                try:
-                    # 测试上下文是否可用
-                    _ = info['context'].pages[0] if info['context'].pages else None
-                    return info['context'], browser_id
-                except Exception as e:
-                    # 上下文已失效，关闭并创建新的
-                    logger.warning(f"Browser {browser_id} context is invalid ({e}), creating new instance")
-                    self._close_browser(browser_id)
-                    return self._create_browser_instance()
-            
-            # 队列为空或获取失败，创建新的浏览器或等待
-            with self._lock:
-                current_pool_size = len(self._browser_info)
-            
-            if current_pool_size < self.pool_size:
-                # 池未满，创建新浏览器
-                logger.debug(f"Creating new browser (pool size: {current_pool_size}/{self.pool_size})")
-                return self._create_browser_instance()
-            else:
-                # 池已满，等待可用的浏览器
-                logger.debug(f"Pool is full, waiting for available browser")
-                try:
-                    browser_id = self._browser_queue.get(timeout=30)  # 30秒超时
-                    with self._lock:
-                        info = self._browser_info.get(browser_id)
-                        if info:
-                            info['last_used'] = time.time()
-                            info['usage_count'] += 1
-                            logger.debug(f"Browser {browser_id} acquired after wait")
-                            return info['context'], browser_id
-                    
-                    # 如果信息不存在，创建新的
-                    logger.warning(f"Browser {browser_id} not found after wait, creating new instance")
-                    return self._create_browser_instance()
-                except Exception as timeout_error:
-                    logger.error(f"Timeout waiting for available browser: {timeout_error}")
-                    raise RuntimeError("Timeout waiting for available browser from pool")
+        # 创建默认上下文
+        context = browser.new_context(
+            viewport={"width": viewport["width"], "height": viewport["height"]},
+            user_agent=user_agent,
+            service_workers="block",
+            bypass_csp=True
+        )
     
-        def release(self, browser_id: int):
-            """将浏览器上下文归还到池中。
-
-            Args:
-                browser_id: 浏览器实例 ID
-            """
-            if browser_id is None:
-                logger.debug("Attempted to release None browser_id")
-                return
+        with self._lock:
+            self._browser_id_counter += 1
+            browser_id = self._browser_id_counter
         
-            with self._lock:
-                info = self._browser_info.get(browser_id)
-                if not info:
-                    logger.warning(f"Browser {browser_id} not found in info dict during release")
-                    return
-            
-                info['last_used'] = time.time()
-                idle_time = info['last_used'] - info.get('created_at', time.time())
-                logger.debug(f"Releasing browser {browser_id} (usage_count: {info['usage_count']}, total_age: {idle_time:.2f}s)")
-        
-            # 将浏览器 ID 放回队列
-            try:
-                self._browser_queue.put_nowait(browser_id)
-                logger.debug(f"Browser {browser_id} returned to pool")
-            except Exception as e:
-                # 队列已满，关闭这个浏览器
-                logger.warning(f"Queue full when releasing browser {browser_id}, closing it: {e}")
-                self._close_browser(browser_id)
-    
-        def _close_browser(self, browser_id: int):
-            """关闭指定的浏览器实例。
-
-            Args:
-                browser_id: 浏览器实例 ID
-            """
-            with self._lock:
-                info = self._browser_info.pop(browser_id, None)
-                if not info:
-                    logger.debug(f"Browser {browser_id} not found for closing")
-                    return
-            
-            logger.info(f"Closing browser {browser_id} (usage_count: {info['usage_count']}, age: {time.time() - info['created_at']:.2f}s)")
-            
-            try:
-                # 关闭所有页面
-                page_count = 0
-                for page in info['context'].pages:
-                    try:
-                        page.close()
-                        page_count += 1
-                    except Exception as e:
-                        logger.warning(f"Error closing page in browser {browser_id}: {e}")
-                
-                logger.debug(f"Closed {page_count} pages for browser {browser_id}")
-            
-                # 关闭上下文
-                try:
-                    info['context'].close()
-                except Exception as e:
-                    logger.warning(f"Error closing context for browser {browser_id}: {e}")
-            
-                # 关闭浏览器
-                try:
-                    info['browser'].close()
-                except Exception as e:
-                    logger.warning(f"Error closing browser {browser_id}: {e}")
-            except Exception as e:
-                logger.error(f"Error closing browser instance {browser_id}: {e}", exc_info=True)
-    
-        def cleanup_idle_browsers(self):
-            """清理闲置超时的浏览器实例。"""
-            browsers_to_close = []
-            
-            with self._lock:
-                current_time = time.time()
-                
-                for browser_id, info in list(self._browser_info.items()):
-                    idle_time = current_time - info['last_used']
-                    if idle_time > self.idle_timeout:
-                        browsers_to_close.append((browser_id, idle_time))
-            
-            if browsers_to_close:
-                logger.info(f"Cleaning up {len(browsers_to_close)} idle browsers")
-                
-                # 在锁外关闭浏览器，避免阻塞其他操作
-                for browser_id, idle_time in browsers_to_close:
-                    logger.debug(f"Closing idle browser {browser_id} (idle for {idle_time:.2f}s)")
-                    self._close_browser(browser_id)
-                    
-                    # 从队列中移除（如果存在）
-                    try:
-                        # 创建一个临时队列来移除特定的 ID
-                        temp_queue = []
-                        while not self._browser_queue.empty():
-                            try:
-                                bid = self._browser_queue.get_nowait()
-                                if bid != browser_id:
-                                    temp_queue.append(bid)
-                            except Exception:
-                                break
-                        # 将其他 ID 放回队列
-                        for bid in temp_queue:
-                            try:
-                                self._browser_queue.put_nowait(bid)
-                            except Exception:
-                                break
-                    except Exception as e:
-                        logger.warning(f"Error removing browser {browser_id} from queue: {e}")
-    
-        def start_cleanup_thread(self):
-            """启动后台清理线程。"""
-            if self._cleanup_thread and self._cleanup_thread.is_alive():
-                return
-        
-            import threading
-        
-            def cleanup_loop():
-                while self._running:
-                    import time
-                    time.sleep(60)  # 每分钟检查一次
-                    self.cleanup_idle_browsers()
-        
-            self._running = True
-            self._cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
-            self._cleanup_thread.start()
-    
-        def stop_cleanup_thread(self):
-            """停止后台清理线程。"""
-            self._running = False
-            if self._cleanup_thread:
-                self._cleanup_thread.join(timeout=5)
-                self._cleanup_thread = None
-    
-        def close_all(self):
-            """关闭所有浏览器实例并清理资源。"""
-            self.stop_cleanup_thread()
-        
-            with self._lock:
-                # 关闭所有浏览器
-                for browser_id in list(self._browser_info.keys()):
-                    self._close_browser(browser_id)
-            
-            # 清空队列
-            while not self._browser_queue.empty():
-                try:
-                    self._browser_queue.get_nowait()
-                except Exception:
-                    break
-        
-            # 关闭 Playwright 上下文（需要在锁外进行，因为可能会阻塞）
-            playwright_context = None
-            with self._lock:
-                if self._playwright_context:
-                    playwright_context = self._playwright_context
-                    self._playwright_context = None
-                    self._playwright = None
-            
-            if playwright_context:
-                try:
-                    playwright_context.__exit__(None, None, None)
-                except Exception:
-                    pass
-    
-        def get_status(self) -> dict[str, Any]:
-            """获取浏览器池的状态信息。
-
-            Returns:
-                包含池状态信息的字典
-            """
-            with self._lock:
-                current_time = time.time()
-                
-                active_browsers = 0
-                idle_browsers = 0
-                total_usage_count = 0
-                ages = []
-                idle_times = []
-                
-                for browser_id, info in self._browser_info.items():
-                    total_usage_count += info['usage_count']
-                    age = current_time - info['created_at']
-                    idle_time = current_time - info['last_used']
-                    
-                    ages.append(age)
-                    idle_times.append(idle_time)
-                    
-                    if idle_time < 10:  # 10秒内使用过的认为是活跃的
-                        active_browsers += 1
-                    else:
-                        idle_browsers += 1
-                
-                return {
-                    'pool_size': self.pool_size,
-                    'total_browsers': len(self._browser_info),
-                    'active_browsers': active_browsers,
-                    'idle_browsers': idle_browsers,
-                    'queue_size': self._browser_queue.qsize(),
-                    'total_usage_count': total_usage_count,
-                    'average_age': sum(ages) / len(ages) if ages else 0,
-                    'average_idle_time': sum(idle_times) / len(idle_times) if idle_times else 0,
-                    'max_idle_time': max(idle_times) if idle_times else 0,
-                    'cleanup_thread_running': self._cleanup_thread.is_alive() if self._cleanup_thread else False,
-                }
-    
-        def get_statistics(self) -> dict[str, Any]:
-            """获取浏览器池的详细统计信息。
-
-            Returns:
-                包含详细统计信息的字典
-            """
-            with self._lock:
-                current_time = time.time()
-                
-                browser_details = []
-                for browser_id, info in self._browser_info.items():
-                    browser_details.append({
-                        'browser_id': browser_id,
-                        'age_seconds': current_time - info['created_at'],
-                        'idle_seconds': current_time - info['last_used'],
-                        'usage_count': info['usage_count'],
-                        'user_agent': info['user_agent'],
-                    })
-                
-                # 按空闲时间排序
-                browser_details.sort(key=lambda x: x['idle_seconds'], reverse=True)
-            
-            return {
-                'status': self.get_status(),
-                'browser_details': browser_details,
+            self._browser_info[browser_id] = {
+                'browser': browser,
+                'context': context,
+                'created_at': time.time(),
+                'last_used': time.time(),
+                'usage_count': 0,
+                'user_agent': user_agent
             }
     
-        def health_check(self) -> tuple[bool, str]:
-            """检查浏览器池的健康状态。
-
-            Returns:
-                (是否健康, 健康状态描述)
-            """
-            try:
-                status = self.get_status()
-                
-                # 检查是否有浏览器实例
-                if status['total_browsers'] == 0:
-                    return False, "No browser instances available"
-                
-                # 检查清理线程是否运行
-                if not status['cleanup_thread_running'] and self._running:
-                    return False, "Cleanup thread not running"
-                
-                # 检查是否有卡死的浏览器（空闲时间过长）
-                if status['max_idle_time'] > self.idle_timeout * 2:
-                    return False, f"Stale browser detected (idle for {status['max_idle_time']:.0f}s)"
-                
-                # 检查队列是否正常
-                if status['queue_size'] > self.pool_size:
-                    return False, f"Queue size ({status['queue_size']}) exceeds pool size ({self.pool_size})"
-                
-                return True, "Browser pool is healthy"
-            
-            except Exception as e:
-                logger.error(f"Health check failed: {e}", exc_info=True)
-                return False, f"Health check failed: {str(e)}"
+        return context, browser_id
     
-        def __del__(self):
-            """析构函数，确保资源被清理。"""
-            self.close_all()
+    def acquire(self) -> tuple[Any, int]:
+        """从池中获取一个浏览器上下文。
+
+        Returns:
+            (BrowserContext, browser_id) 元组
+        
+        Raises:
+            RuntimeError: 如果等待超时
+            RuntimeError: 如果浏览器池初始化失败
+        """
+        # 获取池状态时保持锁，避免竞态条件
+        with self._lock:
+            current_pool_size = len(self._browser_info)
+        
+        logger.debug(f"Acquiring browser from pool (current size: {current_pool_size}/{self.pool_size})")
+        
+        # 尝试从队列中获取可用的浏览器
+        browser_id = None
+        try:
+            browser_id = self._browser_queue.get(block=False)
+            logger.debug(f"Got browser {browser_id} from queue")
+        except Exception:
+            # 队列为空
+            logger.debug("Browser queue is empty, will create new instance or wait")
+            browser_id = None
+        
+        # 如果获取到浏览器，验证并返回
+        if browser_id is not None:
+            # 在验证浏览器时保持锁，避免状态改变
+            with self._lock:
+                info = self._browser_info.get(browser_id)
+                
+            if not info:
+                # 如果浏览器信息不存在，创建新的
+                logger.warning(f"Browser {browser_id} not found in info dict, creating new instance")
+                return self._create_browser_instance()
+            
+            # 检查是否超过最大复用次数
+            if info['usage_count'] >= BROWSER_POOL_MAX_REUSE:
+                # 关闭旧浏览器
+                logger.info(f"Browser {browser_id} reached max reuse count ({info['usage_count']}), creating new instance")
+                self._close_browser(browser_id)
+                # 创建新的
+                return self._create_browser_instance()
+            
+            # 更新使用信息
+            with self._lock:
+                info['last_used'] = time.time()
+                info['usage_count'] += 1
+                
+            logger.debug(f"Browser {browser_id} stats: usage_count={info['usage_count']}, idle_time={time.time() - info['last_used']:.2f}s")
+            
+            # 检查上下文是否仍然有效
+            try:
+                # 测试上下文是否可用
+                _ = info['context'].pages[0] if info['context'].pages else None
+                return info['context'], browser_id
+            except Exception as e:
+                # 上下文已失效，关闭并创建新的
+                logger.warning(f"Browser {browser_id} context is invalid ({e}), creating new instance")
+                self._close_browser(browser_id)
+                return self._create_browser_instance()
+        
+        # 队列为空或获取失败，创建新的浏览器或等待
+        with self._lock:
+            current_pool_size = len(self._browser_info)
+        
+        if current_pool_size < self.pool_size:
+            # 池未满，创建新浏览器
+            logger.debug(f"Creating new browser (pool size: {current_pool_size}/{self.pool_size})")
+            return self._create_browser_instance()
+        else:
+            # 池已满，等待可用的浏览器
+            logger.debug("Pool is full, waiting for available browser")
+            try:
+                browser_id = self._browser_queue.get(timeout=30)  # 30秒超时
+                with self._lock:
+                    info = self._browser_info.get(browser_id)
+                    if info:
+                        info['last_used'] = time.time()
+                        info['usage_count'] += 1
+                        logger.debug(f"Browser {browser_id} acquired after wait")
+                        return info['context'], browser_id
+                
+                # 如果信息不存在，创建新的
+                logger.warning(f"Browser {browser_id} not found after wait, creating new instance")
+                return self._create_browser_instance()
+            except Exception as timeout_error:
+                logger.error(f"Timeout waiting for available browser: {timeout_error}")
+                raise RuntimeError("Timeout waiting for available browser from pool")
+
+    def release(self, browser_id: int):
+        """将浏览器上下文归还到池中。
+
+        Args:
+            browser_id: 浏览器实例 ID
+        """
+        if browser_id is None:
+            logger.debug("Attempted to release None browser_id")
+            return
+    
+        with self._lock:
+            info = self._browser_info.get(browser_id)
+            if not info:
+                logger.warning(f"Browser {browser_id} not found in info dict during release")
+                return
+        
+            info['last_used'] = time.time()
+            idle_time = info['last_used'] - info.get('created_at', time.time())
+            logger.debug(f"Releasing browser {browser_id} (usage_count: {info['usage_count']}, total_age: {idle_time:.2f}s)")
+    
+        # 将浏览器 ID 放回队列
+        try:
+            self._browser_queue.put_nowait(browser_id)
+            logger.debug(f"Browser {browser_id} returned to pool")
+        except Exception as e:
+            # 队列已满，关闭这个浏览器
+            logger.warning(f"Queue full when releasing browser {browser_id}, closing it: {e}")
+            self._close_browser(browser_id)
+
+    def _get_browser_metrics(self, browser_id: int) -> dict[str, Any]:
+        """获取浏览器实例的性能指标。
+    
+        Args:
+            browser_id: 浏览器实例 ID
+        
+        Returns:
+            包含性能指标的字典
+        """
+        with self._lock:
+            info = self._browser_info.get(browser_id)
+            if not info:
+                return {}
+    
+        try:
+            metrics = {}
+        
+            # 获取浏览器内存使用情况
+            if info.get('context') and info['context'].pages:
+                try:
+                    # 获取页面性能指标
+                    page_metrics = info['context'].pages[0].metrics()
+                    metrics.update({
+                        'js_heap_used_size': page_metrics.get('JSHeapUsedSize', 0),
+                        'js_heap_total_size': page_metrics.get('JSHeapTotalSize', 0),
+                        'nodes_count': page_metrics.get('Nodes', 0),
+                        'js_event_listeners': page_metrics.get('JSEventListeners', 0),
+                    })
+                except Exception as e:
+                    logger.debug(f"Failed to get page metrics for browser {browser_id}: {e}")
+        
+            # 添加浏览器实例的基本信息
+            metrics.update({
+                'browser_id': browser_id,
+                'usage_count': info.get('usage_count', 0),
+                'age_seconds': time.time() - info.get('created_at', time.time()),
+                'idle_seconds': time.time() - info.get('last_used', time.time()),
+                'page_count': len(info['context'].pages) if info.get('context') else 0,
+            })
+        
+            return metrics
+        
+        except Exception as e:
+            logger.debug(f"Failed to get metrics for browser {browser_id}: {e}")
+            return {}
+
+    def get_memory_usage(self) -> dict[str, Any]:
+        """获取浏览器池的内存使用情况。
+    
+        Returns:
+            包含内存使用信息的字典
+        """
+        with self._lock:
+            browser_ids = list(self._browser_info.keys())
+    
+        memory_info = {
+            'total_browsers': len(browser_ids),
+            'total_memory_used': 0,
+            'browsers': [],
+            'timestamp': time.time(),
+        }
+    
+        for browser_id in browser_ids:
+            metrics = self._get_browser_metrics(browser_id)
+            if metrics:
+                memory_used = metrics.get('js_heap_used_size', 0)
+                memory_info['total_memory_used'] += memory_used
+                memory_info['browsers'].append(metrics)
+    
+        # 转换为 MB
+        memory_info['total_memory_used_mb'] = memory_info['total_memory_used'] / (1024 * 1024) if memory_info['total_memory_used'] > 0 else 0
+    
+        return memory_info
+
+    def _close_browser(self, browser_id: int):
+        """关闭指定的浏览器实例。
+
+        Args:
+            browser_id: 浏览器实例 ID
+        """
+        with self._lock:
+            info = self._browser_info.pop(browser_id, None)
+            if not info:
+                logger.debug(f"Browser {browser_id} not found for closing")
+                return
+
+        logger.info(f"Closing browser {browser_id} (usage_count: {info['usage_count']}, age: {time.time() - info['created_at']:.2f}s)")
+    
+        try:
+            # 关闭所有页面
+            page_count = 0
+            for page in info['context'].pages:
+                try:
+                    page.close()
+                    page_count += 1
+                except Exception as e:
+                    logger.warning(f"Error closing page in browser {browser_id}: {e}")
+        
+            logger.debug(f"Closed {page_count} pages for browser {browser_id}")
+    
+            # 关闭上下文
+            try:
+                info['context'].close()
+            except Exception as e:
+                logger.warning(f"Error closing context for browser {browser_id}: {e}")
+    
+            # 关闭浏览器
+            try:
+                info['browser'].close()
+            except Exception as e:
+                logger.warning(f"Error closing browser {browser_id}: {e}")
+        except Exception as e:
+            logger.error(f"Error closing browser instance {browser_id}: {e}", exc_info=True)
+
+    def cleanup_idle_browsers(self):
+        """清理闲置超时的浏览器实例。"""
+        browsers_to_close = []
+        
+        with self._lock:
+            current_time = time.time()
+            
+            for browser_id, info in list(self._browser_info.items()):
+                idle_time = current_time - info['last_used']
+                if idle_time > self.idle_timeout:
+                    browsers_to_close.append((browser_id, idle_time))
+        
+        if browsers_to_close:
+            logger.info(f"Cleaning up {len(browsers_to_close)} idle browsers")
+            
+            # 在锁外关闭浏览器，避免阻塞其他操作
+            for browser_id, idle_time in browsers_to_close:
+                logger.debug(f"Closing idle browser {browser_id} (idle for {idle_time:.2f}s)")
+                self._close_browser(browser_id)
+                
+                # 从队列中移除（如果存在）
+                try:
+                    # 创建一个临时队列来移除特定的 ID
+                    temp_queue = []
+                    while not self._browser_queue.empty():
+                        try:
+                            bid = self._browser_queue.get_nowait()
+                            if bid != browser_id:
+                                temp_queue.append(bid)
+                        except Exception:
+                            break
+                    # 将其他 ID 放回队列
+                    for bid in temp_queue:
+                        try:
+                            self._browser_queue.put_nowait(bid)
+                        except Exception:
+                            break
+                except Exception as e:
+                    logger.warning(f"Error removing browser {browser_id} from queue: {e}")
+
+    def start_cleanup_thread(self):
+        """启动后台清理线程。"""
+        if self._cleanup_thread and self._cleanup_thread.is_alive():
+            return
+    
+        import threading
+    
+        def cleanup_loop():
+            while self._running:
+                import time
+                time.sleep(60)  # 每分钟检查一次
+                self.cleanup_idle_browsers()
+    
+        self._running = True
+        self._cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
+        self._cleanup_thread.start()
+
+    def stop_cleanup_thread(self):
+        """停止后台清理线程。"""
+        self._running = False
+        if self._cleanup_thread:
+            self._cleanup_thread.join(timeout=5)
+            self._cleanup_thread = None
+
+    def close_all(self):
+        """关闭所有浏览器实例并清理资源。"""
+        self.stop_cleanup_thread()
+    
+        with self._lock:
+            # 关闭所有浏览器
+            for browser_id in list(self._browser_info.keys()):
+                self._close_browser(browser_id)
+        
+        # 清空队列
+        while not self._browser_queue.empty():
+            try:
+                self._browser_queue.get_nowait()
+            except Exception:
+                break
+    
+        # 关闭 Playwright 上下文（需要在锁外进行，因为可能会阻塞）
+        playwright_context = None
+        with self._lock:
+            if self._playwright_context:
+                playwright_context = self._playwright_context
+                self._playwright_context = None
+                self._playwright = None
+        
+        if playwright_context:
+            try:
+                playwright_context.__exit__(None, None, None)
+            except Exception:
+                pass
+
+    def get_status(self) -> dict[str, Any]:
+        """获取浏览器池的状态信息。
+
+        Returns:
+            包含池状态信息的字典
+        """
+        with self._lock:
+            current_time = time.time()
+            
+            active_browsers = 0
+            idle_browsers = 0
+            total_usage_count = 0
+            ages = []
+            idle_times = []
+            
+            for browser_id, info in self._browser_info.items():
+                total_usage_count += info['usage_count']
+                age = current_time - info['created_at']
+                idle_time = current_time - info['last_used']
+                
+                ages.append(age)
+                idle_times.append(idle_time)
+                
+                if idle_time < 10:  # 10秒内使用过的认为是活跃的
+                    active_browsers += 1
+                else:
+                    idle_browsers += 1
+            
+            return {
+                'pool_size': self.pool_size,
+                'total_browsers': len(self._browser_info),
+                'active_browsers': active_browsers,
+                'idle_browsers': idle_browsers,
+                'queue_size': self._browser_queue.qsize(),
+                'total_usage_count': total_usage_count,
+                'average_age': sum(ages) / len(ages) if ages else 0,
+                'average_idle_time': sum(idle_times) / len(idle_times) if idle_times else 0,
+                'max_idle_time': max(idle_times) if idle_times else 0,
+                'cleanup_thread_running': self._cleanup_thread.is_alive() if self._cleanup_thread else False,
+            }
+
+    def get_statistics(self) -> dict[str, Any]:
+        """获取浏览器池的详细统计信息。
+
+        Returns:
+            包含详细统计信息的字典
+        """
+        with self._lock:
+            current_time = time.time()
+            
+            browser_details = []
+            for browser_id, info in self._browser_info.items():
+                browser_details.append({
+                    'browser_id': browser_id,
+                    'age_seconds': current_time - info['created_at'],
+                    'idle_seconds': current_time - info['last_used'],
+                    'usage_count': info['usage_count'],
+                    'user_agent': info['user_agent'],
+                })
+            
+            # 按空闲时间排序
+            browser_details.sort(key=lambda x: x['idle_seconds'], reverse=True)
+        
+        return {
+            'status': self.get_status(),
+            'browser_details': browser_details,
+        }
+
+    def health_check(self) -> tuple[bool, str]:
+        """检查浏览器池的健康状态。
+
+        Returns:
+            (是否健康, 健康状态描述)
+        """
+        try:
+            status = self.get_status()
+            memory_info = self.get_memory_usage()
+        
+            # 检查是否有浏览器实例
+            if status['total_browsers'] == 0:
+                return False, "No browser instances available"
+        
+            # 检查清理线程是否运行
+            if not status['cleanup_thread_running'] and self._running:
+                return False, "Cleanup thread not running"
+        
+            # 检查是否有卡死的浏览器（空闲时间过长）
+            if status['max_idle_time'] > self.idle_timeout * 2:
+                return False, f"Stale browser detected (idle for {status['max_idle_time']:.0f}s)"
+        
+            # 检查队列是否正常
+            if status['queue_size'] > self.pool_size:
+                return False, f"Queue size ({status['queue_size']}) exceeds pool size ({self.pool_size})"
+        
+            # 检查内存使用情况
+            if memory_info['total_memory_used_mb'] > 500:  # 500MB 阈值
+                return False, f"Memory usage too high ({memory_info['total_memory_used_mb']:.1f} MB)"
+        
+            # 记录健康检查时的内存状态
+            logger.debug(f"Browser pool health check passed. Memory: {memory_info['total_memory_used_mb']:.2f} MB, "
+                        f"Browsers: {status['total_browsers']}, Queue: {status['queue_size']}")
+        
+            return True, "Browser pool is healthy"
+    
+        except Exception as e:
+            logger.error(f"Health check failed: {e}", exc_info=True)
+            return False, f"Health check failed: {str(e)}"
+
+    def __del__(self):
+        """析构函数，确保资源被清理。"""
+        self.close_all()
 
 
 # 全局浏览器池实例
@@ -644,6 +730,7 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
     - 模拟人类操作延迟
     - 使用浏览器连接池提高性能
     - 智能截图大小控制
+    - 内存使用监控
     """
     if not PLAYWRIGHT_AVAILABLE:
         return {
@@ -663,6 +750,10 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
     
     # 获取浏览器池
     browser_pool = get_global_browser_pool()
+    
+    # 记录操作前的内存使用情况
+    memory_before = browser_pool.get_memory_usage()
+    logger.info(f"开始获取网页 {url}，当前浏览器池内存使用: {memory_before['total_memory_used_mb']:.2f} MB")
     
     context = None
     page = None
@@ -810,10 +901,19 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
             "message": f"已经成功获取 {url} 的内容。"
         }
 
-    except Exception as e:
+    except RuntimeError as e:
+        # 处理浏览器池相关的运行时错误
         return {
             "success": False,
-            "error": f"Playwright获取失败: {str(e)}",
+            "error": f"浏览器池错误: {str(e)}",
+            "url": url
+        }
+    except Exception as e:
+        # 处理其他异常
+        logger.error(f"Playwright获取失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"网页获取失败: {str(e)}",
             "url": url
         }
     
@@ -835,6 +935,14 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         # 将浏览器上下文归还到池中
         if browser_id is not None:
             browser_pool.release(browser_id)
+            
+            # 记录操作后的内存使用情况
+            memory_after = browser_pool.get_memory_usage()
+            memory_diff = memory_after['total_memory_used_mb'] - memory_before['total_memory_used_mb']
+            
+            logger.info(f"网页获取完成 {url}, 内存变化: {memory_diff:+.2f} MB, "
+                       f"当前池状态: {memory_after['total_browsers']} 个浏览器, "
+                       f"总内存: {memory_after['total_memory_used_mb']:.2f} MB")
 
 
 @tool(parse_docstring=True)
