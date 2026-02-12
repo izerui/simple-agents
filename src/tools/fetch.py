@@ -154,7 +154,7 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
             ]
             viewport = random.choice(viewports)
 
-            # 启动浏览器（更多反检测参数）
+            # 启动浏览器（更多反检测参数 + 内存管理）
             browser = p.chromium.launch(
                 headless=True,
                 args=[
@@ -165,11 +165,30 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                     '--disable-site-isolation-trials',
                     '--disable-web-security',
                     '--disable-features=VizDisplayCompositor',
+                    # 内存管理相关参数
+                    '--disable-gpu',
+                    '--disable-software-rasterizer',
+                    '--disable-extensions',
+                    '--disable-background-networking',
+                    '--disable-default-apps',
+                    '--disable-sync',
+                    '--metrics-recording-only',
+                    '--no-first-run',
+                    '--safebrowsing-disable-auto-update',
+                    '--disable-setuid-sandbox',
+                    '--disable-logging',
+                    '--disable-hang-monitor',
+                    '--disable-prompt-on-repost',
+                    '--disable-breakpad',
+                    '--disable-client-side-phishing-detection',
+                    '--disable-component-update',
+                    '--disable-domain-reliability',
                 ]
             )
 
             context = None
             page = None
+            stealth = None  # 保存 stealth 引用，用于后续清理
             try:
                 # 创建浏览器上下文（更好的资源隔离和管理）
                 context = browser.new_context(
@@ -187,6 +206,8 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 if PLAYWRIGHT_STEALTH_AVAILABLE:
                     stealth = Stealth()
                     stealth.apply_stealth_sync(page)
+                else:
+                    stealth = None
 
                 # 设置额外的请求头
                 headers = get_realistic_headers(url)
@@ -227,16 +248,6 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                         });
                     """)
 
-                # 加载所有资源，仅阻止媒体文件（视频/音频）
-                def route_handler(route):
-                    resource_type = route.request.resource_type
-                    if resource_type == 'media':
-                        route.abort()
-                    else:
-                        route.continue_()
-
-                page.route("**/*", route_handler)
-
                 # 导航到页面（30秒超时）
                 page.goto(url, timeout=30000, wait_until="domcontentloaded")
 
@@ -259,6 +270,9 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 screenshot_bytes = page.screenshot(full_page=True)
                 with open(screenshot_path, 'wb') as f:
                     f.write(screenshot_bytes)
+                # 立即释放大对象，避免内存泄漏
+                del screenshot_bytes
+                screenshot_bytes = None
 
                 # 移除不需要的元素（仅影响文本提取，不影响截图）
                 page.evaluate("""
@@ -307,13 +321,33 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 }
 
             finally:
-                # 关闭上下文会自动关闭所有页面，释放内存
+                # 按正确顺序清理资源，避免内存泄漏
+                # 1. 显式关闭 page
+                if page is not None:
+                    try:
+                        page.close()
+                    except Exception:
+                        pass
+
+                # 2. 关闭 context
                 if context is not None:
                     try:
                         context.close()
                     except Exception:
                         pass
-                browser.close()
+
+                # 3. 清理 stealth 对象（可能持有对 page 的引用）
+                if stealth is not None:
+                    try:
+                        del stealth
+                    except Exception:
+                        pass
+
+                # 4. 最后关闭浏览器
+                try:
+                    browser.close()
+                except Exception:
+                    pass
 
     except Exception as e:
         return {
