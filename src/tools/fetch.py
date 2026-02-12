@@ -42,7 +42,7 @@ except ImportError:
 # 连接池配置
 BROWSER_POOL_SIZE = int(os.getenv('BROWSER_POOL_SIZE', '2'))  # 浏览器池大小
 BROWSER_IDLE_TIMEOUT = int(os.getenv('BROWSER_IDLE_TIMEOUT', '300'))  # 闲置超时（秒）
-MAX_SCREENSHOT_SIZE = int(os.getenv('MAX_SCREENSHOT_SIZE', '52428800'))  # 最大截图大小（50MB）
+MAX_SCREENSHOT_SIZE = int(os.getenv('MAX_SCREENSHOT_SIZE', '5242880'))  # 最大截图大小（5MB）
 BROWSER_POOL_MAX_REUSE = int(os.getenv('BROWSER_POOL_MAX_REUSE', '10'))  # 浏览器实例最大复用次数
 
 
@@ -905,28 +905,11 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                 });
             """)
 
-        # 组合等待策略：先快速加载DOM，然后等待关键元素，最后等待网络空闲
-        # 步骤1：快速加载DOM结构
-        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        # 只等待DOM加载完成
+        page.goto(url, wait_until="domcontentloaded", timeout=15000)
         
-        # 步骤2：等待body元素出现（基础保障）
-        try:
-            page.wait_for_selector("body", timeout=10000)
-        except Exception:
-            logger.warning("body元素等待超时，但继续执行")
-        
-        # 步骤3：等待页面完全加载
-        try:
-            page.wait_for_load_state("load", timeout=10000)
-        except Exception:
-            logger.warning("页面load事件等待超时，但继续执行")
-        
-        # 步骤4：等待网络空闲（带超时保护）
-        try:
-            page.wait_for_load_state("networkidle", timeout=15000)
-        except Exception:
-            logger.warning("网络未完全空闲，但继续执行")
-        
+        # 短暂等待确保JS开始执行
+        page.wait_for_timeout(1000)  # 只等1秒
 
         # 模拟鼠标移动（可选，增加真实性）
         try:
@@ -942,14 +925,11 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
                     const loadingImgs = Array.from(imgs).filter(img => !img.complete);
                     return loadingImgs.length === 0;
                 }""",
-                timeout=3000
+                timeout=1000
             )
         except Exception:
             logger.debug("图片加载检查超时，继续执行")
         
-        # 额外等待确保页面稳定
-        page.wait_for_timeout(500)
-
         # 获取页面标题
         title = page.title() or "无标题"
         
@@ -978,114 +958,8 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         del screenshot_bytes
         screenshot_bytes = None  # noqa: F841 - 有意设置为 None 以帮助垃圾回收
 
-        # 先等待页面稳定
-        page.wait_for_timeout(1000)
-        
-        page.evaluate("""
-            () => {
-                const elementsToRemove = document.querySelectorAll(
-                    'script, style, nav, header, footer, aside, .advertisement, .ads, .sidebar, .comments, .social-share, .navbar, .menu, iframe'
-                );
-                elementsToRemove.forEach(el => {
-                    try {
-                        el.remove();
-                    } catch (e) {
-                        // 忽略移除错误
-                    }
-                });
-                
-                // 移除隐藏元素
-                const hiddenElements = document.querySelectorAll('[style*="display: none"], [style*="visibility: hidden"], .hidden, [aria-hidden="true"]');
-                hiddenElements.forEach(el => {
-                    try {
-                        if (el.offsetParent === null) { // 检查是否真的不可见
-                            el.remove();
-                        }
-                    } catch (e) {
-                        // 忽略移除错误
-                    }
-                });
-            }
-        """)
-
-        # 获取主要内容（改进版本，确保获取到有效内容）
-        main_content_html = page.evaluate("""
-            () => {
-                // 优先获取主要内容区域
-                const contentSelectors = [
-                    'main',
-                    'article',
-                    '[role="main"]',
-                    '.content',
-                    '#content',
-                    '.post',
-                    '.entry-content',
-                    '.main-content',
-                    '#main-content',
-                    '.page-content',
-                    '.search-results',
-                    '.results',
-                    '.bing_results'  // 针对必应搜索
-                ];
-                
-                let mainContent = null;
-                for (const selector of contentSelectors) {
-                    mainContent = document.querySelector(selector);
-                    if (mainContent) {
-                        // 检查内容是否有效（有足够的文本）
-                        const textContent = mainContent.textContent || '';
-                        if (textContent.trim().length > 100) {
-                            break;
-                        }
-                    }
-                }
-                
-                // 如果没有找到有效内容区域，使用 body
-                if (!mainContent || (mainContent.textContent || '').trim().length < 100) {
-                    mainContent = document.body;
-                }
-                
-                // 检查内容质量
-                const textContent = mainContent.textContent || '';
-                if (textContent.trim().length < 50) {
-                    // 内容太少，可能是页面未完全加载，尝试等待后重试
-                    return {
-                        html: mainContent.innerHTML,
-                        textLength: textContent.length,
-                        warning: 'content_too_short'
-                    };
-                }
-                
-                return {
-                    html: mainContent.innerHTML,
-                    textLength: textContent.length,
-                    warning: null
-                };
-            }
-        """)
-        
-        # 检查内容质量
-        content_warning = main_content_html.get('warning') if isinstance(main_content_html, dict) else None
-        if content_warning == 'content_too_short':
-            logger.warning("页面内容过短，等待后重试获取内容")
-            page.wait_for_timeout(3000)
-            
-            # 重试获取内容
-            main_content_html = page.evaluate("""
-                () => {
-                    const mainContent = document.body;
-                    return {
-                        html: mainContent.innerHTML,
-                        textLength: (mainContent.textContent || '').length
-                    };
-                }
-            """)
-        
-        # 提取 HTML 内容
-        if isinstance(main_content_html, dict):
-            main_content_html = main_content_html.get('html', '')
-        else:
-            main_content_html = main_content_html or ''
+        # 获取完整页面内容
+        main_content_html = page.evaluate("() => document.body.innerHTML")
 
         # 转换为Markdown
         markdown_content = markdownify(main_content_html)
