@@ -927,15 +927,6 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         except Exception:
             logger.warning("网络未完全空闲，但继续执行")
         
-        # 步骤5：针对搜索页面的特殊等待
-        if 'search' in url.lower():
-            page.wait_for_timeout(3000)  # 搜索页面需要更多时间
-            # 等待搜索结果容器
-            try:
-                page.wait_for_selector('[class*="result"], [id*="result"], .search-results, .results', timeout=10000)
-            except Exception:
-                logger.debug("搜索结果容器未找到，继续执行")
-
         # 模拟鼠标移动（可选，增加真实性）
         try:
             page.mouse.move(random.randint(100, 500), random.randint(100, 500))
