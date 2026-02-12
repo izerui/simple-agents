@@ -79,6 +79,7 @@ class BrowserPool:
         self._browser_id_counter = 0
         self._playwright_context = None
         self._playwright_lock = threading.Lock()  # 用于保护 Playwright 上下文初始化
+        self._thread_id = threading.get_ident()  # 记录创建线程 ID
     
     def _init_playwright(self):
         """初始化 Playwright 上下文（延迟初始化）。"""
@@ -182,12 +183,21 @@ class BrowserPool:
         Raises:
             RuntimeError: 如果等待超时
             RuntimeError: 如果浏览器池初始化失败
+            RuntimeError: 如果跨线程访问
         """
+        # 检查是否跨线程访问
+        current_thread_id = threading.get_ident()
+        if current_thread_id != self._thread_id:
+            raise RuntimeError(
+                f"Cannot access browser pool from different thread. "
+                f"Created in thread {self._thread_id}, accessed from thread {current_thread_id}"
+            )
+        
         # 获取池状态时保持锁，避免竞态条件
         with self._lock:
             current_pool_size = len(self._browser_info)
         
-        logger.debug(f"Acquiring browser from pool (current size: {current_pool_size}/{self.pool_size})")
+        logger.debug(f"Acquiring browser from pool (current size: {current_pool_size}/{self.pool_size}) in thread {current_thread_id}")
         
         # 尝试从队列中获取可用的浏览器
         browser_id = None
@@ -615,28 +625,70 @@ class BrowserPool:
 
 
 # 全局浏览器池实例
-_global_browser_pool: Optional[BrowserPool] = None
+# 使用线程池模式，避免每个线程都创建浏览器池
+_global_browser_pools: dict[int, BrowserPool] = {}  # thread_id -> BrowserPool
 _browser_pool_lock = threading.Lock()
+_max_thread_pools = int(os.getenv('BROWSER_POOL_MAX_THREADS', '10'))  # 最大线程池数量
 
 
 def get_global_browser_pool() -> BrowserPool:
-    """获取全局浏览器池实例（单例模式）。
+    """获取全局浏览器池实例（线程池模式，支持多线程）。
 
     Returns:
         BrowserPool 实例
     """
-    global _global_browser_pool
-
-    if _global_browser_pool is None:
-        with _browser_pool_lock:
-            if _global_browser_pool is None:
-                _global_browser_pool = BrowserPool()
-                _global_browser_pool.start_cleanup_thread()
-
-    return _global_browser_pool
+    current_thread_id = threading.get_ident()
+    
+    with _browser_pool_lock:
+        # 检查当前线程是否已经有浏览器池
+        if current_thread_id in _global_browser_pools:
+            return _global_browser_pools[current_thread_id]
+        
+        # 检查是否超过最大线程池数量
+        if len(_global_browser_pools) >= _max_thread_pools:
+            # 清理闲置的浏览器池
+            _cleanup_idle_browser_pools()
+            
+            # 如果仍然超过限制，复用最早的池
+            if len(_global_browser_pools) >= _max_thread_pools:
+                oldest_thread_id = min(_global_browser_pools.keys(), 
+                                     key=lambda tid: _global_browser_pools[tid].get_status().get('max_idle_time', 0))
+                logger.warning(f"Browser pool limit reached ({_max_thread_pools}), reusing pool from thread {oldest_thread_id}")
+                return _global_browser_pools[oldest_thread_id]
+        
+        # 创建新的浏览器池
+        browser_pool = BrowserPool()
+        browser_pool.start_cleanup_thread()
+        _global_browser_pools[current_thread_id] = browser_pool
+        
+        logger.debug(f"Created browser pool for thread {current_thread_id}, total pools: {len(_global_browser_pools)}")
+        return browser_pool
 
 
 # ==================== 反爬虫工具函数 ====================
+
+def _cleanup_idle_browser_pools():
+    """清理闲置的浏览器池。"""
+    current_time = time.time()
+    threads_to_remove = []
+    
+    for thread_id, browser_pool in list(_global_browser_pools.items()):
+        try:
+            status = browser_pool.get_status()
+            max_idle_time = status.get('max_idle_time', 0)
+            
+            # 如果浏览器池闲置超过 10 分钟，清理它
+            if max_idle_time > 600:  # 10 分钟
+                logger.info(f"Cleaning up idle browser pool for thread {thread_id} (idle for {max_idle_time:.0f}s)")
+                browser_pool.close_all()
+                threads_to_remove.append(thread_id)
+        except Exception as e:
+            logger.warning(f"Error checking browser pool for thread {thread_id}: {e}")
+            threads_to_remove.append(thread_id)
+    
+    # 移除清理的线程池
+    for thread_id in threads_to_remove:
+        _global_browser_pools.pop(thread_id, None)
 
 # 常用 User-Agent 池
 USER_AGENTS = [
@@ -903,6 +955,23 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
 
     except RuntimeError as e:
         # 处理浏览器池相关的运行时错误
+        if "Cannot access browser pool from different thread" in str(e):
+            logger.error(f"线程切换错误: {e}")
+            # 重新获取浏览器池（线程池模式会自动管理）
+            try:
+                # 重新获取浏览器池
+                browser_pool = get_global_browser_pool()
+                logger.info("已重新获取浏览器池，可重试操作")
+                
+                return {
+                    "success": False,
+                    "error": f"线程切换错误，已自动修复: {str(e)}",
+                    "url": url,
+                    "can_retry": True
+                }
+            except Exception as retry_error:
+                logger.error(f"修复线程切换错误失败: {retry_error}")
+        
         return {
             "success": False,
             "error": f"浏览器池错误: {str(e)}",
@@ -934,15 +1003,30 @@ def fetch_with_playwright(url: str) -> dict[str, Any]:
         
         # 将浏览器上下文归还到池中
         if browser_id is not None:
-            browser_pool.release(browser_id)
+            try:
+                browser_pool.release(browser_id)
+            except RuntimeError as release_error:
+                if "Cannot access browser pool from different thread" in str(release_error):
+                    logger.warning(f"释放浏览器时遇到线程切换错误: {release_error}")
+                    # 忽略释放错误，让垃圾回收器处理
+                else:
+                    raise
             
             # 记录操作后的内存使用情况
-            memory_after = browser_pool.get_memory_usage()
-            memory_diff = memory_after['total_memory_used_mb'] - memory_before['total_memory_used_mb']
-            
-            logger.info(f"网页获取完成 {url}, 内存变化: {memory_diff:+.2f} MB, "
-                       f"当前池状态: {memory_after['total_browsers']} 个浏览器, "
-                       f"总内存: {memory_after['total_memory_used_mb']:.2f} MB")
+            try:
+                memory_after = browser_pool.get_memory_usage()
+                memory_diff = memory_after['total_memory_used_mb'] - memory_before['total_memory_used_mb']
+                
+                # 记录线程池统计信息
+                with _browser_pool_lock:
+                    total_pools = len(_global_browser_pools)
+                
+                logger.info(f"网页获取完成 {url}, 内存变化: {memory_diff:+.2f} MB, "
+                           f"当前池状态: {memory_after['total_browsers']} 个浏览器, "
+                           f"总内存: {memory_after['total_memory_used_mb']:.2f} MB, "
+                           f"线程池数量: {total_pools}")
+            except Exception as mem_error:
+                logger.warning(f"获取内存使用信息失败: {mem_error}")
 
 
 @tool(parse_docstring=True)
