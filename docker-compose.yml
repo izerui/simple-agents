@@ -37,6 +37,8 @@ services:
                 condition: service_healthy
             simple-agents-postgres:
                 condition: service_healthy
+            browser-service:
+                condition: service_healthy
         env_file:
             - .env
         environment:
@@ -45,6 +47,7 @@ services:
             LANGSMITH_API_KEY: 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
             HF_HOME: /deps/simple-agents/data/huggingface
             HF_ENDPOINT: https://hf-mirror.com
+            BROWSER_SERVICE_URL: http://browser-service:2025
         healthcheck:
             test: python /api/healthcheck.py
             interval: 30s
@@ -66,3 +69,22 @@ services:
             LANGSMITH_API_KEY: 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
         volumes:
           - ./data/sandbox_sessions:/home/data/sandbox_sessions
+
+    # 独立的浏览器抓取服务
+    browser-service:
+        image: serv999.com/hub/izerui/simple-agents:latest
+        ports:
+            - "2025:2025"
+        environment:
+            BROWSER_SERVICE_PORT: 2025
+            BROWSER_SERVICE_HOST: 0.0.0.0
+            HEADLESS: "true"
+            MAX_CONCURRENT_PAGES: "10"
+        command: ["python", "src/browser_service.py"]
+        restart: unless-stopped
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:2025/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s

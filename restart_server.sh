@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# LangGraph Development Server Launcher
-# This script starts the LangGraph development server
+# LangGraph Development Server - Kill & Restart
+# This script stops any existing server on port 2024 and starts a fresh one
 
 set -e  # Exit on error
 
@@ -19,7 +19,47 @@ cd "$SCRIPT_DIR"
 # Print banner
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  LangGraph Development Server${NC}"
+echo -e "${BLUE}  Kill & Restart${NC}"
 echo -e "${BLUE}========================================${NC}"
+echo ""
+
+# ========================================
+# Step 1: Kill existing process on port 2024
+# ========================================
+echo -e "${YELLOW}[Step 1/2] Checking for processes on port 2024...${NC}"
+
+if lsof -i tcp:2024 >/dev/null 2>&1; then
+    echo -e "${YELLOW}Found process(es) using port 2024:${NC}"
+    lsof -i tcp:2024
+    echo ""
+    echo -e "${YELLOW}Terminating...${NC}"
+    lsof -ti tcp:2024 | xargs kill -9
+    echo -e "${GREEN}✓ Process(es) terminated${NC}"
+    echo ""
+
+    # Wait a moment for port to be released
+    sleep 1
+
+    echo -e "${YELLOW}Verifying port is free...${NC}"
+    if lsof -i tcp:2024 >/dev/null 2>&1; then
+        echo -e "${RED}✗ Port 2024 still in use!${NC}"
+        echo -e "${RED}Please check manually and try again.${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}✓ Port 2024 is now free${NC}"
+    fi
+else
+    echo -e "${GREEN}✓ No process using port 2024${NC}"
+fi
+
+echo ""
+echo -e "${BLUE}========================================${NC}"
+echo ""
+
+# ========================================
+# Step 2: Start the server
+# ========================================
+echo -e "${YELLOW}[Step 2/2] Starting server...${NC}"
 echo ""
 
 # Check if .env file exists
@@ -76,4 +116,5 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 
 # Start the LangGraph development server
+# 不需要 --allow-blocking，因为我们使用了 asyncio.to_thread 包装阻塞操作
 exec langgraph dev

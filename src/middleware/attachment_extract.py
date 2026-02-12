@@ -152,12 +152,6 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         # 检查并复制 skills 目录到沙箱
         await asyncio.to_thread(self._ensure_skills_in_sandbox, backend)
 
-        # 创建截图目录 .capture
-        await asyncio.to_thread(self._ensure_capture_dir, backend)
-
-        # 创建fetch_markdown目录 fetch_markdown
-        await asyncio.to_thread(self._ensure_fetch_markdown_dir, backend)
-
         # 更新消息
         return {'messages': updated_messages}
 
@@ -178,24 +172,6 @@ class AttachmentExtractMiddleware(AgentMiddleware):
             )
             uploads: list[FileUploadResponse] = await backend.aupload_files(files_to_upload)
             logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
-
-    def _ensure_fetch_markdown_dir(self, backend: FilesystemBackend):
-        """确保 fetch_markdown 目录存在于沙箱中
-
-        检查沙箱中的 fetch_markdown 目录是否存在，如果不存在则创建
-        """
-        fetch_markdown_dir = backend.cwd / 'fetch_markdown'
-        if not fetch_markdown_dir.exists():
-            fetch_markdown_dir.mkdir(parents=True, exist_ok=True)
-
-    def _ensure_capture_dir(self, backend: FilesystemBackend):
-        """确保 .capture 目录存在于沙箱中
-
-        检查沙箱中的 .capture 目录是否存在，如果不存在则创建
-        """
-        capture_dir = backend.cwd / '.capture'
-        if not capture_dir.exists():
-            capture_dir.mkdir(parents=True, exist_ok=True)
 
     def _ensure_skills_in_sandbox(self, backend: FilesystemBackend):
         """确保 skills 目录存在于沙箱中
