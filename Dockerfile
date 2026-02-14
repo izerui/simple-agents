@@ -12,11 +12,9 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     poppler-data \
     poppler-utils \
-    # -- playwright
-    libnss3 \
-    libxkbcommon0 \
-    libasound2 \
     && rm -rf /var/lib/apt/lists/*
+
+
 
 # -- Adding local package . --
 ADD . /deps/simple-agents
@@ -34,21 +32,5 @@ ENV LANGSERVE_GRAPHS='{"research": "/deps/simple-agents/src/graph.py:agent"}'
 RUN mkdir -p /api/langgraph_api /api/langgraph_runtime /api/langgraph_license && touch /api/langgraph_api/__init__.py /api/langgraph_runtime/__init__.py /api/langgraph_license/__init__.py
 RUN PYTHONDONTWRITEBYTECODE=1 uv pip install --system --no-cache-dir --no-deps -e /api
 # -- End of ensuring user deps didn't inadvertently overwrite langgraph-api --
-
-# playwright 依赖:
-#┌───────────────────────────┬─────────────────────────────────────────────────────┐
-#│           组件             │                      安装命令                        │
-#├───────────────────────────┼─────────────────────────────────────────────────────┤
-#│ Playwright Python         │ pip install playwright                              │
-#├───────────────────────────┼─────────────────────────────────────────────────────┤
-#│ Chromium 浏览器            │ playwright install chromium                         │
-#├───────────────────────────┼─────────────────────────────────────────────────────┤
-#│ 系统依赖（CentOS/RedHat）   │ yum install -y nss libX11 libxkbcommon alsa-lib     │
-#├───────────────────────────┼─────────────────────────────────────────────────────┤
-#│ 系统依赖（Ubuntu/Debian）   │ apt-get install -y libnss3 libxkbcommon0 libasound2 │
-#└───────────────────────────┴─────────────────────────────────────────────────────┘
-
-# 安装 Playwright 浏览器
-RUN playwright install chromium
 
 WORKDIR /deps/simple-agents
