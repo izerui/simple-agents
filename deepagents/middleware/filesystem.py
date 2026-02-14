@@ -229,40 +229,34 @@ Examples:
 - Show matching lines: `grep(pattern="error", output_mode="content")`
 - Search for code with special chars: `grep(pattern="def __init__(self):")`"""
 
-EXECUTE_TOOL_DESCRIPTION = """在隔离的沙箱环境中执行`python` 命令（Python 版本 3.12，支持依赖管理）。
+EXECUTE_TOOL_DESCRIPTION = """`execute` 工具可以执行Python命令，运行环境为隔离沙箱（Python 3.12）。
 
-执行方式优先级（必须严格遵守）：
+在生成任何 python 命令前，必须严格按以下决策顺序选择执行方式：
 
-🥇 **第一优先级：使用 skill 提供的脚本**
-当使用 skill 技能时，如果 skill 文档中明确建议使用技能内的 script.py 脚本，必须优先直接调用。
-示例：python /skills/skill_name/scripts/script.py [args...]
+1. 如果 skill 文档提供 scripts/script.py：
+   必须执行：
+   python /skills/<skill_name>/scripts/script.py [args...]
 
-🥈 **第二优先级：使用 heredoc 执行多行代码**
-当没有合适的 skill 脚本可用时，优先使用 heredoc 方式执行多行代码（支持多行、无需转义引号）。
-示例：
-```python
-python << 'EOF'
-print("Hello World")
-for i in range(3):
-    print(f"Number: {i}")
-EOF
-```
+2. 否则，只要代码包含多行 / 缩进 / 多语句：
+   必须执行：
+   python << 'EOF'
+   <code>
+   EOF
 
-🥉 **第三优先级：其他方式**
-仅在上述方式不适用时使用：
-- python -c "code"：执行简短的单行代码
-- python script.py [args...]：执行自建脚本文件
+3. 仅当代码严格为单行表达式：
+   才允许执行：
+   python -c "<code>"
 
-2. 依赖管理命令（使用 python -m）：
-   - python -m pip install <package>（只安装新包）
-   - python -m pip list
-   - python -m pip show <package>
+禁止跳过高优先级选择低优先级方式。
+python -c 绝对禁止用于多行代码。
 
-使用说明：
-- 命令在隔离的沙箱环境中运行
-- 返回 stdout/stderr 合并输出及退出码
-- 如果输出过大，可能会被截断
-- 建议执行脚本放到 `scripts` 目录下，其生成的文件放在 `outputs` 目录下
+依赖管理仅允许：
+- python -m pip install <pkg>
+- python -m pip list
+- python -m pip show <pkg>
+
+所有命令运行于隔离沙箱，返回 stdout/stderr/exit code。
+推荐：脚本放 scripts/，输出放 outputs/。
 """
 
 FILESYSTEM_SYSTEM_PROMPT = """## Filesystem Tools `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`
