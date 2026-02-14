@@ -82,6 +82,14 @@ def convert_to_markdown(
                 do_formula_enrichment=do_formula_enrichment,
             )
 
+        # Excel 文件不支持转换，提示用户使用 xlsx 技能
+        if source_pathlib.suffix.lower() in ['.xls', '.xlsx', '.csv']:
+            return {
+                "success": False,
+                "error": "Excel/CSV 文件不支持转换为 Markdown。请使用 xlsx 技能来读取 Excel 文件。",
+                "source_path": source_path,
+            }
+
         # 其他文件格式使用远程 API 转换
         return _convert_via_remote_api(
             source_path=source_path,
