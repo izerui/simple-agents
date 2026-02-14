@@ -438,7 +438,13 @@ class NPXStyleInstaller:
             # 使用 tarfile.open() 自动检测压缩格式
             # r:* 模式会自动检测 gzip、bzip2 等格式
             with tarfile.open(tarball_path, 'r:*') as tar:
-                tar.extractall(path=dest_dir)
+                # 使用 filter='data' 避免 Python 3.14 的 DeprecationWarning
+                # 同时提供基本的安全过滤（防止路径遍历）
+                try:
+                    tar.extractall(path=dest_dir, filter='data')
+                except TypeError:
+                    # Python < 3.12 不支持 filter 参数，回退到无过滤
+                    tar.extractall(path=dest_dir)
 
             return True
         except Exception as e:
