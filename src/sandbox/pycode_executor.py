@@ -44,6 +44,7 @@ import os
 import re
 import ast
 import signal
+import shlex
 import traceback
 import tempfile
 from pathlib import Path
@@ -921,8 +922,24 @@ class CodeExecutor:
 
         else:
             # 格式: python script.py [args...]
-            script_path = parts[1]
-            script_args = parts[2:] if len(parts) > 2 else []
+            # 使用 shlex.split 正确处理带引号和转义的参数
+            try:
+                # shlex.split 会正确处理：
+                # - "hello world" -> ['hello world']
+                # - "say \"hello\"" -> ['say "hello"']
+                # - 'single quotes' -> ['single quotes']
+                parsed_parts = shlex.split(command)
+            except ValueError as e:
+                # 如果 shlex 解析失败（如不匹配的引号），回退到简单分割
+                print("shlex 解析失败，回退到简单分割: {0}".format(e))
+                parsed_parts = command.split()
+
+            if len(parsed_parts) < 2:
+                raise ValueError("命令格式错误")
+
+            script_path = parsed_parts[1]
+            script_args = parsed_parts[2:] if len(parsed_parts) > 2 else []
+
             return None, script_path, script_args
 
     def _read_script_file(self, script_path):
