@@ -113,8 +113,9 @@ python /skills/find-skills/scripts/install_skill.py --help
 | 优先级 | 来源 | 说明 |
 |--------|------|------|
 | 1 | **skills.sh** | 专门的技能目录（优先搜索） |
-| 2 | **npm registry** | npm 包搜索 |
-| 3 | **GitHub** | 搜索流行仓库并提供手动搜索链接 |
+| 2 | **SkillsMP** | 技能市场，支持关键词搜索和 AI 语义搜索 |
+| 3 | **npm registry** | npm 包搜索 |
+| 4 | **GitHub** | 搜索流行仓库并提供手动搜索链接 |
 
 **使用脚本搜索：**
 ```bash

@@ -701,6 +701,10 @@ class NPXStyleInstaller:
         """
         从直接 URL 下载并安装
 
+        支持格式：
+        - tarball URL: https://example.com/package.tar.gz
+        - GitHub tree URL: https://github.com/owner/repo/tree/branch/path/to/skill
+
         Args:
             url: tarball 或文件的直接 URL
 
@@ -708,6 +712,32 @@ class NPXStyleInstaller:
             bool: 是否成功
         """
         print_header(f"📦 Installing from URL: {url}")
+
+        # 检查是否是 GitHub tree URL
+        # https://github.com/owner/repo/tree/branch/path -> 转换为 tarball 下载
+        github_tree_match = re.match(
+            r'https?://github\.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)',
+            url
+        )
+        if github_tree_match:
+            owner = github_tree_match.group(1)
+            repo = github_tree_match.group(2)
+            branch = github_tree_match.group(3)
+            skill_path = github_tree_match.group(4)
+
+            # 构建 tarball URL
+            tarball_url = f"https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.tar.gz"
+            print_info(f"Converting GitHub tree URL to tarball: {tarball_url}")
+
+            tarball_filename = f"{repo}-{branch}.tar.gz"
+            tarball_path = os.path.join(self.temp_dir, tarball_filename)
+
+            if not self._download_file(tarball_url, tarball_path):
+                return False
+
+            # 使用带路径的安装方法
+            skill_name = skill_path.split('/')[-1]
+            return self._install_from_tarball_with_path(tarball_path, tarball_filename, skill_path, skill_name)
 
         # 从 URL 确定文件类型
         parsed_url = urlparse(url)
@@ -1067,9 +1097,99 @@ class NPXStyleInstaller:
             print_error(f"skills.sh search failed: {e}")
             return False
 
+    def _search_skillsmp(self, query: str) -> bool:
+        """
+        从 SkillsMP 搜索技能
+
+        API 文档: https://skillsmp.com/docs/api
+
+        Args:
+            query: 搜索关键词
+
+        Returns:
+            bool: 是否成功
+        """
+        print_header(f"🔍 Searching SkillsMP for: {query}")
+
+        # SkillsMP API Token
+        api_token = "sk_live_skillsmp_EYZZIK2d-mZJ2d7PzC7LHBrJx6X2CbjWILeala6LQUs"
+
+        try:
+            # 使用关键词搜索 API
+            url = f"https://skillsmp.com/api/v1/skills/search?q={urllib.parse.quote(query)}&limit=10&sortBy=stars"
+
+            print_info(f"Querying SkillsMP API...\n")
+
+            ssl_context = ssl._create_unverified_context()
+            req = urllib.request.Request(url)
+            req.add_header("Authorization", f"Bearer {api_token}")
+            req.add_header("User-Agent", "Mozilla/5.0 (compatible; SkillInstaller/1.0)")  # SkillsMP 需要非默认 UA
+
+            with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+                # 解析返回结构: {"success": true, "data": {"skills": [...], "pagination": {...}}}
+                if not data.get('success'):
+                    print_error("SkillsMP API returned error")
+                    return False
+
+                skills_data = data.get('data', {})
+                skills = skills_data.get('skills', [])
+                pagination = skills_data.get('pagination', {})
+
+                if skills:
+                    total = pagination.get('total', len(skills))
+                    print_info(f"Found {total} skill(s), showing top {len(skills)}:\n")
+
+                    for skill in skills[:10]:  # 最多显示10个
+                        name = skill.get('name', 'Unknown')
+                        author = skill.get('author', '')
+                        description = skill.get('description', '')
+                        github_url = skill.get('githubUrl', '')
+                        stars = skill.get('stars', 0)
+
+                        # 截断描述
+                        desc_short = (description[:80] + '...') if len(description) > 80 else description
+
+                        print(f"  {Colors.GREEN}•{Colors.RESET} {name}")
+                        if author:
+                            print(f"    Author: {author}")
+                        if desc_short:
+                            print(f"    {desc_short}")
+                        if stars > 0:
+                            print(f"    ⭐ {stars} stars")
+                        if github_url:
+                            # 直接使用 githubUrl 作为安装源
+                            print(f"    📦 Install: python install_skill.py {github_url}")
+                        print()
+                else:
+                    print_warning("No skills found")
+                    return True
+
+            return True
+
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                print_error("SkillsMP API: Invalid API key")
+            else:
+                print_error(f"HTTP Error {e.code}: {e.reason}")
+            return False
+        except urllib.error.URLError as e:
+            print_error(f"URL Error: {e.reason}")
+            return False
+        except Exception as e:
+            print_error(f"SkillsMP search failed: {e}")
+            return False
+
     def search_skills(self, query: str) -> bool:
         """
         Search for skills from multiple sources
+
+        搜索优先级：
+        1. skills.sh - 专门的技能目录
+        2. SkillsMP - 技能市场（支持 AI 语义搜索）
+        3. npm registry - npm 包
+        4. GitHub - 流行仓库
 
         Args:
             query: Search query
@@ -1080,13 +1200,16 @@ class NPXStyleInstaller:
         print_header(f"🔍 Skill Search: {query}")
         print_info("Searching multiple sources...\n")
 
-        # 优先搜索 skills.sh（专门的技能目录）
+        # 1. 优先搜索 skills.sh（专门的技能目录）
         skills_sh_success = self._search_skills_sh(query)
 
-        # Search npm
+        # 2. 搜索 SkillsMP（技能市场）
+        skillsmp_success = self._search_skillsmp(query)
+
+        # 3. Search npm
         npm_success = self._search_npm(query)
 
-        # Search GitHub
+        # 4. Search GitHub
         github_success = self._search_github(query)
 
         # Provide manual search options
@@ -1094,12 +1217,13 @@ class NPXStyleInstaller:
         print_info("Browse these websites for skills:")
         print()
         print(f"  • https://skills.sh/          - Official skills directory")
+        print(f"  • https://skillsmp.com/       - SkillsMP Marketplace")
         print(f"  • https://github.com/topics/agent-skills  - GitHub topic")
         print(f"  • https://github.com/topics/claude-skills  - Claude skills")
         print(f"  • https://www.npmjs.com/search?q=agent+skill  - npm packages")
         print()
 
-        return skills_sh_success or github_success or npm_success
+        return skills_sh_success or skillsmp_success or github_success or npm_success
 
 
 def main():
