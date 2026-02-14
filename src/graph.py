@@ -63,7 +63,7 @@ research_agent = SubAgent(
     ],  # 完整的中间件配置
 )
 
-my_store = InMemoryStore()
+# my_store = InMemoryStore()
 
 # 配置哪些工具需要中断
 # 决策类型
@@ -82,7 +82,6 @@ agent = create_deep_agent(
     name="主代理",
     model=chat_model,  # 使用模型实例
     tools=[think_tool, fetch_url, convert_to_markdown],
-    store=my_store,
     backend=get_backend_per_thread,
     system_prompt=MAIN_AGENT_INSTRUCTIONS,
     subagents=[research_agent],
