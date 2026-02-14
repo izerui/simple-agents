@@ -18,6 +18,32 @@ description: 帮助用户发现和安装技能。当用户问"怎么做X"、"找
 - 想要搜索工具、模板或工作流
 - 提到希望在特定领域获得帮助（设计、测试、部署等）
 - 需要下载并安装技能到 `/skills/` 目录
+- **探索技能类型**：问"有哪些技能"、"技能分类"
+- **模糊查询**：问"操作 word 文档的技能有哪些"
+
+## 探索技能（AI 语义搜索）
+
+当用户没有指明具体的关键字，而是进行模糊查询时，使用 AI 语义搜索：
+
+**使用场景：**
+- "有哪些技能"
+- "技能分类"
+- "操作 word 文档的技能有哪些"
+- "数据分析相关的技能"
+
+**命令：**
+```bash
+# 使用 AI 语义搜索探索技能
+python /skills/find-skills/scripts/install_skill.py -e "操作 word 文档的技能"
+python /skills/find-skills/scripts/install_skill.py -e "有哪些数据分析的技能"
+```
+
+**AI 搜索 vs 关键词搜索：**
+
+| 搜索方式 | 命令参数 | 适用场景 |
+|---------|---------|---------|
+| AI 语义搜索 | `-e` | 模糊查询、自然语言问题、探索技能类型 |
+| 关键词搜索 | `-s` | 明确的关键词、精确搜索 |
 
 ## 安装方法
 
@@ -83,8 +109,12 @@ python /skills/find-skills/scripts/install_skill.py ./my-skill.tgz
 ### 可用命令
 
 ```bash
-# 搜索技能
+# 搜索技能（关键词搜索）
 python /skills/find-skills/scripts/install_skill.py -s "查询关键词"
+
+# 探索技能（AI 语义搜索，用于模糊查询）
+python /skills/find-skills/scripts/install_skill.py -e "操作 word 文档的技能"
+python /skills/find-skills/scripts/install_skill.py -e "有哪些数据分析的技能"
 
 # 安装到自定义目录
 python /skills/find-skills/scripts/install_skill.py -d /path/to/skills <package>

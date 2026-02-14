@@ -1097,11 +1097,11 @@ class NPXStyleInstaller:
             print_error(f"skills.sh search failed: {e}")
             return False
 
-    def _search_skillsmp(self, query: str) -> bool:
+    def _search_skillsmp_keyword(self, query: str) -> bool:
         """
-        从 SkillsMP 搜索技能
+        从 SkillsMP 关键词搜索技能
 
-        API 文档: https://skillsmp.com/docs/api
+        API: /api/v1/skills/search
 
         Args:
             query: 搜索关键词
@@ -1111,24 +1111,20 @@ class NPXStyleInstaller:
         """
         print_header(f"🔍 Searching SkillsMP for: {query}")
 
-        # SkillsMP API Token
         api_token = "sk_live_skillsmp_EYZZIK2d-mZJ2d7PzC7LHBrJx6X2CbjWILeala6LQUs"
 
         try:
-            # 使用关键词搜索 API
             url = f"https://skillsmp.com/api/v1/skills/search?q={urllib.parse.quote(query)}&limit=10&sortBy=stars"
-
             print_info(f"Querying SkillsMP API...\n")
 
             ssl_context = ssl._create_unverified_context()
             req = urllib.request.Request(url)
             req.add_header("Authorization", f"Bearer {api_token}")
-            req.add_header("User-Agent", "Mozilla/5.0 (compatible; SkillInstaller/1.0)")  # SkillsMP 需要非默认 UA
+            req.add_header("User-Agent", "Mozilla/5.0 (compatible; SkillInstaller/1.0)")
 
             with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
                 data = json.loads(response.read().decode('utf-8'))
 
-                # 解析返回结构: {"success": true, "data": {"skills": [...], "pagination": {...}}}
                 if not data.get('success'):
                     print_error("SkillsMP API returned error")
                     return False
@@ -1141,14 +1137,13 @@ class NPXStyleInstaller:
                     total = pagination.get('total', len(skills))
                     print_info(f"Found {total} skill(s), showing top {len(skills)}:\n")
 
-                    for skill in skills[:10]:  # 最多显示10个
+                    for skill in skills[:10]:
                         name = skill.get('name', 'Unknown')
                         author = skill.get('author', '')
                         description = skill.get('description', '')
                         github_url = skill.get('githubUrl', '')
                         stars = skill.get('stars', 0)
 
-                        # 截断描述
                         desc_short = (description[:80] + '...') if len(description) > 80 else description
 
                         print(f"  {Colors.GREEN}•{Colors.RESET} {name}")
@@ -1159,7 +1154,6 @@ class NPXStyleInstaller:
                         if stars > 0:
                             print(f"    ⭐ {stars} stars")
                         if github_url:
-                            # 直接使用 githubUrl 作为安装源
                             print(f"    📦 Install: python install_skill.py {github_url}")
                         print()
                 else:
@@ -1180,6 +1174,117 @@ class NPXStyleInstaller:
         except Exception as e:
             print_error(f"SkillsMP search failed: {e}")
             return False
+
+    def _search_skillsmp_ai(self, query: str) -> bool:
+        """
+        从 SkillsMP AI 语义搜索技能
+
+        API: /api/v1/skills/ai-search
+        适用于自然语言查询，如"有哪些技能"、"操作 word 文档的技能"
+
+        Args:
+            query: 自然语言查询
+
+        Returns:
+            bool: 是否成功
+        """
+        print_header(f"🔍 AI Semantic Search: {query}")
+
+        api_token = "sk_live_skillsmp_EYZZIK2d-mZJ2d7PzC7LHBrJx6X2CbjWILeala6LQUs"
+
+        try:
+            url = f"https://skillsmp.com/api/v1/skills/ai-search?q={urllib.parse.quote(query)}"
+            print_info(f"Using AI Semantic Search...\n")
+
+            ssl_context = ssl._create_unverified_context()
+            req = urllib.request.Request(url)
+            req.add_header("Authorization", f"Bearer {api_token}")
+            req.add_header("User-Agent", "Mozilla/5.0 (compatible; SkillInstaller/1.0)")
+
+            with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+                if not data.get('success'):
+                    print_error("SkillsMP API returned error")
+                    return False
+
+                skills_data = data.get('data', {})
+                # AI 搜索返回结构: {"data": [...]} 每项包含 skill 对象
+                ai_results = skills_data.get('data', [])
+
+                if not ai_results:
+                    print_warning("No skills found")
+                    return True
+
+                print_info(f"Found {len(ai_results)} skill(s):\n")
+
+                seen_skills = set()
+                for result in ai_results[:10]:
+                    skill = result.get('skill', {})
+                    if not skill:
+                        continue
+
+                    skill_id = skill.get('id', '')
+                    if skill_id in seen_skills:
+                        continue
+                    seen_skills.add(skill_id)
+
+                    name = skill.get('name', 'Unknown')
+                    author = skill.get('author', '')
+                    description = skill.get('description', '')
+                    github_url = skill.get('githubUrl', '')
+                    stars = skill.get('stars', 0)
+                    score = result.get('score', 0)
+
+                    desc_short = (description[:80] + '...') if len(description) > 80 else description
+
+                    print(f"  {Colors.GREEN}•{Colors.RESET} {name}")
+                    if score:
+                        print(f"    Relevance: {score:.2f}")
+                    if author:
+                        print(f"    Author: {author}")
+                    if desc_short:
+                        print(f"    {desc_short}")
+                    if stars > 0:
+                        print(f"    ⭐ {stars} stars")
+                    if github_url:
+                        print(f"    📦 Install: python install_skill.py {github_url}")
+                    print()
+
+            return True
+
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                print_error("SkillsMP API: Invalid API key")
+            else:
+                print_error(f"HTTP Error {e.code}: {e.reason}")
+            return False
+        except urllib.error.URLError as e:
+            print_error(f"URL Error: {e.reason}")
+            return False
+        except Exception as e:
+            print_error(f"SkillsMP AI search failed: {e}")
+            return False
+
+    def explore_skills(self, query: str) -> bool:
+        """
+        探索技能（使用 AI 语义搜索）
+
+        用于模糊查询场景，如：
+        - "有哪些技能"
+        - "技能分类"
+        - "操作 word 文档的技能有哪些"
+
+        Args:
+            query: 自然语言查询
+
+        Returns:
+            bool: 是否成功
+        """
+        print_header(f"🔍 Exploring Skills: {query}")
+        print_info("Using AI Semantic Search for natural language queries...\n")
+
+        return self._search_skillsmp_ai(query)
 
     def search_skills(self, query: str) -> bool:
         """
@@ -1204,7 +1309,7 @@ class NPXStyleInstaller:
         skills_sh_success = self._search_skills_sh(query)
 
         # 2. 搜索 SkillsMP（技能市场）
-        skillsmp_success = self._search_skillsmp(query)
+        skillsmp_success = self._search_skillsmp_keyword(query)
 
         # 3. Search npm
         npm_success = self._search_npm(query)
@@ -1257,6 +1362,10 @@ Examples:
   # Search for skills
   python /skills/find-skills/scripts/install_skill.py -s "react performance"
 
+  # Explore skills with AI semantic search (for natural language queries)
+  python /skills/find-skills/scripts/install_skill.py -e "操作 word 文档的技能有哪些"
+  python /skills/find-skills/scripts/install_skill.py -e "有哪些类型的技能"
+
   # List installed skills
   python /skills/find-skills/scripts/install_skill.py -l
 
@@ -1273,7 +1382,12 @@ Examples:
     parser.add_argument(
         "-s", "--search",
         metavar="QUERY",
-        help="Search for available skills"
+        help="Search for available skills (keyword search)"
+    )
+    parser.add_argument(
+        "-e", "--explore",
+        metavar="QUERY",
+        help="Explore skills using AI semantic search (for natural language queries like '有哪些技能')"
     )
     parser.add_argument(
         "-l", "--list",
@@ -1299,6 +1413,11 @@ Examples:
         if args.list:
             installer.list_installed()
             return 0
+
+        # Explore skills (AI semantic search)
+        if args.explore:
+            success = installer.explore_skills(args.explore)
+            return 0 if success else 1
 
         # Search for skills
         if args.search:
