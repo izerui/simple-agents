@@ -57,8 +57,6 @@ services:
             dockerfile: Dockerfile
         volumes:
             - ./data/sandbox_sessions:/deps/simple-agents/data/sandbox_sessions
-            - ./data/huggingface:/deps/simple-agents/data/huggingface
-            - /root/.cache/pip:/root/.cache/pip
 
     agent-chat-ui:
         image: serv999.com/hub/izerui/agent-chat-ui:latest
