@@ -392,8 +392,6 @@ atexit.register(cleanup_model)
    pip install pympler
    ```
 
-### Playwright 内存监控
-
 ```python
 # 监控浏览器内存使用
 metrics = await page.metrics()
@@ -425,7 +423,6 @@ logger.info(f"Browser memory: {memory_usage / 1024 / 1024:.2f} MB")
 ## 相关资源
 
 - [Python 内存管理最佳实践](https://docs.python.org/3/library/gc.html)
-- [Playwright 性能优化](https://playwright.dev/docs/ci#reusing-authentication-state)
 - [FastAPI 性能优化](https://fastapi.tiangolo.com/async/)
 - [LangGraph 内存管理](https://langchain-ai.github.io/langgraph/concepts/low_level/)
 
@@ -439,7 +436,6 @@ logger.info(f"Browser memory: {memory_usage / 1024 / 1024:.2f} MB")
 ## 更新日志
 
 ### v1.1 (2025-01-09)
-- ✅ 完成问题 1 的优化：fetch.py - Playwright 浏览器资源管理问题
 - ✅ 实现浏览器连接池，减少内存占用 75-90%
 - ✅ 添加截图大小限制，防止大图占用过多内存
 - ✅ 优化浏览器启动参数，减少内存开销
