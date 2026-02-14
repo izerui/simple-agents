@@ -97,7 +97,11 @@ python /skills/find-skills/scripts/install_skill.py create-react-app@5.0.1
 
 **从直接 URL 安装：**
 ```bash
+# tarball URL
 python /skills/find-skills/scripts/install_skill.py https://example.com/skill-package.tar.gz
+
+# GitHub tree URL（从 SkillsMP 搜索结果复制）
+python /skills/find-skills/scripts/install_skill.py https://github.com/owner/repo/tree/main/path/to/skill
 ```
 
 **从本地 tarball 文件安装：**
