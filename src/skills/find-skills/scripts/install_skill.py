@@ -149,6 +149,158 @@ def copytree_with_open(src: str, dst: str) -> bool:
         return False
 
 
+def find_skill_folders(root_dir: str, skill_name_filter: Optional[str] = None) -> list:
+    """
+    递归查找包含 SKILL.md 文件的文件夹
+
+    规则：
+    - 如果文件夹包含 SKILL.md，则该文件夹是一个技能，不再递归其子文件夹
+    - 如果文件夹不包含 SKILL.md，则继续递归查找子文件夹
+    - 可能找到多个技能文件夹
+    - 如果指定了 skill_name_filter，只返回 SKILL.md 中 name 字段匹配的技能
+
+    Args:
+        root_dir: 要搜索的根目录
+        skill_name_filter: 可选的技能名称过滤器（匹配 SKILL.md 中的 name 字段）
+
+    Returns:
+        list: 包含 SKILL.md 的文件夹路径列表，每项为 (文件夹路径, 技能名称)
+    """
+    skill_folders = []
+
+    def scan_directory(dir_path: str):
+        """递归扫描目录"""
+        try:
+            items = os.listdir(dir_path)
+        except (PermissionError, OSError):
+            return
+
+        # 检查当前目录是否包含 SKILL.md
+        skill_md_path = os.path.join(dir_path, "SKILL.md")
+        if os.path.isfile(skill_md_path):
+            # 找到技能文件夹
+            skill_name = os.path.basename(dir_path)
+
+            # 如果指定了过滤器，检查 SKILL.md 中的 name 字段是否匹配
+            if skill_name_filter:
+                if _matches_skill_info(dir_path, skill_name_filter):
+                    skill_folders.append((dir_path, skill_name))
+            else:
+                skill_folders.append((dir_path, skill_name))
+            return
+
+        # 当前目录不是技能，递归扫描子目录
+        for item in items:
+            item_path = os.path.join(dir_path, item)
+            if os.path.isdir(item_path):
+                scan_directory(item_path)
+
+    scan_directory(root_dir)
+    return skill_folders
+
+
+def _matches_skill_name(folder_name: str, query_name: str) -> bool:
+    """
+    检查文件夹名是否匹配查询的技能名称
+
+    支持的匹配方式：
+    - 精确匹配：error-handling-patterns == error-handling-patterns
+    - 大小写不敏感：Error-Handling-Patterns == error-handling-patterns
+    - 下划线/横线转换：error_handling_patterns == error-handling-patterns
+
+    Args:
+        folder_name: 文件夹名称
+        query_name: 查询的技能名称
+
+    Returns:
+        bool: 是否匹配
+    """
+    # 统一转换为小写并替换分隔符
+    def normalize(name):
+        return name.lower().replace('_', '-').replace(' ', '-')
+
+    return normalize(folder_name) == normalize(query_name)
+
+
+def _matches_skill_info(skill_dir: str, query_name: str) -> bool:
+    """
+    检查 SKILL.md 中的 name 字段是否匹配查询的技能名称
+
+    匹配方式：
+    - 读取 SKILL.md 中的 name: 字段
+    - 大小写不敏感
+    - 支持 -, _, 空格 的互通
+
+    Args:
+        skill_dir: 技能文件夹路径
+        query_name: 查询的技能名称
+
+    Returns:
+        bool: 是否匹配
+    """
+    skill_md_path = os.path.join(skill_dir, "SKILL.md")
+    try:
+        with open(skill_md_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # 解析 name: 字段
+        lines = content.strip().split('\n')
+        for line in lines[:20]:
+            line = line.strip()
+            if line.startswith('name:'):
+                skill_name = line.split(':', 1)[1].strip()
+                # 使用与 _matches_skill_name 相同的匹配逻辑
+                def normalize(name):
+                    return name.lower().replace('_', '-').replace(' ', '-')
+                return normalize(skill_name) == normalize(query_name)
+            elif line.startswith('# '):
+                # Markdown 标题作为备用
+                skill_name = line[2:].strip()
+                def normalize(name):
+                    return name.lower().replace('_', '-').replace(' ', '-')
+                return normalize(skill_name) == normalize(query_name)
+    except:
+        pass
+
+    # 如果读取失败，回退到文件夹名匹配
+    return _matches_skill_name(os.path.basename(skill_dir), query_name)
+
+
+def get_skill_info(skill_dir: str) -> dict:
+    """
+    从 SKILL.md 文件中提取技能信息
+
+    Args:
+        skill_dir: 技能文件夹路径
+
+    Returns:
+        dict: 包含 name, description 等信息
+    """
+    info = {"name": os.path.basename(skill_dir), "description": ""}
+
+    skill_md_path = os.path.join(skill_dir, "SKILL.md")
+    try:
+        with open(skill_md_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # 尝试解析 YAML frontmatter 或开头的 name: 字段
+        lines = content.strip().split('\n')
+        for line in lines[:20]:  # 只检查前20行
+            line = line.strip()
+            if line.startswith('name:'):
+                info["name"] = line.split(':', 1)[1].strip()
+            elif line.startswith('description:'):
+                info["description"] = line.split(':', 1)[1].strip()
+            elif line.startswith('# '):
+                # Markdown 标题作为备用名称
+                if info["name"] == os.path.basename(skill_dir):
+                    info["name"] = line[2:].strip()
+    except:
+        pass
+
+    return info
+
+
 def rmtree_with_os(path: str) -> bool:
     """
     手动删除目录树，使用 os 操作确保被沙箱处理
@@ -344,7 +496,6 @@ class NPXStyleInstaller:
             if version not in pkg_info.get('versions', {}):
                 print_error(f"Version {version} not found")
                 return False
-            dist_tags = {'version': version}
         else:
             dist_tags = pkg_info.get('dist-tags', {})
             version = dist_tags.get('latest', 'latest')
@@ -368,62 +519,22 @@ class NPXStyleInstaller:
         if not self._download_file(tarball_url, tarball_path):
             return False
 
-        # 解压到临时目录
-        extract_dir = os.path.join(self.temp_dir, "extracted")
-        try:
-            os.makedirs(extract_dir, exist_ok=True)
-        except FileExistsError:
-            pass
-
-        if not self._extract_tarball(tarball_path, extract_dir):
-            return False
-
-        # 找到包目录（通常在 'package/' 子目录中）
-        extracted_items = os.listdir(extract_dir)
-        if len(extracted_items) == 1:
-            item_path = os.path.join(extract_dir, extracted_items[0])
-            if os.path.isdir(item_path):
-                package_source = item_path
-            else:
-                package_source = extract_dir
-        else:
-            package_source = extract_dir
-
-        # 确定目标目录名
-        skill_name = package_name.replace('/', '-')
-        target_dir = os.path.join(self.skills_dir, skill_name)
-
-        # 检查是否已安装（绝不覆盖）
-        if os.path.exists(target_dir):
-            print_warning(f"Skill already exists: {target_dir}")
-            print_warning("Skipping installation (NEVER overwrites existing files)")
-            return True
-
-        # 安装到 skills 目录
-        try:
-            # 确保父目录存在
-            parent_dir = os.path.dirname(target_dir)
-            try:
-                os.makedirs(parent_dir, exist_ok=True)
-            except FileExistsError:
-                pass
-
-            # 使用自定义的 copytree，通过 open() 被沙箱拦截
-            if copytree_with_open(package_source, target_dir):
-                print_success(f"Installed to: {target_dir}")
-                return True
-            return False
-        except Exception as e:
-            print_error(f"Installation failed: {e}")
-            return False
+        # 使用统一的安装方法（会查找 SKILL.md），传递包名作为过滤器
+        # npm 包名可能包含 @scope/，需要提取实际的技能名
+        filter_name = package_name.split('/')[-1] if '/' in package_name else package_name
+        return self._install_from_tarball(tarball_path, tarball_filename, skill_name_filter=filter_name)
 
     def _install_from_github(self, repo_spec: str, skill_path: Optional[str] = None) -> bool:
         """
         从 GitHub 仓库下载并安装
 
+        支持格式：
+        - owner/repo/skill-name - 仓库是 owner/repo，技能名是 skill-name
+        - owner/repo/path/skill-name - 仓库是 owner/repo，路径是 path，技能名是 skill-name
+
         Args:
-            repo_spec: 仓库规格（如 'owner/repo' 或 'owner/repo@tag'）
-            skill_path: 仓库中技能子目录的路径（如 'skills/my-skill'）
+            repo_spec: 仓库规格（如 'owner/repo'）
+            skill_path: 技能路径或技能名（如 'skills/my-skill' 或 'my-skill'）
 
         Returns:
             bool: 是否成功
@@ -431,7 +542,6 @@ class NPXStyleInstaller:
         print_header(f"📦 Installing from GitHub: {repo_spec}")
 
         # 解析仓库规格
-        # 格式: owner/repo[@tag][/path/to/skill]
         parts = repo_spec.split('@')
         repo = parts[0]
 
@@ -441,19 +551,14 @@ class NPXStyleInstaller:
 
         owner, repo_name = repo.split('/')[:2]
 
-        # 解析 tag/branch
-        tag = parts[1] if len(parts) > 1 else 'main'
+        # @ 后面是技能名过滤器（如果有的话）
+        skill_name_from_at = parts[1] if len(parts) > 1 else None
 
-        # 如果是默认值，尝试 'main' 和 'master'
-        if tag in ['main', 'master']:
-            tag = 'main'  # 默认使用 main
+        # 始终使用 main 分支
+        tag = 'main'
 
         # 构建下载 URL
-        # GitHub tarball URL: https://github.com/owner/repo/archive/refs/tags/tag.tar.gz
-        # 或 branch: https://github.com/owner/repo/archive/refs/heads/branch.tar.gz
         tarball_url = f"https://github.com/{owner}/{repo_name}/archive/refs/tags/{tag}.tar.gz"
-
-        # 如果 tag 不存在，回退到 branch
         fallback_url = f"https://github.com/{owner}/{repo_name}/archive/refs/heads/{tag}.tar.gz"
 
         tarball_filename = f"{repo_name}-{tag}.tar.gz"
@@ -466,6 +571,37 @@ class NPXStyleInstaller:
                 print_error("Failed to download from GitHub")
                 return False
 
+        # 确定技能名过滤器
+        skill_name_filter = skill_name_from_at
+
+        # 处理 skill_path：
+        # - 如果包含 "/"，说明是目录路径，最后一部分是技能名
+        # - 如果不包含 "/"，说明是技能名，用于过滤
+        if skill_path:
+            if '/' in skill_path:
+                # 是目录路径，导航到该目录，最后一部分是技能名
+                skill_name_from_path = skill_path.split('/')[-1]
+                return self._install_from_tarball_with_path(tarball_path, tarball_filename, skill_path, skill_name_from_path)
+            else:
+                # 是技能名，用作过滤器
+                skill_name_filter = skill_path
+
+        # 使用统一的安装方法（会查找 SKILL.md），传递技能名过滤器
+        return self._install_from_tarball(tarball_path, tarball_filename, skill_name_filter=skill_name_filter)
+
+    def _install_from_tarball_with_path(self, tarball_path: str, fallback_name: str, skill_path: str, skill_name_filter: Optional[str] = None) -> bool:
+        """
+        从 tarball 安装指定的子目录技能
+
+        Args:
+            tarball_path: tarball 文件路径
+            fallback_name: 备用名称
+            skill_path: 技能子目录路径
+            skill_name_filter: 可选的技能名称过滤器
+
+        Returns:
+            bool: 是否成功
+        """
         # 解压
         extract_dir = os.path.join(self.temp_dir, "extracted")
         try:
@@ -476,7 +612,7 @@ class NPXStyleInstaller:
         if not self._extract_tarball(tarball_path, extract_dir):
             return False
 
-        # 找到解压后的目录
+        # 找到解压后的根目录
         extracted_items = os.listdir(extract_dir)
         if not extracted_items:
             print_error("No files extracted")
@@ -484,43 +620,82 @@ class NPXStyleInstaller:
 
         package_source = os.path.join(extract_dir, extracted_items[0])
 
-        # 如果指定了技能子目录，导航到该目录
-        if skill_path:
-            package_source = os.path.join(package_source, skill_path)
-            if not os.path.exists(package_source):
-                print_error(f"Skill path not found: {skill_path}")
-                return False
+        # 导航到指定的技能子目录
+        package_source = os.path.join(package_source, skill_path)
+        if not os.path.exists(package_source):
+            print_error(f"Skill path not found: {skill_path}")
+            return False
 
-        # 确定目标目录
-        skill_name = f"{owner}-{repo_name}"
-        if skill_path:
-            skill_name = skill_path.replace('/', '-')
+        # 查找技能（可过滤）
+        print_info("Scanning for skills (folders with SKILL.md)...")
+        if skill_name_filter:
+            print_info(f"Filtering by skill name: {skill_name_filter}")
+        skill_folders = find_skill_folders(package_source, skill_name_filter)
 
-        target_dir = os.path.join(self.skills_dir, skill_name)
+        if not skill_folders:
+            print_error("No valid skills found (no SKILL.md files detected)")
+            print_info("A valid skill must contain a SKILL.md file")
+            return False
 
-        # 检查是否已安装（绝不覆盖）
-        if os.path.exists(target_dir):
-            print_warning(f"Skill already exists: {target_dir}")
-            print_warning("Skipping installation (NEVER overwrites existing files)")
-            return True
+        # 安装找到的技能
+        installed_skills = []
+        skipped_skills = []
 
-        # 安装
-        try:
-            # 确保父目录存在
-            parent_dir = os.path.dirname(target_dir)
+        print_info(f"Found {len(skill_folders)} skill(s)")
+
+        for skill_dir, skill_name in skill_folders:
+            skill_info = get_skill_info(skill_dir)
+            display_name = skill_info.get("name", skill_name)
+            description = skill_info.get("description", "")
+
+            target_dir = os.path.join(self.skills_dir, skill_name)
+
+            if os.path.exists(target_dir):
+                print_warning(f"Skill already exists: {skill_name}")
+                skipped_skills.append((skill_name, display_name, "already exists"))
+                continue
+
             try:
-                os.makedirs(parent_dir, exist_ok=True)
-            except FileExistsError:
-                pass
+                parent_dir = os.path.dirname(target_dir)
+                try:
+                    os.makedirs(parent_dir, exist_ok=True)
+                except FileExistsError:
+                    pass
 
-            # 使用自定义的 copytree，通过 open() 被沙箱拦截
-            if copytree_with_open(package_source, target_dir):
-                print_success(f"Installed to: {target_dir}")
-                return True
-            return False
-        except Exception as e:
-            print_error(f"Installation failed: {e}")
-            return False
+                print_info(f"Installing skill: {skill_name}")
+                if copytree_with_open(skill_dir, target_dir):
+                    installed_skills.append((skill_name, display_name, description))
+                    print_success(f"Installed: {skill_name}")
+                else:
+                    print_error(f"Failed to install: {skill_name}")
+            except Exception as e:
+                print_error(f"Installation failed for {skill_name}: {e}")
+
+        # 输出安装摘要
+        self._print_install_summary(installed_skills, skipped_skills)
+
+        return len(installed_skills) > 0 or len(skipped_skills) > 0
+
+    def _print_install_summary(self, installed_skills: list, skipped_skills: list) -> None:
+        """输出安装摘要"""
+        print_header("📋 Installation Summary")
+        if installed_skills:
+            print_success(f"Successfully installed {len(installed_skills)} skill(s):")
+            for skill_name, display_name, description in installed_skills:
+                if display_name != skill_name:
+                    print(f"  • {skill_name} ({display_name})")
+                else:
+                    print(f"  • {skill_name}")
+                if description:
+                    print(f"    {description}")
+        else:
+            print_warning("No skills were installed")
+
+        if skipped_skills:
+            print()
+            print_warning(f"Skipped {len(skipped_skills)} skill(s) (already exist):")
+            for skill_name, display_name, _ in skipped_skills:
+                print(f"  • {skill_name}")
 
     def _install_from_url(self, url: str) -> bool:
         """
@@ -568,13 +743,21 @@ class NPXStyleInstaller:
         filename = os.path.basename(file_path)
         return self._install_from_tarball(file_path, filename)
 
-    def _install_from_tarball(self, tarball_path: str, fallback_name: str) -> bool:
+    def _install_from_tarball(self, tarball_path: str, fallback_name: str, skill_name_filter: Optional[str] = None) -> bool:
         """
         从 tarball 解压并安装
+
+        安装逻辑：
+        1. 解压 tarball 到临时目录
+        2. 查找所有包含 SKILL.md 的文件夹（每个是一个独立技能）
+        3. 如果指定了 skill_name_filter，只安装匹配的技能
+        4. 将每个技能文件夹复制到 /skills/<skill_name>/
+        5. 输出安装的技能列表
 
         Args:
             tarball_path: tarball 文件路径
             fallback_name: 技能的备用名称
+            skill_name_filter: 可选的技能名称过滤器（只安装匹配的技能）
 
         Returns:
             bool: 是否成功
@@ -591,7 +774,7 @@ class NPXStyleInstaller:
             if not self._extract_tarball(tarball_path, extract_dir):
                 return False
 
-            # 找到解压后的目录
+            # 找到解压后的根目录
             extracted_items = os.listdir(extract_dir)
             if len(extracted_items) == 1:
                 package_source = os.path.join(extract_dir, extracted_items[0])
@@ -601,28 +784,59 @@ class NPXStyleInstaller:
             print_error(f"Not a tarball file: {tarball_path}")
             return False
 
-        # 确定目标名称 - 使用字符串操作而不是 Path 方法
-        filename = os.path.basename(fallback_name)
-        # 使用字符串 replace 移除扩展名
-        skill_name = filename.replace('.tar.gz', '').replace('.tgz', '').replace('.tar.bz2', '').replace('.tar', '')
-        target_dir = os.path.join(self.skills_dir, skill_name)
+        # 查找所有包含 SKILL.md 的技能文件夹（可过滤）
+        print_info("Scanning for skills (folders with SKILL.md)...")
+        if skill_name_filter:
+            print_info(f"Filtering by skill name: {skill_name_filter}")
+        skill_folders = find_skill_folders(package_source, skill_name_filter)
 
-        # 检查是否已安装
-        if os.path.exists(target_dir):
-            print_warning(f"Skill already exists: {target_dir}")
-            print_warning("Skipping installation (NEVER overwrites existing files)")
-            return True
+        installed_skills = []
+        skipped_skills = []
 
-        # 安装
-        print_info(f"Installing to: {target_dir}")
-        try:
-            if copytree_with_open(package_source, target_dir):
-                print_success(f"Installed successfully: {target_dir}")
-                return True
+        if skill_folders:
+            # 找到了技能文件夹，逐个安装
+            print_info(f"Found {len(skill_folders)} skill(s)")
+
+            for skill_dir, skill_name in skill_folders:
+                skill_info = get_skill_info(skill_dir)
+                display_name = skill_info.get("name", skill_name)
+                description = skill_info.get("description", "")
+
+                target_dir = os.path.join(self.skills_dir, skill_name)
+
+                # 检查是否已安装
+                if os.path.exists(target_dir):
+                    print_warning(f"Skill already exists: {skill_name}")
+                    skipped_skills.append((skill_name, display_name, "already exists"))
+                    continue
+
+                # 安装技能
+                try:
+                    # 确保父目录存在
+                    parent_dir = os.path.dirname(target_dir)
+                    try:
+                        os.makedirs(parent_dir, exist_ok=True)
+                    except FileExistsError:
+                        pass
+
+                    print_info(f"Installing skill: {skill_name}")
+                    if copytree_with_open(skill_dir, target_dir):
+                        installed_skills.append((skill_name, display_name, description))
+                        print_success(f"Installed: {skill_name}")
+                    else:
+                        print_error(f"Failed to install: {skill_name}")
+                except Exception as e:
+                    print_error(f"Installation failed for {skill_name}: {e}")
+        else:
+            # 没有找到 SKILL.md，认为没有可用技能
+            print_error("No valid skills found (no SKILL.md files detected)")
+            print_info("A valid skill must contain a SKILL.md file")
             return False
-        except Exception as e:
-            print_error(f"Installation failed: {e}")
-            return False
+
+        # 输出安装摘要
+        self._print_install_summary(installed_skills, skipped_skills)
+
+        return len(installed_skills) > 0 or len(skipped_skills) > 0
 
     def install(self, package_spec: str) -> bool:
         """
@@ -801,9 +1015,61 @@ class NPXStyleInstaller:
             print_error(f"npm search failed: {e}")
             return False
 
+    def _search_skills_sh(self, query: str) -> bool:
+        """
+        从 skills.sh 搜索技能
+
+        Args:
+            query: 搜索关键词
+
+        Returns:
+            bool: 是否成功
+        """
+        print_header(f"🔍 Searching skills.sh for: {query}")
+
+        try:
+            # skills.sh API
+            url = f"https://skills.sh/api/search?q={urllib.parse.quote(query)}"
+
+            print_info(f"Querying: {url}\n")
+
+            ssl_context = ssl._create_unverified_context()
+            with urllib.request.urlopen(url, timeout=10, context=ssl_context) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+                skills = data.get('skills', [])
+                if skills:
+                    print_info(f"Found {len(skills)} skill(s):\n")
+                    for skill in skills[:10]:  # 最多显示10个
+                        skill_id = skill.get('id', '')
+                        name = skill.get('name', skill_id)
+                        source = skill.get('source', '')
+                        installs = skill.get('installs', 0)
+
+                        print(f"  {Colors.GREEN}•{Colors.RESET} {name}")
+                        print(f"    Source: {source}")
+                        print(f"    Installs: {installs}")
+                        print(f"    📦 Install: python install_skill.py {skill_id}")
+                        print()
+                else:
+                    print_warning("No skills found")
+                    return True
+
+            return True
+
+        except urllib.error.HTTPError as e:
+            print_error(f"HTTP Error {e.code}: {e.reason}")
+            return False
+        except urllib.error.URLError as e:
+            print_error(f"URL Error: {e.reason}")
+            return False
+        except Exception as e:
+            print_error(f"skills.sh search failed: {e}")
+            return False
+
     def search_skills(self, query: str) -> bool:
         """
-        Search for skills without npx
+        Search for skills from multiple sources
 
         Args:
             query: Search query
@@ -814,11 +1080,14 @@ class NPXStyleInstaller:
         print_header(f"🔍 Skill Search: {query}")
         print_info("Searching multiple sources...\n")
 
-        # Search GitHub
-        github_success = self._search_github(query)
+        # 优先搜索 skills.sh（专门的技能目录）
+        skills_sh_success = self._search_skills_sh(query)
 
         # Search npm
         npm_success = self._search_npm(query)
+
+        # Search GitHub
+        github_success = self._search_github(query)
 
         # Provide manual search options
         print_header("📚 Manual Search Options")
@@ -830,7 +1099,7 @@ class NPXStyleInstaller:
         print(f"  • https://www.npmjs.com/search?q=agent+skill  - npm packages")
         print()
 
-        return github_success or npm_success
+        return skills_sh_success or github_success or npm_success
 
 
 def main():

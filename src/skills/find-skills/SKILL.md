@@ -31,15 +31,16 @@ Install skills using the provided Python script with direct HTTP download:
 - ✅ **Direct** - Downloads straight to `/skills/` directory
 - ✅ **Flexible** - Supports npm, GitHub, and direct URLs
 - ✅ **Complete** - Search + install + list functionality
+- ✅ **Smart filtering** - Filters by SKILL.md name field
 
 ### Quick Start
 
 ```bash
-# Search for skills (no npx required!)
+# Search for skills (searches skills.sh, npm, GitHub)
 python /skills/find-skills/scripts/install_skill.py -s "react performance"
 
-# Install a skill
-python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+# Install a specific skill (filter by SKILL.md name)
+python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills/vercel-react-best-practices
 
 # List installed skills
 python /skills/find-skills/scripts/install_skill.py -l
@@ -49,14 +50,14 @@ python /skills/find-skills/scripts/install_skill.py -l
 
 **From GitHub (Recommended for agent skills):**
 ```bash
-# Install specific skill from repository
-python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+# Install specific skill by name (matches SKILL.md name field)
+python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills/vercel-react-best-practices
 
-# Install entire repository
+# Install skill with path
+python /skills/find-skills/scripts/install_skill.py owner/repo/skills/my-skill
+
+# Install all skills from repository (no filter)
 python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills
-
-# Install from specific tag
-python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@v1.0.0
 ```
 
 **From npm registry:**
@@ -83,7 +84,7 @@ python /skills/find-skills/scripts/install_skill.py ./my-skill.tgz
 ### Available Commands
 
 ```bash
-# Search for skills (no npx required!)
+# Search for skills (searches skills.sh API, npm, GitHub)
 python /skills/find-skills/scripts/install_skill.py -s "query"
 
 # Install to custom directory
@@ -108,14 +109,15 @@ When a user asks for help with something, identify:
 
 ### Step 2: Search for Skills
 
-**Option A: Use the script's search feature (no npx required!):**
+**Option A: Use the script's search feature:**
 ```bash
 python /skills/find-skills/scripts/install_skill.py -s "react performance"
 ```
 
 The search will:
-- Search GitHub for popular skill repositories
-- Suggest relevant npm packages
+- Search skills.sh API for official skills
+- Search npm registry for packages
+- Suggest popular GitHub repositories
 - Provide manual search links
 
 **Option B: Browse manually:**
@@ -124,6 +126,7 @@ Visit https://skills.sh/ to explore available skills
 **Option C: Try common skill sources:**
 Many skills come from:
 - `vercel-labs/agent-skills` - Vercel's collection of agent skills
+- `expo/skills` - Expo's official skills
 - `ComposioHQ/awesome-claude-skills` - Community-maintained list
 
 ### Step 3: Present Options to the User
@@ -135,7 +138,7 @@ I found a skill that might help! The "vercel-react-best-practices" skill provide
 React and Next.js performance optimization guidelines from Vercel Engineering.
 
 To install it:
-python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills@vercel-react-best-practices
+python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills/vercel-react-best-practices
 
 Learn more: https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices
 ```
@@ -151,6 +154,7 @@ python /skills/find-skills/scripts/install_skill.py <package_spec>
 The script will:
 - ✅ Download via HTTP (no npx needed)
 - ✅ Extract to `/skills/` directory
+- ✅ Filter by SKILL.md name field (if skill name provided)
 - ✅ Skip if already installed (never overwrites)
 - ✅ Clean up temporary files automatically
 
@@ -169,6 +173,24 @@ When searching, consider these common categories:
 | Productivity    | workflow, automation, git                |
 
 ## Technical Details
+
+### How Skill Filtering Works
+
+When you specify a skill name, the script filters by the `name` field in `SKILL.md`:
+
+```
+owner/repo/skill-name
+  ↑        ↑
+仓库     技能名（匹配 SKILL.md 中的 name 字段）
+```
+
+**Example:**
+```bash
+# Only install skill with name: expo-deployment in SKILL.md
+python /skills/find-skills/scripts/install_skill.py expo/skills/expo-deployment
+```
+
+The matching is case-insensitive and supports `-`, `_`, and spaces interchangeably.
 
 ### How It Works (Direct HTTP Download)
 
@@ -196,13 +218,21 @@ with gzip.open('/tmp/skill_install/package.tgz', 'rb') as gz:
 → Extracts to /tmp/ directory
 ```
 
-**4. Install to /skills/:**
+**4. Find SKILL.md files:**
 ```python
-shutil.copytree('/tmp/skill_install/extracted/package', '/skills/package-name')
+# Recursively find folders containing SKILL.md
+# Filter by name field if skill name specified
+for folder in find_skill_folders(extracted_dir, skill_name_filter):
+    install_skill(folder)
+```
+
+**5. Install to /skills/:**
+```python
+shutil.copytree('/tmp/skill_install/extracted/skill-folder', '/skills/skill-name')
 → Copies from /tmp/ to /skills/ directory
 ```
 
-**5. Anti-Overwrite Protection:**
+**6. Anti-Overwrite Protection:**
 ```python
 if /skills/<package>/ exists:
     ⚠ Skip installation (NEVER overwrites)
@@ -212,7 +242,7 @@ else:
 
 **Workflow Summary:**
 ```
-Registry → Download to /tmp/ → Extract in /tmp/ → Install to /skills/
+Registry → Download to /tmp/ → Extract → Find SKILL.md → Filter → Install to /skills/
 ```
 
 All operations use **only Python standard library** - no external commands required.
@@ -221,10 +251,9 @@ All operations use **only Python standard library** - no external commands requi
 
 **1. GitHub repositories:**
 ```
-owner/repo
-owner/repo@tag
-owner/repo@branch
-owner/repo@tag/path/to/skill
+owner/repo                              # Install all skills
+owner/repo/skill-name                   # Install specific skill (filter by SKILL.md name)
+owner/repo/path/skill-name              # Install from subdirectory
 ```
 
 **2. npm packages:**
@@ -252,7 +281,7 @@ https://example.com/skill-package.tar.gz
 
 1. **Use specific keywords**: "react testing" is better than just "testing"
 2. **Try alternative terms**: If "deploy" doesn't work, try "deployment" or "ci-cd"
-3. **Check popular sources**: Many skills come from `vercel-labs/agent-skills`
+3. **Check popular sources**: Many skills come from `vercel-labs/agent-skills`, `expo/skills`
 4. **Browse manually**: Visit https://skills.sh/ to explore
 
 ## When No Skills Are Found
@@ -295,6 +324,14 @@ python -c "import shutil; shutil.rmtree('/skills/<skill-name>')"
 
 # Then install again
 python /skills/find-skills/scripts/install_skill.py <package>
+```
+
+**Problem:** Skill not found (filter didn't match)
+```bash
+# The skill name must match the "name:" field in SKILL.md
+# Check the SKILL.md file in the repository to see the correct name
+# Example: If SKILL.md has "name: vercel-react-best-practices"
+python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills/vercel-react-best-practices
 ```
 
 **Note:** This script uses only Python standard library - no external commands required.
