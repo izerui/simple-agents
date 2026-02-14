@@ -200,7 +200,7 @@ python /skills/find-skills/scripts/install_skill.py <package_spec>
 | 类别 | 示例查询 |
 |------|----------|
 | Web 开发 | react, nextjs, typescript, css, tailwind |
-| 测试 | testing, jest, playwright, e2e |
+| 测试 | testing, jest, e2e |
 | DevOps | deploy, docker, kubernetes, ci-cd |
 | 文档 | docs, readme, changelog, api-docs |
 | 代码质量 | review, lint, refactor, best-practices |
