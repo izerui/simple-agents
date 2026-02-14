@@ -1,182 +1,182 @@
 ---
 name: find-skills
-description: Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill.
+description: 帮助用户发现和安装技能。当用户问"怎么做X"、"找一个X的技能"、"有没有能做X的技能"，或表达扩展能力的意愿时使用此技能。
 ---
 
-# Find Skills
+# 技能查找
 
-This skill helps you discover and install skills from the open agent skills ecosystem. It can find skills and automatically download them to your `/skills/` directory.
+帮助用户从开放技能生态系统中发现和安装技能，可以查找技能并自动下载到 `/skills/` 目录。
 
-## When to Use This Skill
+## 使用场景
 
-Use this skill when the user:
+当用户：
 
-- Asks "how do I do X" where X might be a common task with an existing skill
-- Says "find a skill for X" or "is there a skill for X"
-- Asks "can you do X" where X is a specialized capability
-- Expresses interest in extending agent capabilities
-- Wants to search for tools, templates, or workflows
-- Mentions they wish they had help with a specific domain (design, testing, deployment, etc.)
-- Needs to download and install skills to the `/skills/` directory
+- 问"怎么做X"，X 可能是常见任务
+- 说"找一个X的技能"或"有没有X的技能"
+- 问"你能做X吗"，X 是专门的能力
+- 表达扩展 Agent 能力的意愿
+- 想要搜索工具、模板或工作流
+- 提到希望在特定领域获得帮助（设计、测试、部署等）
+- 需要下载并安装技能到 `/skills/` 目录
 
-## Installation Method
+## 安装方法
 
-### 🚀 Use the Python Script
+### Python 脚本安装
 
-Install skills using the provided Python script with direct HTTP download:
+使用提供的 Python 脚本通过 HTTP 直接下载安装：
 
-**Key features:**
-- ✅ **Zero dependencies** - Only requires Python 3.5+
-- ✅ **Safe** - NEVER overwrites existing installations
-- ✅ **Direct** - Downloads straight to `/skills/` directory
-- ✅ **Flexible** - Supports npm, GitHub, and direct URLs
-- ✅ **Complete** - Search + install + list functionality
-- ✅ **Smart filtering** - Filters by SKILL.md name field
+**核心特性：**
+- ✅ **零依赖** - 仅需 Python 3.5+
+- ✅ **安全** - 永不覆盖已有安装
+- ✅ **直接** - 直接下载到 `/skills/` 目录
+- ✅ **灵活** - 支持 npm、GitHub 和直接 URL
+- ✅ **完整** - 搜索 + 安装 + 列表功能
+- ✅ **智能过滤** - 按 SKILL.md name 字段过滤
 
-### Quick Start
+### 快速开始
 
 ```bash
-# Search for skills (searches skills.sh, npm, GitHub)
+# 搜索技能
 python /skills/find-skills/scripts/install_skill.py -s "react performance"
 
-# Install a specific skill (filter by SKILL.md name)
+# 安装特定技能（按 SKILL.md name 过滤）
 python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills/vercel-react-best-practices
 
-# List installed skills
+# 列出已安装技能
 python /skills/find-skills/scripts/install_skill.py -l
 ```
 
-### Installation Examples
+### 安装示例
 
-**From GitHub (Recommended for agent skills):**
+**从 GitHub 安装（推荐）：**
 ```bash
-# Install specific skill by name (matches SKILL.md name field)
+# 按技能名安装（匹配 SKILL.md 中的 name 字段）
 python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills/vercel-react-best-practices
 
-# Install skill with path
+# 按路径安装技能
 python /skills/find-skills/scripts/install_skill.py owner/repo/skills/my-skill
 
-# Install all skills from repository (no filter)
+# 安装仓库中的所有技能（不过滤）
 python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills
 ```
 
-**From npm registry:**
+**从 npm registry 安装：**
 ```bash
-# Install latest version
+# 安装最新版本
 python /skills/find-skills/scripts/install_skill.py create-react-app
 
-# Install specific version
+# 安装特定版本
 python /skills/find-skills/scripts/install_skill.py create-react-app@5.0.1
 ```
 
-**From direct URL:**
+**从直接 URL 安装：**
 ```bash
 python /skills/find-skills/scripts/install_skill.py https://example.com/skill-package.tar.gz
 ```
 
-**From local tarball file:**
+**从本地 tarball 文件安装：**
 ```bash
-# Install from local .tgz or .tar.gz file
 python /skills/find-skills/scripts/install_skill.py /path/to/skill-package.tar.gz
 python /skills/find-skills/scripts/install_skill.py ./my-skill.tgz
 ```
 
-### Available Commands
+### 可用命令
 
 ```bash
-# Search for skills (searches skills.sh API, npm, GitHub)
-python /skills/find-skills/scripts/install_skill.py -s "query"
+# 搜索技能
+python /skills/find-skills/scripts/install_skill.py -s "查询关键词"
 
-# Install to custom directory
+# 安装到自定义目录
 python /skills/find-skills/scripts/install_skill.py -d /path/to/skills <package>
 
-# List installed skills
+# 列出已安装技能
 python /skills/find-skills/scripts/install_skill.py -l
 
-# Show help
+# 显示帮助
 python /skills/find-skills/scripts/install_skill.py --help
 ```
 
-## How to Help Users Find Skills
+## 帮助用户查找技能
 
-### Step 1: Understand What They Need
+### 步骤 1：理解用户需求
 
-When a user asks for help with something, identify:
+当用户请求帮助时，识别：
 
-1. The domain (e.g., React, testing, design, deployment)
-2. The specific task (e.g., writing tests, creating animations, reviewing PRs)
-3. Whether this is a common enough task that a skill likely exists
+1. 领域（如 React、测试、设计、部署）
+2. 具体任务（如编写测试、创建动画、审查 PR）
+3. 是否是常见任务，可能有现成技能
 
-### Step 2: Search for Skills
+### 步骤 2：搜索技能
 
-**Option A: Use the script's search feature:**
+**搜索优先级顺序：**
+
+| 优先级 | 来源 | 说明 |
+|--------|------|------|
+| 1 | **skills.sh** | 专门的技能目录（优先搜索） |
+| 2 | **npm registry** | npm 包搜索 |
+| 3 | **GitHub** | 搜索流行仓库并提供手动搜索链接 |
+
+**使用脚本搜索：**
 ```bash
 python /skills/find-skills/scripts/install_skill.py -s "react performance"
 ```
 
-The search will:
-- Search skills.sh API for official skills
-- Search npm registry for packages
-- Suggest popular GitHub repositories
-- Provide manual search links
+**手动浏览：**
+访问 https://skills.sh/ 探索可用技能
 
-**Option B: Browse manually:**
-Visit https://skills.sh/ to explore available skills
+**常见技能来源：**
+- `vercel-labs/agent-skills` - Vercel 的 Agent 技能集合
+- `expo/skills` - Expo 官方技能
+- `ComposioHQ/awesome-claude-skills` - 社区维护列表
 
-**Option C: Try common skill sources:**
-Many skills come from:
-- `vercel-labs/agent-skills` - Vercel's collection of agent skills
-- `expo/skills` - Expo's official skills
-- `ComposioHQ/awesome-claude-skills` - Community-maintained list
+### 步骤 3：向用户展示选项
 
-### Step 3: Present Options to the User
-
-When you find relevant skills, present them clearly:
+找到相关技能后，清晰展示：
 
 ```
-I found a skill that might help! The "vercel-react-best-practices" skill provides
-React and Next.js performance optimization guidelines from Vercel Engineering.
+我找到一个可能有帮助的技能！"vercel-react-best-practices" 技能提供了
+来自 Vercel Engineering 的 React 和 Next.js 性能优化指南。
 
-To install it:
+安装命令：
 python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills/vercel-react-best-practices
 
-Learn more: https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices
+了解更多：https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices
 ```
 
-### Step 4: Install the Skill
+### 步骤 4：安装技能
 
-If the user wants to proceed, install it directly:
+如果用户确认，直接安装：
 
 ```bash
 python /skills/find-skills/scripts/install_skill.py <package_spec>
 ```
 
-The script will:
-- ✅ Download via HTTP (no npx needed)
-- ✅ Extract to `/skills/` directory
-- ✅ Filter by SKILL.md name field (if skill name provided)
-- ✅ Skip if already installed (never overwrites)
-- ✅ Clean up temporary files automatically
+脚本会：
+- ✅ 通过 HTTP 下载（无需 npx）
+- ✅ 解压到 `/skills/` 目录
+- ✅ 按 SKILL.md name 字段过滤（如果指定了技能名）
+- ✅ 跳过已安装的技能（永不覆盖）
+- ✅ 自动清理临时文件
 
-## Common Skill Categories
+## 常见技能类别
 
-When searching, consider these common categories:
+搜索时，考虑以下常见类别：
 
-| Category        | Example Queries                          |
-| --------------- | ---------------------------------------- |
-| Web Development | react, nextjs, typescript, css, tailwind |
-| Testing         | testing, jest, playwright, e2e           |
-| DevOps          | deploy, docker, kubernetes, ci-cd        |
-| Documentation   | docs, readme, changelog, api-docs        |
-| Code Quality    | review, lint, refactor, best-practices   |
-| Design          | ui, ux, design-system, accessibility     |
-| Productivity    | workflow, automation, git                |
+| 类别 | 示例查询 |
+|------|----------|
+| Web 开发 | react, nextjs, typescript, css, tailwind |
+| 测试 | testing, jest, playwright, e2e |
+| DevOps | deploy, docker, kubernetes, ci-cd |
+| 文档 | docs, readme, changelog, api-docs |
+| 代码质量 | review, lint, refactor, best-practices |
+| 设计 | ui, ux, design-system, accessibility |
+| 效率 | workflow, automation, git |
 
-## Technical Details
+## 技术细节
 
-### How Skill Filtering Works
+### 技能过滤机制
 
-When you specify a skill name, the script filters by the `name` field in `SKILL.md`:
+指定技能名时，脚本按 SKILL.md 中的 `name` 字段过滤：
 
 ```
 owner/repo/skill-name
@@ -184,154 +184,130 @@ owner/repo/skill-name
 仓库     技能名（匹配 SKILL.md 中的 name 字段）
 ```
 
-**Example:**
+**示例：**
 ```bash
-# Only install skill with name: expo-deployment in SKILL.md
+# 只安装 SKILL.md 中 name: expo-deployment 的技能
 python /skills/find-skills/scripts/install_skill.py expo/skills/expo-deployment
 ```
 
-The matching is case-insensitive and supports `-`, `_`, and spaces interchangeably.
+匹配不区分大小写，支持 `-`、`_` 和空格互通。
 
-### How It Works (Direct HTTP Download)
+### 工作原理（直接 HTTP 下载）
 
-This script downloads and installs skills using direct HTTP requests:
+脚本通过直接 HTTP 请求下载和安装技能：
 
-**1. Query Package Registry:**
-```python
-GET https://registry.npmjs.org/<package>
-→ Returns JSON with versions and tarball URL
+```
+仓库 → 下载到 /tmp/ → 解压 → 查找 SKILL.md → 过滤 → 安装到 /skills/
 ```
 
-**2. Download Tarball to /tmp/:**
-```python
-with urllib.request.urlopen(tarball_url) as response:
-    with open('/tmp/skill_install/package.tgz', 'wb') as f:
-        shutil.copyfileobj(response, f)
-→ Downloads .tgz file to /tmp/ directory
+**工作流程：**
+
+1. **查询包仓库：**
+   - 从 npm registry 或 GitHub 获取包信息
+
+2. **下载 Tarball 到 /tmp/：**
+   - 下载 .tgz 文件到临时目录
+
+3. **在 /tmp/ 中解压：**
+   - 解压 tarball 到临时目录
+
+4. **查找 SKILL.md 文件：**
+   - 递归查找包含 SKILL.md 的文件夹
+   - 如果指定了技能名，按 name 字段过滤
+
+5. **安装到 /skills/：**
+   - 将技能文件夹复制到 `/skills/` 目录
+
+6. **防覆盖保护：**
+   - 如果 `/skills/<package>/` 已存在，跳过安装
+
+所有操作仅使用 **Python 标准库** - 无需外部命令。
+
+### 支持的包格式
+
+**1. GitHub 仓库：**
+```
+owner/repo                    # 安装所有技能
+owner/repo/skill-name         # 安装特定技能（按 SKILL.md name 过滤）
+owner/repo/path/skill-name    # 从子目录安装
 ```
 
-**3. Extract in /tmp/:**
-```python
-with gzip.open('/tmp/skill_install/package.tgz', 'rb') as gz:
-    with tarfile.open(fileobj=gz, mode='r:gz') as tar:
-        tar.extractall(path='/tmp/skill_install/extracted')
-→ Extracts to /tmp/ directory
-```
-
-**4. Find SKILL.md files:**
-```python
-# Recursively find folders containing SKILL.md
-# Filter by name field if skill name specified
-for folder in find_skill_folders(extracted_dir, skill_name_filter):
-    install_skill(folder)
-```
-
-**5. Install to /skills/:**
-```python
-shutil.copytree('/tmp/skill_install/extracted/skill-folder', '/skills/skill-name')
-→ Copies from /tmp/ to /skills/ directory
-```
-
-**6. Anti-Overwrite Protection:**
-```python
-if /skills/<package>/ exists:
-    ⚠ Skip installation (NEVER overwrites)
-else:
-    ✓ Install fresh copy
-```
-
-**Workflow Summary:**
-```
-Registry → Download to /tmp/ → Extract → Find SKILL.md → Filter → Install to /skills/
-```
-
-All operations use **only Python standard library** - no external commands required.
-
-### Supported Package Formats
-
-**1. GitHub repositories:**
-```
-owner/repo                              # Install all skills
-owner/repo/skill-name                   # Install specific skill (filter by SKILL.md name)
-owner/repo/path/skill-name              # Install from subdirectory
-```
-
-**2. npm packages:**
+**2. npm 包：**
 ```
 package-name
 package-name@version
 package@1.2.3
 ```
 
-**3. Direct URLs:**
+**3. 直接 URL：**
 ```
 https://registry.npmjs.org/package/-/package-1.0.0.tgz
 https://github.com/owner/repo/archive/refs/tags/v1.0.0.tar.gz
 https://example.com/skill-package.tar.gz
 ```
 
-**4. Local tarball files:**
+**4. 本地 tarball 文件：**
 ```
 /path/to/skill-package.tar.gz
 ./my-skill.tgz
 ~/Downloads/skill.tar.bz2
 ```
 
-## Tips for Effective Searches
+## 搜索技巧
 
-1. **Use specific keywords**: "react testing" is better than just "testing"
-2. **Try alternative terms**: If "deploy" doesn't work, try "deployment" or "ci-cd"
-3. **Check popular sources**: Many skills come from `vercel-labs/agent-skills`, `expo/skills`
-4. **Browse manually**: Visit https://skills.sh/ to explore
+1. **使用具体关键词**："react testing" 比 "testing" 更好
+2. **尝试替代词**：如果 "deploy" 没找到，试试 "deployment" 或 "ci-cd"
+3. **检查热门来源**：许多技能来自 `vercel-labs/agent-skills`、`expo/skills`
+4. **手动浏览**：访问 https://skills.sh/ 探索
 
-## When No Skills Are Found
+## 未找到技能时
 
-If no relevant skills exist:
+如果没有找到相关技能：
 
-1. Acknowledge that no existing skill was found
-2. Offer to help with the task directly using your general capabilities
-3. Suggest the user could create their own skill
+1. 告知用户没有找到现有技能
+2. 主动提出使用通用能力帮助完成任务
+3. 建议用户可以创建自己的技能
 
-Example:
+示例：
 
 ```
-I searched for skills related to "xyz" but didn't find any matches.
-I can still help you with this task directly! Would you like me to proceed?
+我搜索了与 "xyz" 相关的技能但没有找到匹配项。
+我仍然可以直接帮你完成这个任务！要继续吗？
 
-If this is something you do often, you could create your own skill
-using the template in /skills/find-skills/
+如果你经常需要这个功能，可以使用 /skills/find-skills/ 中的模板
+创建自己的技能。
 ```
 
-## Troubleshooting
+## 故障排除
 
-**Problem:** Command not found or Python 2 error
+**问题：找不到命令或 Python 2 错误**
 ```bash
-# Solution: Use python instead of python
-python /skills/find-skills/scripts/install_skill.py <package>
+# 解决方案：使用 python3
+python3 /skills/find-skills/scripts/install_skill.py <package>
 ```
 
-**Problem:** Permission denied
-```python
-# Solution: Make sure /skills/ directory is writable
+**问题：权限被拒绝**
+```bash
+# 解决方案：确保 /skills/ 目录可写
 python -c "import os; os.chmod('/skills/', 0o755)"
 ```
 
-**Problem:** Skill already exists
-```python
-# This is expected behavior! The script never overwrites.
-# To reinstall, first delete the existing skill:
+**问题：技能已存在**
+```bash
+# 这是预期行为！脚本永不覆盖。
+# 要重新安装，先删除现有技能：
 python -c "import shutil; shutil.rmtree('/skills/<skill-name>')"
 
-# Then install again
+# 然后再次安装
 python /skills/find-skills/scripts/install_skill.py <package>
 ```
 
-**Problem:** Skill not found (filter didn't match)
+**问题：找不到技能（过滤未匹配）**
 ```bash
-# The skill name must match the "name:" field in SKILL.md
-# Check the SKILL.md file in the repository to see the correct name
-# Example: If SKILL.md has "name: vercel-react-best-practices"
+# 技能名必须匹配 SKILL.md 中的 "name:" 字段
+# 查看仓库中的 SKILL.md 文件确认正确的名称
+# 示例：如果 SKILL.md 中有 "name: vercel-react-best-practices"
 python /skills/find-skills/scripts/install_skill.py vercel-labs/agent-skills/vercel-react-best-practices
 ```
 
-**Note:** This script uses only Python standard library - no external commands required.
+**注意：** 此脚本仅使用 Python 标准库 - 无需外部命令。
