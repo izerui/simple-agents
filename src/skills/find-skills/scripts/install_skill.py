@@ -982,7 +982,7 @@ class NPXStyleInstaller:
         for owner, repo, description in popular_repos:
             print(f"  {Colors.GREEN}•{Colors.RESET} {owner}/{repo}")
             print(f"    {description}")
-            print(f"    📦 Install: python install_skill.py {owner}/{repo}")
+            print(f"    📦 Install: python /skills/find-skills/scripts/install_skill.py {owner}/{repo}")
             print()
 
         print_info(f"🔗 Search GitHub manually:")
@@ -1022,7 +1022,7 @@ class NPXStyleInstaller:
 
                         print(f"  {Colors.GREEN}•{Colors.RESET} {name}@{version}")
                         print(f"    {desc_short}")
-                        print(f"    📦 Install: python install_skill.py {name}")
+                        print(f"    📦 Install: python /skills/find-skills/scripts/install_skill.py {name}")
                         print()
                 else:
                     print_warning("No packages found")
@@ -1079,7 +1079,7 @@ class NPXStyleInstaller:
                         print(f"  {Colors.GREEN}•{Colors.RESET} {name}")
                         print(f"    Source: {source}")
                         print(f"    Installs: {installs}")
-                        print(f"    📦 Install: python install_skill.py {skill_id}")
+                        print(f"    📦 Install: python /skills/find-skills/scripts/install_skill.py {skill_id}")
                         print()
                 else:
                     print_warning("No skills found")
@@ -1142,6 +1142,7 @@ class NPXStyleInstaller:
                         author = skill.get('author', '')
                         description = skill.get('description', '')
                         github_url = skill.get('githubUrl', '')
+                        skill_url = skill.get('skillUrl', '')
                         stars = skill.get('stars', 0)
 
                         desc_short = (description[:80] + '...') if len(description) > 80 else description
@@ -1154,7 +1155,9 @@ class NPXStyleInstaller:
                         if stars > 0:
                             print(f"    ⭐ {stars} stars")
                         if github_url:
-                            print(f"    📦 Install: python install_skill.py {github_url}")
+                            print(f"    📦 Install: python /skills/find-skills/scripts/install_skill.py {github_url}")
+                        if skill_url:
+                            print(f"    🔗 Details: {skill_url}")
                         print()
                 else:
                     print_warning("No skills found")
@@ -1219,37 +1222,63 @@ class NPXStyleInstaller:
                 print_info(f"Found {len(ai_results)} skill(s):\n")
 
                 seen_skills = set()
-                for result in ai_results[:10]:
+                count = 0
+                for result in ai_results:
+                    if count >= 10:
+                        break
+
                     skill = result.get('skill', {})
-                    if not skill:
-                        continue
-
-                    skill_id = skill.get('id', '')
-                    if skill_id in seen_skills:
-                        continue
-                    seen_skills.add(skill_id)
-
-                    name = skill.get('name', 'Unknown')
-                    author = skill.get('author', '')
-                    description = skill.get('description', '')
-                    github_url = skill.get('githubUrl', '')
-                    stars = skill.get('stars', 0)
                     score = result.get('score', 0)
 
-                    desc_short = (description[:80] + '...') if len(description) > 80 else description
+                    if skill:
+                        # 有完整技能信息
+                        skill_id = skill.get('id', '')
+                        if skill_id in seen_skills:
+                            continue
+                        seen_skills.add(skill_id)
 
-                    print(f"  {Colors.GREEN}•{Colors.RESET} {name}")
-                    if score:
-                        print(f"    Relevance: {score:.2f}")
-                    if author:
-                        print(f"    Author: {author}")
-                    if desc_short:
-                        print(f"    {desc_short}")
-                    if stars > 0:
-                        print(f"    ⭐ {stars} stars")
-                    if github_url:
-                        print(f"    📦 Install: python install_skill.py {github_url}")
-                    print()
+                        name = skill.get('name', 'Unknown')
+                        author = skill.get('author', '')
+                        description = skill.get('description', '')
+                        github_url = skill.get('githubUrl', '')
+                        skill_url = skill.get('skillUrl', '')
+                        stars = skill.get('stars', 0)
+
+                        desc_short = (description[:80] + '...') if len(description) > 80 else description
+
+                        print(f"  {Colors.GREEN}•{Colors.RESET} {name}")
+                        if score:
+                            print(f"    Relevance: {score:.2f}")
+                        if author:
+                            print(f"    Author: {author}")
+                        if desc_short:
+                            print(f"    {desc_short}")
+                        if stars > 0:
+                            print(f"    ⭐ {stars} stars")
+                        if github_url:
+                            print(f"    📦 Install: python /skills/find-skills/scripts/install_skill.py {github_url}")
+                        if skill_url:
+                            print(f"    🔗 Details: {skill_url}")
+                        print()
+                        count += 1
+                    else:
+                        # 没有完整技能信息，显示文件名
+                        filename = result.get('filename', '')
+                        if filename:
+                            # 从文件名提取技能名
+                            import re
+                            match = re.search(r'skills/([^/]+)-skill-md\.md$', filename)
+                            if match:
+                                skill_name = match.group(1).replace('-', ' ')
+                            else:
+                                skill_name = filename
+
+                            print(f"  {Colors.GREEN}•{Colors.RESET} {skill_name}")
+                            if score:
+                                print(f"    Relevance: {score:.2f}")
+                            print(f"    ℹ️  详细信息请访问 SkillsMP 查看")
+                            print()
+                            count += 1
 
             return True
 
