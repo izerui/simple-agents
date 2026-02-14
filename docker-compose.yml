@@ -38,7 +38,7 @@ services:
             simple-agents-postgres:
                 condition: service_healthy
             browser-service:
-                condition: service_healthy
+                condition: service_started
         env_file:
             - .env
         environment:
@@ -79,11 +79,7 @@ services:
             BROWSER_SERVICE_PORT: 2025
             BROWSER_SERVICE_HOST: 0.0.0.0
             HEADLESS: "true"
+            BROWSER_POOL_SIZE: 3
             MAX_CONCURRENT_PAGES: "10"
-        restart: unless-stopped
-        healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:2025/health"]
-            interval: 30s
-            timeout: 10s
-            retries: 3
-            start_period: 40s
+            BROWSER_IDLE_TIMEOUT: 5
+            LOG_LEVEL: "INFO"
