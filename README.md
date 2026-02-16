@@ -52,7 +52,7 @@ langgraph dockerfile -c langgraph.json Dockerfile
 使用 LangGraph CLI 生成 Dockerfile：
 
 ```bash
-langgraph dockerfile --add-docker-compose -c langgraph.json ./Dockerfile
+langgraph dockerfile -c langgraph.json Dockerfile
 ```
 
 ### 启动 LangGraph 服务器
