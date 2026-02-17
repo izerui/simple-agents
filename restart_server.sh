@@ -117,4 +117,4 @@ echo ""
 
 # Start the LangGraph development server
 # 不需要 --allow-blocking，因为我们使用了 asyncio.to_thread 包装阻塞操作
-exec langgraph dev
+exec langgraph dev --no-reload
