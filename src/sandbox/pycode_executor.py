@@ -29,7 +29,7 @@
 ❌ 禁用：os.open, os.write, os.fdopen（使用内置 open() 代替）
 
 支持三种标准执行格式：
-1. python -c "code" - 直接执行代码字符串
+1. python -c "单行pyscript" - 直接执行代码字符串
 2. python script.py [args...] - 执行脚本文件(支持参数)
 3. python << 'EOF' - 使用 heredoc 执行多行代码（推荐）
 
@@ -1123,7 +1123,7 @@ class CodeExecutor:
         执行受限的 Python 代码或脚本文件
 
         Args:
-            command: 命令字符串（python -c "code" 或 python script.py [args...]）
+            command: 命令字符串（python -c "单行script" 或 python script.py [args...]）
 
         Returns:
             ExecuteResponse 包含输出、退出码和截断标志
