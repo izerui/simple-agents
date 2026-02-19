@@ -240,12 +240,12 @@ EXECUTE_TOOL_DESCRIPTION = """`execute` 工具可以执行Python命令，运行�
 2. 否则，只要代码包含多行 / 缩进 / 多语句：
    必须执行：
    python << 'EOF'
-   <code>
+   <多行pyscript>
    EOF
 
 3. 仅当代码严格为单行表达式：
    才允许执行：
-   python -c "<code>"
+   python -c "<单行pyscript>"
 
 禁止跳过高优先级选择低优先级方式。
 python -c 绝对禁止用于多行代码。

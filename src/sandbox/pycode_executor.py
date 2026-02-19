@@ -857,7 +857,7 @@ class CodeExecutor:
         解析命令字符串
 
         支持格式：
-        1. python -c "code" - 执行代码字符串
+        1. python -c "单行pyscript" - 执行代码字符串
         2. python script.py [args...] - 执行脚本文件
         3. python << 'EOF' - 使用 heredoc 执行多行代码
 
@@ -917,6 +917,20 @@ class CodeExecutor:
                 code = command_str[1:-1]
             else:
                 raise ValueError("代码字符串必须用引号括起来")
+
+            # 检查是否包含多行代码
+            if '\n' in code:
+                raise ValueError(
+                    "python -c 不支持多行代码。\n"
+                    "请使用以下格式之一：\n"
+                    "  1. python script.py [args...]  - 执行脚本文件\n"
+                    "  2. python << 'EOF'             - 使用 heredoc 执行多行代码\n"
+                    "示例:\n"
+                    "  python << 'EOF'\n"
+                    "  print('第一行')\n"
+                    "  print('第二行')\n"
+                    "  EOF"
+                )
 
             return code, None, []
 

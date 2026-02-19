@@ -130,9 +130,10 @@ class SandboxFilesystemBackend(FilesystemBackend, SandboxBackendProtocol):
         - python -m pip check
 
         CodeExecutor 支持的命令：
-        - python -c "code" - 执行代码字符串
         - python script.py - 执行脚本文件
         - python << 'EOF' - 使用 heredoc 执行多行代码（推荐，支持多行）
+        - python -c "单行pyscript" - 执行代码字符串
+
 
         ⚠️ 重要说明：
         针对文件和目录相关操作，请使用以下内置工具方法，不要使用 execute：
