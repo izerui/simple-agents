@@ -47,8 +47,8 @@ upload_files = AttachmentExtractMiddleware(backend_factory=get_backend_per_threa
 
 # thread_id 内工具限制中间件
 tool_limiter = ToolCallLimitMiddleware(
-    run_limit=50,
-    exit_behavior="continue"  # 达到 50 次后，强制终止并返回当前结果
+    run_limit=500,
+    exit_behavior="continue"  # 达到 500 次后，强制终止并返回当前结果
 )
 
 # 创建研究子智能体

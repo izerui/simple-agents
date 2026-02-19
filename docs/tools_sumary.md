@@ -4,7 +4,7 @@
 |---|---------|------|--------|---------|----------|---------|
 | 1 | `think_tool` | 自定义 | `core/tools/think.py` | 显式传递 | 用于研究进度和决策的战略反思工具 | ❌ |
 | 2 | `fetch_markdown` | 自定义 | `core/tools/fetch.py` | 显式传递 | 从 URL 获取内容并将 HTML 转换为 Markdown | ❌ |
-| 3 | `convert_pdf_to_markdown` | 自定义 | `core/tools/converts.py` | 显式传递 | 将 PDF 文件转换为 Markdown，保留标题、段落、图片 | ❌ |
+| 3 | `convert_to_markdown` | 自定义 | `core/tools/converts.py` | 显式传递 | 将 PDF 文件转换为 Markdown，保留标题、段落、图片 | ❌ |
 | 4 | `convert_docx_to_markdown` | 自定义 | `core/tools/converts.py` | 显式传递 | 将 DOCX 文件转换为 Markdown，保留标题、段落、表格 | ❌ |
 | 5 | `ls` | 内置 | `FilesystemMiddleware` | 自动注入 | 列出指定目录中的文件和子目录 | ✅ |
 | 6 | `read_file` | 内置 | `FilesystemMiddleware` | 自动注入 | 读取文件内容，支持分页读取 | ✅ |
