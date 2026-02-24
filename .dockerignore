@@ -27,6 +27,13 @@ build
 .cache
 __pycache__
 
+# Ignore Python virtual environment
+.venv
+venv
+
+# Ignore langgraph API data (can be very large)
+.langgraph_api
+
 # Ignore IDE and editor configurations
 .vscode
 .idea
