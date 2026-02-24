@@ -1,5 +1,5 @@
 services:
-    simple-agents-redis:
+    redis:
         image: serv999.com/hub/redis:6
         healthcheck:
             test: redis-cli ping
@@ -7,7 +7,7 @@ services:
             timeout: 1s
             retries: 5
 
-    simple-agents-postgres:
+    postgres:
         image: serv999.com/hub/pgvector/pgvector:pg16
         ports:
             - "5433:5432"
@@ -28,22 +28,22 @@ services:
             retries: 5
             interval: 5s
 
-    simple-agents-api:
+    agents-api:
         image: serv999.com/hub/izerui/simple-agents:latest
         ports:
             - "8123:8000"
         depends_on:
-            simple-agents-redis:
+            redis:
                 condition: service_healthy
-            simple-agents-postgres:
+            postgres:
                 condition: service_healthy
             browser-service:
                 condition: service_started
         env_file:
             - .env
         environment:
-            REDIS_URI: redis://simple-agents-redis:6379
-            DATABASE_URI: postgres://postgres:postgres@simple-agents-postgres:5432/postgres?sslmode=disable
+            REDIS_URI: redis://redis:6379
+            DATABASE_URI: postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
             LANGSMITH_API_KEY: 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
             HF_HOME: /deps/simple-agents/data/huggingface
             HF_ENDPOINT: https://hf-mirror.com
@@ -63,7 +63,7 @@ services:
         ports:
             - "8124:3000"
         environment:
-            LANGGRAPH_API_URL: http://simple-agents-api:8000
+            LANGGRAPH_API_URL: http://agents-api:8000
             LANGSMITH_API_KEY: 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
         volumes:
           - ./data/sandbox_sessions:/home/data/sandbox_sessions
