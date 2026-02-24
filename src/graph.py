@@ -22,11 +22,7 @@ from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_url
 from src.tools.think import think_tool
 from src.utils._library_download import install_pip_if_needed
-from src.utils.register_providers import register_all_providers
 from src.utils.util import get_backend_per_thread
-
-# 注册自定义 model providers（如 qwq, qwen）
-register_all_providers()
 
 # Model - 使用环境变量配置
 # 支持的 providers: openai, anthropic, qwq, qwen, deepseek 等
