@@ -1,4 +1,4 @@
-FROM langchain/langgraph-api:0.6.39-py3.12:3.12
+FROM langchain/langgraph-api:3.12
 
 RUN apt-get update && apt-get install -y poppler-data poppler-utils && rm -rf /var/lib/apt/lists/*
 
