@@ -16,20 +16,28 @@ from langgraph_sdk import Auth
 
 from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
+from src.middleware.qwen_tool_call_fix import QwenToolCallFixMiddleware
 from src.prompts import RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_url
 from src.tools.think import think_tool
 from src.utils._library_download import install_pip_if_needed
+from src.utils.register_providers import register_all_providers
 from src.utils.util import get_backend_per_thread
 
-# Model Claude 4.5
+# 注册自定义 model providers（如 qwq, qwen）
+register_all_providers()
+
+# Model - 使用环境变量配置
+# 支持的 providers: openai, anthropic, qwq, qwen, deepseek 等
 chat_model = init_chat_model(
     model=os.getenv('MODEL_MODEL_ID'),
     model_provider=os.getenv('MODEL_PROVIDER'),
     base_url=os.getenv('MODEL_BASE_URL'),
     api_key=os.getenv('MODEL_API_KEY'),
-    temperature=0.0)
+    temperature=0.0,
+    streaming=True,  # 必须流式输出
+)
 
 
 # 创建自定义工具限制中间件
@@ -91,6 +99,7 @@ agent = create_deep_agent(
     interrupt_on=interrupt_config,
     middleware=[
         upload_files,
+        QwenToolCallFixMiddleware(),  # 修复 Qwen3 流式输出工具调用问题， 必须放在第一个
         tool_limiter,
         # create_duplicate_call_prevention(get_backend_per_thread),
         cus_tool_limiter('glob', 5),
