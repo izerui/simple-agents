@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -30,6 +31,25 @@ from langgraph.runtime import Runtime
 from langgraph.types import Overwrite
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_dict_args(args: Any) -> dict:
+    """确保 args 是字典类型。
+
+    某些模型在流式输出时，args 可能是 JSON 字符串而不是字典。
+    """
+    if args is None:
+        return {}
+    if isinstance(args, dict):
+        return args
+    if isinstance(args, str):
+        try:
+            parsed = json.loads(args)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse args as JSON: {args[:100]}...")
+            return {}
+    return {}
 
 
 def fix_streaming_tool_calls(tool_calls: list[dict]) -> list[dict]:
@@ -60,12 +80,12 @@ def fix_streaming_tool_calls(tool_calls: list[dict]) -> list[dict]:
     for tc in tool_calls:
         tc_id = tc.get('id') or current_id
         name = tc.get('name', '')
-        args = tc.get('args', {})
+        args = _ensure_dict_args(tc.get('args'))
 
         if tc_id not in merged:
             merged[tc_id] = {
                 'name': name,
-                'args': args if args else {},
+                'args': args,
                 'id': tc_id,
                 'type': 'tool_call'
             }
@@ -80,7 +100,7 @@ def fix_streaming_tool_calls(tool_calls: list[dict]) -> list[dict]:
             current_id = tc_id
 
     result = list(merged.values())
-    logger.info(f"Fixed streaming tool calls: {len(tool_calls)} -> {len(result)}")
+    logger.info(f"Fixed streaming tool calls: {len(tool_calls)} -> {len(result)}, result={result}")
     return result
 
 
