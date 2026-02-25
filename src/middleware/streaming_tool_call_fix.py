@@ -120,7 +120,6 @@ def fix_streaming_tool_calls(tool_calls: list[dict]) -> list[dict]:
             current_id = tc_id
 
     result = list(merged.values())
-    logger.info(f"Fixed streaming tool calls: {len(tool_calls)} -> {len(result)}, result={result}")
     return result
 
 
