@@ -9,8 +9,11 @@
 但 LangChain 内部使用字典格式存储 args，导致多轮对话时 Pydantic 校验失败。
 
 这个中间件通过：
-1. 在发送给模型前，将 tool_calls.args 从 JSON 字符串解析为字典（兼容 LangChain）
-2. 在模型返回后，合并分离的 tool_calls 条目
+1. 在模型返回后，合并分离的 tool_calls 条目
+2. 只在检测到需要合并时，才将 tool_calls.args 从 JSON 字符串解析为字典
+
+注意：为了避免破坏某些 API（如 code model）的调用，我们不会无条件地转换所有消息的格式，
+只在确实需要合并分离的 tool_calls 时才进行转换。
 
 使用方法：
     from src.middleware.streaming_tool_call_fix import StreamingToolCallFixMiddleware
@@ -58,44 +61,24 @@ def _ensure_dict_args(args: Any) -> dict:
     return {}
 
 
-def _fix_aimessage_for_api(msg: AIMessage) -> AIMessage:
-    """修复 AIMessage 以兼容 LangChain。
 
-    DashScope API 在流式模式下返回的 tool_calls.args 可能是 JSON 字符串，
-    但 LangChain 要求 args 必须是字典格式。这个函数将 JSON 字符串解析为字典。
+
+def _needs_merge(tool_calls: list[dict]) -> bool:
+    """检测 tool_calls 是否需要合并。
+
+    如果存在只有 name 或只有 args 的条目，说明需要合并。
     """
-    if not hasattr(msg, 'tool_calls') or not msg.tool_calls:
-        return msg
+    if not tool_calls:
+        return False
 
-    # 检查是否需要修复：args 是字符串而不是字典
-    needs_fix = False
-    for tc in msg.tool_calls:
-        args = tc.get('args')
-        if isinstance(args, str):
-            needs_fix = True
-            break
+    for tc in tool_calls:
+        has_name = bool(tc.get('name'))
+        has_args = bool(tc.get('args'))
+        # 如果只有其中一个，说明需要合并
+        if has_name != has_args:
+            return True
 
-    if not needs_fix:
-        return msg
-
-    # 创建新的 tool_calls，将 args 从 JSON 字符串解析为字典
-    new_tool_calls = []
-    for tc in msg.tool_calls:
-        new_tc = dict(tc)
-        args = tc.get('args')
-        if isinstance(args, str):
-            new_tc['args'] = _ensure_dict_args(args)
-        new_tool_calls.append(new_tc)
-
-    logger.debug(f"Fixed AIMessage tool_calls args: JSON string -> dict")
-
-    return AIMessage(
-        content=msg.content,
-        tool_calls=new_tool_calls,
-        additional_kwargs=msg.additional_kwargs,
-        response_metadata=msg.response_metadata,
-        id=msg.id,
-    )
+    return False
 
 
 def fix_streaming_tool_calls(tool_calls: list[dict]) -> list[dict]:
@@ -107,16 +90,7 @@ def fix_streaming_tool_calls(tool_calls: list[dict]) -> list[dict]:
         return tool_calls
 
     # 检测是否需要修复：存在只有 name 或只有 args 的条目
-    needs_fix = False
-    for tc in tool_calls:
-        has_name = bool(tc.get('name'))
-        has_args = bool(tc.get('args'))
-        # 如果只有其中一个，说明需要合并
-        if has_name != has_args:
-            needs_fix = True
-            break
-
-    if not needs_fix:
+    if not _needs_merge(tool_calls):
         return tool_calls
 
     # 合并策略：按 id 分组，如果没有 id 则按顺序合并
@@ -156,75 +130,11 @@ class StreamingToolCallFixMiddleware(AgentMiddleware):
     这个中间件在模型返回后修复 tool_calls，
     在 agent 执行工具调用之前运行。
 
-    同时在发送给模型前，将 tool_calls.args 从 JSON 字符串解析为字典，
-    以兼容 LangChain 的 Pydantic 校验要求。
+    只在检测到需要合并分离的 tool_calls 时，才将 tool_calls.args
+    从 JSON 字符串解析为字典格式。
 
     对所有模型生效，但只会在检测到需要修复时才处理。
     """
-
-    def wrap_model_call(self, request: ModelRequest[ContextT], handler) -> Any:
-        """在发送给模型前，修复消息中 tool_calls 的格式（同步版本）。
-
-        DashScope API 在流式模式下返回的 tool_calls.args 可能是 JSON 字符串，
-        但 LangChain 要求 args 必须是字典格式。
-        这个方法将 JSON 字符串解析为字典。
-        """
-        messages = request.messages
-        if not messages:
-            return handler(request)
-
-        # 修复所有 AIMessage 中的 tool_calls
-        fixed_messages = []
-        any_fixed = False
-        for msg in messages:
-            if isinstance(msg, AIMessage):
-                fixed_msg = _fix_aimessage_for_api(msg)
-                if fixed_msg is not msg:
-                    any_fixed = True
-                    fixed_messages.append(fixed_msg)
-                else:
-                    fixed_messages.append(msg)
-            else:
-                fixed_messages.append(msg)
-
-        if any_fixed:
-            logger.info(f"Fixed {sum(1 for m in fixed_messages if isinstance(m, AIMessage) and m.tool_calls)} AIMessages for DashScope API")
-            new_request = request.override(messages=fixed_messages)
-            return handler(new_request)
-
-        return handler(request)
-
-    async def awrap_model_call(self, request: ModelRequest[ContextT], handler) -> Any:
-        """在发送给模型前，修复消息中 tool_calls 的格式（异步版本）。
-
-        DashScope API 在流式模式下返回的 tool_calls.args 可能是 JSON 字符串，
-        但 LangChain 要求 args 必须是字典格式。
-        这个方法将 JSON 字符串解析为字典。
-        """
-        messages = request.messages
-        if not messages:
-            return await handler(request)
-
-        # 修复所有 AIMessage 中的 tool_calls
-        fixed_messages = []
-        any_fixed = False
-        for msg in messages:
-            if isinstance(msg, AIMessage):
-                fixed_msg = _fix_aimessage_for_api(msg)
-                if fixed_msg is not msg:
-                    any_fixed = True
-                    fixed_messages.append(fixed_msg)
-                else:
-                    fixed_messages.append(msg)
-            else:
-                fixed_messages.append(msg)
-
-        if any_fixed:
-            logger.info(f"Fixed {sum(1 for m in fixed_messages if isinstance(m, AIMessage) and m.tool_calls)} AIMessages for DashScope API")
-            new_request = request.override(messages=fixed_messages)
-            return await handler(new_request)
-
-        return await handler(request)
 
     def after_model(self, state: AgentState, runtime: Runtime[Any]) -> dict[str, Any] | None:  # noqa: ARG002
         """在模型调用后修复 AIMessage 中的工具调用。
@@ -264,5 +174,4 @@ class StreamingToolCallFixMiddleware(AgentMiddleware):
         return {'messages': Overwrite(new_messages)}
 
 
-# 别名，保持向后兼容
-QwenToolCallFixMiddleware = StreamingToolCallFixMiddleware
+
