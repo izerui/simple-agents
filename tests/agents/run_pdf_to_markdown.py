@@ -19,7 +19,7 @@ from tests.agents.output_handler import output_handler, print_header, print_user
 async def run_test():
     """运行 PDF 转 Markdown 转换测试。"""
     thread_id = "test_pdf_conversion"
-    user_message = "请将 files/论文.pdf 转换为 Markdown 格式"
+    user_message = "请将 files/朝天府.pdf 转换为 Markdown 格式"
     
     # 打印测试标题
     print_header("PDF 转 Markdown 转换")
