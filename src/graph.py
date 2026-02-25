@@ -16,7 +16,7 @@ from langgraph_sdk import Auth
 
 from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
-from src.middleware.qwen_tool_call_fix import QwenToolCallFixMiddleware
+from src.middleware.streaming_tool_call_fix import StreamingToolCallFixMiddleware
 from src.prompts import RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_url
@@ -95,7 +95,7 @@ agent = create_deep_agent(
     interrupt_on=interrupt_config,
     middleware=[
         upload_files,
-        QwenToolCallFixMiddleware(),  # 修复 Qwen3 流式输出工具调用问题， 必须放在第一个
+        StreamingToolCallFixMiddleware(),  # 修复流式输出工具调用问题，必须放在第一个
         tool_limiter,
         # create_duplicate_call_prevention(get_backend_per_thread),
         cus_tool_limiter('glob', 5),
