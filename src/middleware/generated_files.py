@@ -2,6 +2,8 @@
 
 在 Agent 执行完成后，从消息中提取生成的文件路径，
 通过 custom 事件发送给客户端。
+
+通过拦截 write_file 工具调用来记录文件路径。
 """
 
 import re
@@ -14,9 +16,14 @@ class GeneratedFilesMiddleware(AgentMiddleware):
     """提取 Agent 生成的文件路径并通过 custom 事件发送"""
 
     # 测试模式：设置为 True 则总是发送测试文件
-    TEST_MODE = True
+    TEST_MODE = False
 
-    def after_agent(self, state: AgentState, runtime: Any) -> dict | None:
+    def __init__(self):
+        """初始化"""
+        super().__init__()
+        self.tools = []
+
+    async def aafter_agent(self, state: AgentState, runtime: Any) -> dict | None:
         """在 Agent 执行完成后提取文件路径"""
         messages = state.get("messages", [])
         if not messages:
@@ -34,14 +41,11 @@ class GeneratedFilesMiddleware(AgentMiddleware):
             })
             return None
 
-        last_message = messages[-1]
-        content = last_message.content if hasattr(last_message, 'content') else str(last_message)
-
-        # 提取文件路径（只返回字符串数组）
-        file_paths = extract_file_paths(content)
+        # 从消息中提取 write_file 工具调用的文件路径
+        file_paths = self._extract_write_file_paths(messages)
 
         if file_paths:
-            # 发送 custom 事件（content 为字符串数组）
+            # 发送 custom 事件
             runtime.stream_writer({
                 "type": "generated_files",
                 "content": file_paths
@@ -49,25 +53,43 @@ class GeneratedFilesMiddleware(AgentMiddleware):
 
         return None
 
+    def _extract_write_file_paths(self, messages: list) -> list[str]:
+        """从消息中提取 write_file 工具调用的文件路径"""
+        file_paths = []
+        seen_paths = set()
 
-def extract_file_paths(content: str) -> list[str]:
-    """从内容中提取生成的文件路径（返回字符串数组）"""
-    files = []
+        for msg in messages:
+            # 从 AIMessage 的 tool_calls 中提取 file_path
+            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                for tool_call in msg.tool_calls:
+                    if tool_call.get('name') == 'write_file':
+                        args = tool_call.get('args', {})
+                        # args 可能是 dict 或字符串
+                        if isinstance(args, dict):
+                            file_path = args.get('file_path')
+                        else:
+                            # 如果是字符串，尝试解析
+                            try:
+                                import json
+                                args_dict = json.loads(args) if isinstance(args, str) else {}
+                                file_path = args_dict.get('file_path')
+                            except Exception:
+                                file_path = None
 
-    # 模式1: "文件已保存到: /path/to/file.md"
-    pattern1 = r"文件已保存到[:：]\s*(/[^\s]+)"
-    for match in re.finditer(pattern1, content):
-        files.append(match.group(1))
+                        if file_path and file_path not in seen_paths:
+                            seen_paths.add(file_path)
+                            file_paths.append(file_path)
 
-    # 模式2: "报告路径: deepthink/final_report.md" 或 "报告已保存到 xxx"
-    pattern2 = r"(?:报告|文件)(?:已保存到|路径)[:：]\s*([^\s]+\.(?:md|txt|pdf|json|docx))"
-    for match in re.finditer(pattern2, content):
-        files.append(match.group(1))
+            # 也从 ToolMessage 的返回内容中提取（作为备用）
+            if hasattr(msg, 'type') and msg.type == 'tool':
+                if hasattr(msg, 'name') and msg.name == 'write_file':
+                    content = msg.content if hasattr(msg, 'content') else ''
+                    # 匹配 "Created file {path}" 或 "Updated file {path}"
+                    match = re.search(r'(?:Created|Updated) file (.+)', content)
+                    if match:
+                        path = match.group(1).strip()
+                        if path and path not in seen_paths:
+                            seen_paths.add(path)
+                            file_paths.append(path)
 
-    # 模式3: 路径包含 deepthink/ 或 output/ 等目录
-    pattern3 = r"(?:deepthink|output|data)/[^\s]+\.(?:md|txt|pdf|json|docx)"
-    for match in re.finditer(pattern3, content):
-        files.append(match.group(0))
-
-    # 去重
-    return list(set(files))
+        return file_paths
