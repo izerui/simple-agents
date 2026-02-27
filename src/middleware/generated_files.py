@@ -3,12 +3,13 @@
 在 Agent 执行完成后，从消息中提取生成的文件路径，
 通过 custom 事件发送给客户端。
 
-通过拦截 write_file 工具调用来记录文件路径。
+通过调用 webapp 接口获取文件列表。
 """
 
-import re
+import os
 from typing import Any
 
+import httpx
 from langchain.agents.middleware import AgentMiddleware, AgentState
 
 
@@ -17,6 +18,9 @@ class GeneratedFilesMiddleware(AgentMiddleware):
 
     # 测试模式：设置为 True 则总是发送测试文件
     TEST_MODE = False
+
+    # webapp 接口地址
+    EXTRACT_API_URL = os.getenv('EXTRACT_API_URL', 'http://localhost:2024')
 
     def __init__(self):
         """初始化"""
@@ -41,8 +45,25 @@ class GeneratedFilesMiddleware(AgentMiddleware):
             })
             return None
 
-        # 从消息中提取 write_file 工具调用的文件路径
-        file_paths = self._extract_write_file_paths(messages)
+        # 获取最后一条 AI 消息
+        last_message = None
+        for msg in reversed(messages):
+            if hasattr(msg, 'type') and msg.type == 'ai':
+                last_message = msg
+                break
+            elif hasattr(msg, 'type') and msg.type == 'system':
+                continue
+            else:
+                last_message = msg
+                break
+
+        if not last_message:
+            return None
+
+        content = last_message.content if hasattr(last_message, 'content') else str(last_message)
+
+        # 调用 webapp 接口获取文件列表
+        file_paths = await self._extract_file_paths(content)
 
         if file_paths:
             # 发送 custom 事件
@@ -53,43 +74,17 @@ class GeneratedFilesMiddleware(AgentMiddleware):
 
         return None
 
-    def _extract_write_file_paths(self, messages: list) -> list[str]:
-        """从消息中提取 write_file 工具调用的文件路径"""
-        file_paths = []
-        seen_paths = set()
-
-        for msg in messages:
-            # 从 AIMessage 的 tool_calls 中提取 file_path
-            if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                for tool_call in msg.tool_calls:
-                    if tool_call.get('name') == 'write_file':
-                        args = tool_call.get('args', {})
-                        # args 可能是 dict 或字符串
-                        if isinstance(args, dict):
-                            file_path = args.get('file_path')
-                        else:
-                            # 如果是字符串，尝试解析
-                            try:
-                                import json
-                                args_dict = json.loads(args) if isinstance(args, str) else {}
-                                file_path = args_dict.get('file_path')
-                            except Exception:
-                                file_path = None
-
-                        if file_path and file_path not in seen_paths:
-                            seen_paths.add(file_path)
-                            file_paths.append(file_path)
-
-            # 也从 ToolMessage 的返回内容中提取（作为备用）
-            if hasattr(msg, 'type') and msg.type == 'tool':
-                if hasattr(msg, 'name') and msg.name == 'write_file':
-                    content = msg.content if hasattr(msg, 'content') else ''
-                    # 匹配 "Created file {path}" 或 "Updated file {path}"
-                    match = re.search(r'(?:Created|Updated) file (.+)', content)
-                    if match:
-                        path = match.group(1).strip()
-                        if path and path not in seen_paths:
-                            seen_paths.add(path)
-                            file_paths.append(path)
-
-        return file_paths
+    async def _extract_file_paths(self, content: str) -> list[str]:
+        """调用 webapp 接口提取文件路径"""
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.EXTRACT_API_URL}/webapp/extract-file-paths",
+                    json={"content": content}
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data.get('files', [])
+        except Exception as e:
+            print(f"调用接口提取文件路径失败: {e}")
+            return []

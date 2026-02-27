@@ -1,9 +1,14 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Query
 from fastapi.responses import Response, StreamingResponse
+import json
 import os
+import re
+import traceback
 from urllib.parse import quote
 
 from deepagents.backends import FilesystemBackend
+from langchain.chat_models import init_chat_model
+from pydantic import BaseModel
 
 app = FastAPI(title="Webapp Agents API", version="0.1.0")
 
@@ -150,6 +155,86 @@ async def check_report_exists(thread_id: str):
     # HEAD 请求只返回 headers，不返回内容体
     return Response(status_code=200, headers=headers)
 
+
+
+
+# LLM 提取文件列表接口
+_extract_model = None
+
+
+def _get_extract_model():
+    """获取用于提取文件列表的模型（延迟初始化）"""
+    global _extract_model
+    if _extract_model is None:
+        _extract_model = init_chat_model(
+            model=os.getenv('MODEL_MODEL_ID'),
+            model_provider=os.getenv('MODEL_PROVIDER'),
+            base_url=os.getenv('MODEL_BASE_URL'),
+            api_key=os.getenv('MODEL_API_KEY'),
+            temperature=0.0,
+            streaming=False,
+        )
+    return _extract_model
+
+
+class FilePaths(BaseModel):
+    """提取的文件路径列表"""
+    files: list[str]
+
+
+# 请求模型
+class ExtractFilePathsRequest(BaseModel):
+    content: str
+
+
+# 文件列表提取接口
+@router.post("/extract-file-paths", tags=["Webapp"])
+async def extract_file_paths(request: ExtractFilePathsRequest):
+    """
+    从 AI 回复内容中提取生成的文件路径。
+
+    Args:
+        request: 请求体，包含 content 字段
+
+    Returns:
+        JSON: {"files": ["path1", "path2"]}
+    """
+    try:
+        model = _get_extract_model()
+        content = request.content
+
+        # 构建提取提示
+        prompt = f"""请从以下 AI 回复中提取所有生成的文件路径。
+
+文件路径可能包括：
+- 报告文件如 deepthink/final_report.md
+- 输出文件如 output/summary.json
+- 数据文件如 data/xxx.json
+- 任何 .md, .txt, .pdf, .json, .docx 等文件
+
+只返回文件路径列表的 JSON 格式，不要其他内容。格式如：{{"files": ["path1", "path2"]}}
+如果没找到任何文件路径，返回 {{"files": []}}
+
+AI 回复内容：
+{content}
+"""
+
+        import asyncio
+
+        # 使用 with_structured_output 结构化提取，在线程中执行避免阻塞
+        structured_model = model.with_structured_output(FilePaths)
+        result = await asyncio.to_thread(structured_model.invoke, prompt)
+
+        # 提取文件列表
+        if isinstance(result, FilePaths):
+            return {"files": result.files}
+        elif isinstance(result, dict):
+            return {"files": result.get('files', [])}
+        return {"files": []}
+
+    except Exception as e:
+        error_detail = f"提取文件路径失败: {str(e)}\n{traceback.format_exc()}"
+        raise HTTPException(status_code=500, detail=error_detail)
 
 app.include_router(router)
 
