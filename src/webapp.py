@@ -36,9 +36,8 @@ async def download_file(
 
     # 创建新的 Backend 实例
     backend = FilesystemBackend(
-        thread_dir=thread_dir,
+        root_dir=thread_dir,
         max_file_size_mb=50,
-        thread_id=thread_id,
     )
     
     try:
