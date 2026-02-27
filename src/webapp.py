@@ -41,6 +41,9 @@ async def download_file(
     )
     
     try:
+        # 去掉前导斜杠，支持 path=/deepthink/... 和 path=deepthink/... 两种格式
+        path = path.lstrip('/')
+
         # 使用后端下载文件
         responses = await backend.adownload_files([path])
         
