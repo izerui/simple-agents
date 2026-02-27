@@ -20,7 +20,8 @@ from langgraph_sdk import get_client
 
 
 def get_api_url() -> str:
-    return os.getenv("LANGGRAPH_API_URL", "https://agent.schoopia.com")
+    # return os.getenv("LANGGRAPH_API_URL", "https://agent.schoopia.com")
+    return os.getenv("LANGGRAPH_API_URL", "http://localhost:2024")
 
 
 # ==================== 测试函数 ====================
@@ -53,27 +54,82 @@ async def test_threads():
 
     # 搜索不存在的用户
     fake_user_id = f"non_existent_{uuid.uuid4().hex[:8]}"
-    fake_threads = await client.threads.search(metadata={"user_id": fake_user_id}, limit=999)
+    fake_threads = await client.threads.search(metadata={"user_id": fake_user_id}, limit=99)
     print(f"✅ 搜索不存在用户: 找到 {len(fake_threads)} 个 threads")
 
     if len(fake_threads) != 0:
         print("❌ 验证失败: 不存在的用户应返回空结果")
         return False
 
-    # 对话
+    # 对话（流式）
     for i, t in enumerate(threads[:3]):
-        print(f"💬 Thread {i+1} 发送消息: '你好'")
-        await client.runs.create(
+        print(f"\n💬 Thread {i+1} 发送消息: '你好'")
+        print("-" * 40)
+
+        # 流式对话
+        chunks = client.runs.stream(
             thread_id=t['thread_id'],
             assistant_id='research',
             input={"messages": [HumanMessage(content="你好")]},
-            if_not_exists='create'
+            multitask_strategy='reject',
+            stream_mode=["messages", "custom"],
+            if_not_exists='create',
+            stream_subgraphs=True,
+            on_disconnect='cancel',
+            on_completion='keep',
+            durability='async',
         )
-        print(f"✅ Thread {i+1} 对话成功")
 
-    # 全部对话完后搜索
-    result = await client.threads.search(metadata={"user_id": test_user_id})
-    print(f"✅ 全部对话后搜索: 找到 {len(result)} 个 threads")
+        # 处理流式输出
+        current_content = ''
+        async for chunk in chunks:
+            if hasattr(chunk, 'event'):
+                event_name = chunk.event
+
+                # 处理自定义事件 (custom)
+                if event_name == "custom":
+                    data = chunk.data if hasattr(chunk, 'data') else {}
+                    event_type = data.get('type', '') if isinstance(data, dict) else ''
+
+                    if event_type == "generated_files":
+                        files = data.get('content', [])
+                        if files:
+                            print(f"\n📁 生成的文件:")
+                            for f in files:
+                                print(f"   - {f.get('path')} ({f.get('type')})")
+                    else:
+                        print(f"\n🔔 Custom 事件: {event_type}")
+                        print(f"   数据: {data}")
+                    continue
+
+                # 处理消息片段
+                if event_name == "messages/partial":
+                    if isinstance(chunk.data, list) and len(chunk.data) > 0:
+                        msg = chunk.data[0]
+                        content_list = msg.get('content', [])
+                        if isinstance(content_list, list):
+                            for item in content_list:
+                                if item.get('type') == 'text':
+                                    text = item.get('text', '')
+                                    print(text, end='', flush=True)
+                                    current_content += text
+                        elif isinstance(content_list, str):
+                            print(content_list, end='', flush=True)
+                            current_content += content_list
+
+                # 处理消息完成
+                elif event_name == "messages/complete":
+                    if isinstance(chunk.data, list) and len(chunk.data) > 0:
+                        msg = chunk.data[0]
+                        msg_type = msg.get('type', '')
+                        if msg_type == 'tool':
+                            name = msg.get('name', '')
+                            content = msg.get('content', '')
+                            print(f"\n🔧 工具调用: {name}")
+                            print(f"   内容: {content[:100]}..." if len(str(content)) > 100 else f"   内容: {content}")
+
+        print("\n" + "-" * 40)
+        print(f"✅ Thread {i+1} 对话完成")
 
     # 搜索验证
     result = await client.threads.search(metadata={"user_id": test_user_id})

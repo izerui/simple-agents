@@ -37,6 +37,23 @@ async def output_stream_result(chunks, chunk_file=None):
             # 处理事件
             if hasattr(chunk, 'event'):
                 event_name = chunk.event
+
+                # 处理自定义事件 (custom)
+                if event_name == "custom":
+                    data = chunk.data if hasattr(chunk, 'data') else {}
+                    event_type = data.get('type', '') if isinstance(data, dict) else ''
+
+                    if event_type == "generated_files":
+                        files = data.get('content', [])
+                        if files:
+                            print(f"\n📁 生成的文件:")
+                            for f in files:
+                                print(f"   - {f.get('path')} ({f.get('type')})")
+                    else:
+                        print(f"\n🔔 Custom 事件: {event_type}")
+                        print(f"   数据: {data}")
+                    continue
+
                 # 添加事件类型调试信息
                 if event_name not in ["messages/partial"]:  # 避免 partial 事件刷屏
                     print(f"[事件] {event_name}")
@@ -221,6 +238,7 @@ async def search():
         multitask_strategy='reject',
         stream_mode=[
             "messages",
+            "custom"
         ],
         if_not_exists='create',
         stream_subgraphs=True,

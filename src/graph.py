@@ -17,6 +17,7 @@ from langgraph_sdk import Auth
 from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
 from src.middleware.streaming_tool_call_fix import StreamingToolCallFixMiddleware
+from src.middleware.generated_files import GeneratedFilesMiddleware
 from src.prompts import RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_url
@@ -97,6 +98,7 @@ agent = create_deep_agent(
         upload_files,
         StreamingToolCallFixMiddleware(),  # 修复流式输出工具调用问题，必须放在第一个
         tool_limiter,
+        GeneratedFilesMiddleware(),  # 提取生成的文件路径并发送 custom 事件
         # create_duplicate_call_prevention(get_backend_per_thread),
         cus_tool_limiter('glob', 5),
     ],  # 完整的中间件配置

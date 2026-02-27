@@ -28,16 +28,17 @@ def show_agent_info(event):
 
 def output_handler(event):
     """事件输出处理器（流式输出优先）。
-    
+
     Args:
-        event: LangGraph 事件对象
-        
+        event: LangGraph 事件对象 或 (mode, data) 元组 或 dict
+
     功能：
         - 显示智能体名称
         - 实时流式输出 AI 回复（打字机效果）
         - 显示工具调用及参数
         - 显示工具执行结果
         - 显示错误信息
+        - 显示 custom 事件（如生成的文件列表）
     """
     kind = event["event"]
     
@@ -105,6 +106,7 @@ def output_handler(event):
         if event.get("name"):
             print(f"   发生在: {event['name']}")
 
+    print(f'\n{event}')
 
 def print_header(title):
     """打印测试标题。
