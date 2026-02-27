@@ -96,7 +96,7 @@ async def test_threads():
                         if files:
                             print(f"\n📁 生成的文件:")
                             for f in files:
-                                print(f"   - {f.get('path')} ({f.get('type')})")
+                                print(f"   - {f}")
                     else:
                         print(f"\n🔔 Custom 事件: {event_type}")
                         print(f"   数据: {data}")
