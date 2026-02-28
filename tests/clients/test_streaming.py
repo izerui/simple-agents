@@ -12,6 +12,10 @@ import requests
 from langchain_core.messages import HumanMessage, SystemMessage
 
 
+# 存储工具调用信息，用于匹配开始和结果
+tool_calls_registry = {}
+
+
 async def get_file_base64(file_path):
     import aiofiles
     async with aiofiles.open(file_path, 'rb') as f:
@@ -20,29 +24,32 @@ async def get_file_base64(file_path):
 
 async def output_stream_result(chunks, chunk_file=None):
     """
-    处理流式输出结果，参考 guidance.py 的实现
+    处理流式输出结果 - messages-tuple 模式
+
+    stream_mode: ["messages-tuple", "custom"]
     """
+    global tool_calls_registry
+    tool_calls_registry = {}  # 重置
     current_content = ''
+
     async for chunk in chunks:
         try:
             # 将 chunk 写入文件（如果提供了文件）
             if chunk_file:
-                chunk_dict = {
-                    'event': chunk.event if hasattr(chunk, 'event') else None,
-                    'data': chunk.data if hasattr(chunk, 'data') else str(chunk)
-                }
-                chunk_file.write(json.dumps(chunk_dict, ensure_ascii=False) + "\n")
+                chunk_file.write(str(chunk) + "\n")
                 chunk_file.flush()
 
-            # 处理事件
-            if hasattr(chunk, 'event'):
-                event_name = chunk.event
+            # messages-tuple 模式下，chunk 是 StreamPart 对象
+            event_name = chunk.event if hasattr(chunk, 'event') else None
+            data = chunk.data if hasattr(chunk, 'data') else None
 
-                # 处理自定义事件 (custom)
-                if event_name == "custom":
-                    data = chunk.data if hasattr(chunk, 'data') else {}
-                    event_type = data.get('type', '') if isinstance(data, dict) else ''
+            if event_name is None:
+                continue
 
+            # 处理自定义事件 (custom)
+            if event_name == "custom":
+                if isinstance(data, dict):
+                    event_type = data.get('type', '')
                     if event_type == "generated_files":
                         files = data.get('content', [])
                         if files:
@@ -52,74 +59,103 @@ async def output_stream_result(chunks, chunk_file=None):
                     else:
                         print(f"\n🔔 Custom 事件: {event_type}")
                         print(f"   数据: {data}")
+                continue
+
+            # 处理 messages-tuple 事件
+            if event_name == "messages":
+                if not isinstance(data, list) or len(data) < 2:
                     continue
 
-                # 添加事件类型调试信息
-                if event_name not in ["messages/partial"]:  # 避免 partial 事件刷屏
-                    print(f"[事件] {event_name}")
+                # data[0] 是消息内容，data[1] 是 metadata
+                msg_list = data[0]
 
-                if event_name == "messages/metadata":
-                    if current_content and len(current_content) > 0:
-                        print(f'\n{current_content}')
-                        current_content = ''
-                elif event_name == "messages/partial":
-                    if isinstance(chunk.data, list):
-                        msg = chunk.data[0]
-                        content_list = msg.get('content', [])
-                        if isinstance(content_list, list):
-                            for content_item in content_list:
-                                if content_item.get('type', None) == "text":
-                                    current_content = content_item.get('text', None)
-                                    break
-                        elif isinstance(content_list, str):
-                            current_content = content_list
-                elif event_name == "messages/complete":
-                    if isinstance(chunk.data, list):
-                        msg = chunk.data[0]
-                        # message type
-                        msg_type = msg.get('type', None)
-                        # tool name
-                        name = msg.get('name', None)
-                        # tool status
-                        status = msg.get('status', None)
-                        # tool content
-                        content = msg.get('content', None)
-                        # tool call id
-                        tool_call_id = msg.get('tool_call_id', None)
+                if not isinstance(msg_list, list):
+                    msg_list = [msg_list]
 
-                        # 打印工具调用信息
-                        if msg_type == "tool":
-                            print(f"\n🛠️ ===== 工具调用 =====")
-                            print(f"工具名称: {name}")
-                            print(f"工具状态: {status}")
-                            print(f"工具内容: {content[:200]}..." if content and len(content) > 200 else f"工具内容: {content}")
-                            print(f"============================\n")
+                for msg in msg_list:
+                    msg_type = msg.get('type') if isinstance(msg, dict) else None
 
-                            # 处理待办列表
-                            if name == "write_todos":
-                                # 移除前缀并解析
-                                todo_content = content.replace("Updated todo list to", "").strip()
-                                try:
-                                    todos = ast.literal_eval(todo_content)
-                                    print(f"\n📋 ===== 任务清单 =====")
-                                    for i, todo in enumerate(todos, 1):
-                                        todo_item = todo.get('content', '')
-                                        todo_status = todo.get('status', 'unknown')
-                                        # 根据状态添加表情符号
-                                        status_icon = "⏳" if todo_status == "in_progress" else (
-                                            "✅" if todo_status == "completed" else "⭕")
-                                        print(f"{i}. [{status_icon}] {todo_item}")
-                                    print(f"============================\n")
-                                except Exception as e:
-                                    print(f"❌ 解析待办列表失败: {e}")
-                        else:
-                            print(f"\n🔍 ===== 调试信息 =====")
-                            print(f"事件类型: {event_name}")
-                            print(f"数据类型: {msg_type}")
-                            print(f"数据内容: {chunk.data}")
-                            print(f"============================\n")
+                    # 处理 AI 消息块 (AIMessageChunk) - 流式输出 + 工具调用
+                    if msg_type == "AIMessageChunk":
+                        content = msg.get('content', '')
+                        tool_calls = msg.get('tool_calls', [])
+                        tool_call_chunks = msg.get('tool_call_chunks', [])
+
+                        # 输出文本内容
+                        if content:
+                            print(content, end='', flush=True)
+                            current_content += content
+
+                        # 处理 tool_calls - 工具调用开始（只处理有完整信息的）
+                        if tool_calls:
+                            for tc in tool_calls:
+                                tool_name = tc.get('name', '')
+                                tool_id = tc.get('id', '')
+
+                                # 只有当 name 和 id 都不为空时才输出调用开始
+                                if tool_name and tool_id:
+                                    tool_calls_registry[tool_id] = {
+                                        'name': tool_name,
+                                        'args': '',
+                                        'started': True
+                                    }
+                                    print(f"\n🔧 工具: {tool_name}")
+                                    print(f"   ID: {tool_id}")
+                                    print(f"📝 参数: ", end='', flush=True)
+
+                        # 处理 tool_call_chunks - 工具参数流式输出
+                        if tool_call_chunks:
+                            for tcc in tool_call_chunks:
+                                tcc_id = tcc.get('id', '')
+                                args_chunk = tcc.get('args', '')
+
+                                # 累加参数
+                                if tcc_id and tcc_id in tool_calls_registry:
+                                    tool_calls_registry[tcc_id]['args'] += args_chunk
+                                elif args_chunk:
+                                    # 没有找到匹配的 ID，尝试通过 name 查找
+                                    name = tcc.get('name', '')
+                                    for tid, info in tool_calls_registry.items():
+                                        if info.get('name') == name:
+                                            tool_calls_registry[tid]['args'] += args_chunk
+                                            break
+
+                                # 流式输出参数
+                                if args_chunk:
+                                    print(f"{args_chunk}", end='', flush=True)
+
+                    # 处理工具执行结果 (tool) - 流式输出
+                    elif msg_type == "tool":
+                        tool_name = msg.get('name', 'unknown')
+                        tool_content = msg.get('content', '')
+                        tool_status = msg.get('status', None)
+                        tool_call_id = msg.get('tool_call_id', '')
+
+                        # 流式输出结果
+                        print(f"\n✅ 结果: {tool_content}", end='', flush=True)
+
+                        # 处理待办列表（完整结果时）
+                        if tool_status == "success" and tool_name == "write_todos":
+                            print("")  # 换行
+                            todo_content = tool_content.replace("Updated todo list to", "").strip()
+                            try:
+                                todos = ast.literal_eval(todo_content)
+                                print(f"\n📋 任务清单:")
+                                for i, todo in enumerate(todos, 1):
+                                    todo_item = todo.get('content', '')
+                                    todo_status = todo.get('status', 'unknown')
+                                    status_icon = "⏳" if todo_status == "in_progress" else (
+                                        "✅" if todo_status == "completed" else "⭕")
+                                    print(f"  {i}. [{status_icon}] {todo_item}")
+                            except Exception as e:
+                                print(f"❌ 解析待办列表失败: {e}")
+
+                continue
+
         except Exception as e:
-            print(f"❌ 输出结果出错: {e}")
+            print(f"\n❌ 输出结果出错: {e}")
+            import traceback
+            traceback.print_exc()
 
     if current_content:
         print(f'\n{current_content}')
@@ -128,8 +164,8 @@ async def output_stream_result(chunks, chunk_file=None):
 
 
 async def search():
-    host = 'https://agent.schoopia.com'
-    # host = 'http://localhost:2024'
+    # host = 'https://agent.schoopia.com'
+    host = 'http://localhost:2024'
 
     # 用户问题
     user_message = """读取markdown格式论文，
@@ -151,7 +187,7 @@ async def search():
         {"type": "file", "data": md_content, "metadata": {"filename": "指导手册.md"}},
     ])
 
-    input = {
+    input_data = {
         "messages": [
             SystemMessage(content="""# 你是一个本科毕业生的导师，以老师的角度进行分析，并给出评分和等级
 
@@ -182,23 +218,23 @@ async def search():
 ## 输出报告格式要求
 结合论文格式分析结果和内容分析结果按下面五个方面分析并分别以评价和改进建议输出结论。
 一、文献综述质量
-  1. 评价
-  2. 改进建议
+ 1. 评价
+ 2. 改进建议
 二、研究方法与实施
-  1. 评价
-  2. 改进建议
+ 1. 评价
+ 2. 改进建议
 三、论文结构与逻辑
-  1. 评价
-  2. 改进建议
+ 1. 评价
+ 2. 改进建议
 四、学术规范与表达
-  1. 评价
-  2. 改进建议
+ 1. 评价
+ 2. 改进建议
 五、总结
-  1. 评价
-  2. 改进建议
+ 1. 评价
+ 2. 改进建议
 六、总评
-  评分:
-  等级:
+ 评分:
+ 等级:
 
 ## 注意：
 必须将分析结果写入到最终报告，报告路径写入：`deepthink/final_report.md`"""),
@@ -234,10 +270,10 @@ async def search():
     chunks = local_client.runs.stream(
         thread_id=thread_id,
         assistant_id='research',
-        input=input,
+        input=input_data,
         multitask_strategy='reject',
         stream_mode=[
-            "messages",
+            "messages-tuple",
             "custom"
         ],
         if_not_exists='create',
