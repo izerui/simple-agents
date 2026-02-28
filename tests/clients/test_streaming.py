@@ -157,9 +157,6 @@ async def output_stream_result(chunks, chunk_file=None):
             import traceback
             traceback.print_exc()
 
-    if current_content:
-        print(f'\n{current_content}')
-
     return current_content
 
 
@@ -285,8 +282,6 @@ async def search():
 
     # 使用 output_stream_result 函数处理流式输出
     result = await output_stream_result(chunks, chunk_file)
-
-    print(f'最终回答: {result}')
 
     print("\n" + "=" * 80)
     print("✅ 任务执行完成！")
