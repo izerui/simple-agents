@@ -42,7 +42,6 @@ chat_model = init_chat_model(
 # 从环境变量读取，默认为 131072（qwen-max）
 max_input_tokens = int(os.getenv('MODEL_MAX_INPUT_TOKENS', '131072'))
 chat_model.profile = {"max_input_tokens": max_input_tokens}  # type: ignore[assignment]
-logger.info(f"Model profile set: max_input_tokens={max_input_tokens}")
 
 
 # 创建自定义工具限制中间件
@@ -112,6 +111,9 @@ agent = create_deep_agent(
     ],  # 完整的中间件配置
     debug=int(os.getenv('ENABLED_AGENT_DEBUG', 0)) == 1,
 )
+
+# 打印 model profile 确认设置正确
+logger.info(f"chat_model.profile = {chat_model.profile}")
 
 agent.with_config(
     config=RunnableConfig(
