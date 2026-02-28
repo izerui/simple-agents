@@ -8,6 +8,8 @@ Supports per-conversation sandbox isolation using BackendFactory.
 import logging
 import os
 
+logger = logging.getLogger(__name__)
+
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
@@ -40,6 +42,7 @@ chat_model = init_chat_model(
 # 从环境变量读取，默认为 131072（qwen-max）
 max_input_tokens = int(os.getenv('MODEL_MAX_INPUT_TOKENS', '131072'))
 chat_model.profile = {"max_input_tokens": max_input_tokens}  # type: ignore[assignment]
+logger.info(f"Model profile set: max_input_tokens={max_input_tokens}")
 
 
 # 创建自定义工具限制中间件
