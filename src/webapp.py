@@ -6,6 +6,8 @@ import re
 import traceback
 from urllib.parse import quote
 
+from langsmith import tracing_context
+
 from deepagents.backends import FilesystemBackend
 from langchain.chat_models import init_chat_model
 from pydantic import BaseModel
@@ -222,8 +224,14 @@ AI 回复内容：
         import asyncio
 
         # 使用 with_structured_output 结构化提取，在线程中执行避免阻塞
+        # 临时禁用 LangSmith 追踪
+        from langchain_core.runnables import RunnableConfig
         structured_model = model.with_structured_output(FilePaths)
-        result = await asyncio.to_thread(structured_model.invoke, prompt)
+        config = RunnableConfig()
+
+        # 使用 tracing_context 临时关闭追踪
+        with tracing_context(enabled=False):
+            result = await asyncio.to_thread(structured_model.invoke, prompt, config)
 
         # 提取文件列表
         if isinstance(result, FilePaths):
