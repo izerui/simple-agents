@@ -48,6 +48,7 @@ services:
             HF_HOME: /deps/simple-agents/data/huggingface
             HF_ENDPOINT: https://hf-mirror.com
             BROWSER_SERVICE_URL: http://browser-service:2025
+            EXTRACT_API_URL: http://localhost:8000
         healthcheck:
             test: python /api/healthcheck.py
             interval: 30s
