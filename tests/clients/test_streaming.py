@@ -31,6 +31,7 @@ async def output_stream_result(chunks, chunk_file=None):
     global tool_calls_registry
     tool_calls_registry = {}  # 重置
     current_content = ''
+    last_tool_call_ended = False  # 标记：上一个是否是工具调用结果
 
     async for chunk in chunks:
         try:
@@ -83,6 +84,10 @@ async def output_stream_result(chunks, chunk_file=None):
 
                         # 输出文本内容
                         if content:
+                            # 如果上一个是工具调用结果，先换行
+                            if last_tool_call_ended:
+                                print("\n\n")  # 换行
+                                last_tool_call_ended = False  # 重置标记
                             print(content, end='', flush=True)
                             current_content += content
 
@@ -129,10 +134,10 @@ async def output_stream_result(chunks, chunk_file=None):
                         tool_name = msg.get('name', 'unknown')
                         tool_content = msg.get('content', '')
                         tool_status = msg.get('status', None)
-                        tool_call_id = msg.get('tool_call_id', '')
 
                         # 流式输出结果
                         print(f"\n✅ 结果: {tool_content}", end='', flush=True)
+                        last_tool_call_ended = True  # 标记工具调用已结束
 
                         # 处理待办列表（完整结果时）
                         if tool_status == "success" and tool_name == "write_todos":

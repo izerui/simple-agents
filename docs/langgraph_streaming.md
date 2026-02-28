@@ -547,13 +547,21 @@ async def output_stream_result(chunks, chunk_file=None):
 ### 处理 AI 消息块
 
 ```python
+# 全局变量：标记上一个是否是工具调用结果
+last_tool_call_ended = False
+
 def handle_ai_message_chunk(msg):
+    global last_tool_call_ended
     content = msg.get('content', '')
     tool_calls = msg.get('tool_calls', [])
     tool_call_chunks = msg.get('tool_call_chunks', [])
 
     # 输出文本内容
     if content:
+        # 如果上一个是工具调用结果，先换行
+        if last_tool_call_ended:
+            print("\n")  # 换行
+            last_tool_call_ended = False  # 重置标记
         print(content, end='', flush=True)
 
     # 处理工具调用开始
@@ -577,11 +585,13 @@ def handle_ai_message_chunk(msg):
 
 ```python
 def handle_tool_result(msg):
+    global last_tool_call_ended
     tool_name = msg.get('name')
     tool_content = msg.get('content', '')
     tool_status = msg.get('status')
 
     print(f"\n✅ 结果: {tool_content}", end='')
+    last_tool_call_ended = True  # 标记工具调用已结束
 
     # 特殊处理：待办列表
     if tool_name == "write_todos" and tool_status == "success":
