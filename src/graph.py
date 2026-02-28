@@ -36,6 +36,11 @@ chat_model = init_chat_model(
     streaming=True,  # 必须流式输出
 )
 
+# 设置 model profile，让 SummarizationMiddleware 自动计算压缩阈值
+# 从环境变量读取，默认为 131072（qwen-max）
+max_input_tokens = int(os.getenv('MODEL_MAX_INPUT_TOKENS', '140000'))
+chat_model.profile = {"max_input_tokens": max_input_tokens}  # type: ignore[assignment]
+
 
 # 创建自定义工具限制中间件
 def cus_tool_limiter(tool_name: str, run_limit: int) -> ToolCallLimitMiddleware:
