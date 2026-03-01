@@ -20,6 +20,7 @@ from deepagents import create_deep_agent, SubAgent
 from src.middleware.attachment_extract import AttachmentExtractMiddleware
 from src.middleware.streaming_tool_call_fix import StreamingToolCallFixMiddleware
 from src.middleware.generated_files import GeneratedFilesMiddleware
+from src.middleware.fix_dangling_tool_messages import FixDanglingToolMessagesMiddleware
 from src.prompts import RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_url
@@ -103,6 +104,7 @@ agent = create_deep_agent(
     middleware=[
         upload_files,
         StreamingToolCallFixMiddleware(),  # 修复流式输出工具调用问题，必须放在第一个
+        FixDanglingToolMessagesMiddleware(),  # 修复手动停止工具调用后遗留的孤立 ToolMessage
         tool_limiter,
         GeneratedFilesMiddleware(),  # 提取生成的文件路径并发送 custom 事件
         # create_duplicate_call_prevention(get_backend_per_thread),
