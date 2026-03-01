@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Query
 from fastapi.responses import Response, StreamingResponse
 import json
+import logging
 import os
 import re
 import traceback
@@ -227,11 +228,10 @@ AI 回复内容：
         # 临时禁用 LangSmith 追踪
         from langchain_core.runnables import RunnableConfig
         structured_model = model.with_structured_output(FilePaths)
-        config = RunnableConfig()
 
         # 使用 tracing_context 临时关闭追踪
         with tracing_context(enabled=False):
-            result = await asyncio.to_thread(structured_model.invoke, prompt, config)
+            result = await asyncio.to_thread(structured_model.invoke, prompt)
 
         # 提取文件列表
         if isinstance(result, FilePaths):
@@ -242,6 +242,7 @@ AI 回复内容：
 
     except Exception as e:
         error_detail = f"提取文件路径失败: {str(e)}\n{traceback.format_exc()}"
+        logging.getLogger(__name__).error(error_detail)
         raise HTTPException(status_code=500, detail=error_detail)
 
 app.include_router(router)
