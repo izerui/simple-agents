@@ -11,10 +11,11 @@
         await handler.receive_chunk(chunk)
 """
 
-from .client import StreamingClient
+from .client import StreamingClient, EventType
 from .handlers import SimpleEventHandlers
 
 __all__ = [
     "StreamingClient",
     "SimpleEventHandlers",
+    "EventType",
 ]
