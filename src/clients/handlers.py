@@ -25,9 +25,9 @@ class SimpleEventHandlers:
 
     可继承并覆盖以下方法:
         - on_ai_message_chunk(content: str, is_chunk_start: bool)  # AI 文本流式
-        - on_tool_call_start(tool_id, tool_name, args)  # 工具调用开始
-        - on_tool_call_args_chunk(tool_id, args_chunk)  # 参数流式
-        - on_tool_result_chunk(tool_id, content, tool_name, status)  # 结果流式
+        - on_tool_call_start(tool_id, tool_name)  # 工具调用开始
+        - on_tool_call_args_chunk(tool_id, args_chunk, is_chunk_start)  # 参数流式
+        - on_tool_result_chunk(tool_id, content, is_chunk_start)  # 结果流式
         - on_tool_call_complete(tool_id, tool_name, args, content, status)  # 完整结果
         - on_custom(data: dict)  # 自定义事件
         - on_error(error: Exception)  # 错误
@@ -87,34 +87,62 @@ class SimpleEventHandlers:
 
         # tool_calls - 工具调用开始（args 为空，参数通过 tool_call_chunks 流式传递）
         tool_calls = msg.get("tool_calls", [])
-        for tc in tool_calls:
+        for idx, tc in enumerate(tool_calls):
             tool_name = tc.get("name", "")
             tool_id = tc.get("id", "")
             if tool_name and tool_id:
                 self._tool_calls_registry[tool_id] = {
                     "name": tool_name,
                     "args": "",
+                    "index": idx,  # 保存 index 用于 fallback 匹配
                 }
-                await self.on_tool_call_start(tool_id, tool_name, "")
+                await self.on_tool_call_start(tool_id, tool_name)
 
         # tool_call_chunks - 参数流式
         tool_call_chunks = msg.get("tool_call_chunks", [])
         for tcc in tool_call_chunks:
             tcc_id = tcc.get("id", "")
+            tcc_index = tcc.get("index")  # 获取 index
             args_chunk = tcc.get("args", "")
 
-            # 优先通过 ID 查找
+            # 累加参数：优先通过 ID，其次通过 index，最后通过 name
+            matched_id = None
+            is_args_chunk_start = False
             if tcc_id and tcc_id in self._tool_calls_registry:
                 self._tool_calls_registry[tcc_id]["args"] += args_chunk
-                await self.on_tool_call_args_chunk(tcc_id, args_chunk)
+                matched_id = tcc_id
+                # 检查是否是第一次参数
+                if not hasattr(self, '_tool_args_started'):
+                    self._tool_args_started = {}
+                is_args_chunk_start = not self._tool_args_started.get(tcc_id, False)
+                self._tool_args_started[tcc_id] = True
+            elif tcc_index is not None:
+                # 通过 index 匹配
+                for tid, info in self._tool_calls_registry.items():
+                    if info.get("index") == tcc_index:
+                        self._tool_calls_registry[tid]["args"] += args_chunk
+                        matched_id = tid
+                        if not hasattr(self, '_tool_args_started'):
+                            self._tool_args_started = {}
+                        is_args_chunk_start = not self._tool_args_started.get(tid, False)
+                        self._tool_args_started[tid] = True
+                        break
             elif args_chunk:
-                # 没有找到匹配的 ID，尝试通过 name 查找
+                # 最后尝试通过 name 匹配
                 name = tcc.get("name", "")
                 for tid, info in self._tool_calls_registry.items():
                     if info.get("name") == name:
                         self._tool_calls_registry[tid]["args"] += args_chunk
-                        await self.on_tool_call_args_chunk(tid, args_chunk)
+                        matched_id = tid
+                        if not hasattr(self, '_tool_args_started'):
+                            self._tool_args_started = {}
+                        is_args_chunk_start = not self._tool_args_started.get(tid, False)
+                        self._tool_args_started[tid] = True
                         break
+
+            # 无论是否找到匹配，都流式输出参数
+            if args_chunk:
+                await self.on_tool_call_args_chunk(matched_id or tcc_id, args_chunk, is_args_chunk_start)
 
     async def _handle_tool_message(self, msg: dict):
         """处理工具消息."""
@@ -123,9 +151,15 @@ class SimpleEventHandlers:
         tool_call_id = msg.get("tool_call_id", "")
         tool_status = msg.get("status")
 
-        # 结果流式（传递 tool_name 和 status 便于用户处理特殊逻辑）
+        # 结果流式
         if tool_content:
-            await self.on_tool_result_chunk(tool_call_id, tool_content, tool_name, tool_status)
+            # 检查是否是第一次结果（用于 is_chunk_start）
+            is_result_chunk_start = not hasattr(self, '_tool_result_started') or not self._tool_result_started.get(tool_call_id, False)
+            if not hasattr(self, '_tool_result_started'):
+                self._tool_result_started = {}
+            self._tool_result_started[tool_call_id] = True
+
+            await self.on_tool_result_chunk(tool_call_id, tool_content, is_result_chunk_start)
             # 标记工具调用已结束，下一次 AI 输出需要换行
             self._last_tool_call_ended = True
 
@@ -158,24 +192,37 @@ class SimpleEventHandlers:
                 print("\n\n", end="")
             print(content, end="", flush=True)
 
-    async def on_tool_call_start(self, tool_id: str, tool_name: str, args: str):
+    async def on_tool_call_start(self, tool_id: str, tool_name: str):
         """工具调用开始."""
-        print(f"\n🔧 工具调用: {tool_name}")
+        print(f"工具: {tool_name}")
+        print(f"ID: {tool_id}")
 
-    async def on_tool_call_args_chunk(self, tool_id: str, args_chunk: str):
-        """工具参数流式输出."""
-        print(args_chunk, end="", flush=True)
+    async def on_tool_call_args_chunk(self, tool_id: str, args_chunk: str, is_chunk_start: bool = False):
+        """工具参数流式输出.
 
-    async def on_tool_result_chunk(self, tool_id: str, content: str, tool_name: str = "unknown", status: str | None = None):
+        Args:
+            tool_id: 工具调用 ID
+            args_chunk: 参数字符串片段
+            is_chunk_start: 是否是参数流式开始
+        """
+        if args_chunk:
+            if is_chunk_start:
+                print("")
+            print(f"{args_chunk}", end="", flush=True)
+
+    async def on_tool_result_chunk(self, tool_id: str, content: str, is_chunk_start: bool = False):
         """工具结果流式输出.
 
         Args:
             tool_id: 工具调用 ID
             content: 工具返回的内容
-            tool_name: 工具名称（便于用户处理特殊逻辑如 write_todos）
-            status: 工具执行状态
+            is_chunk_start: 是否是结果流式开始
         """
-        print(content, end="", flush=True)
+        # 截断显示
+        if content:
+            if is_chunk_start:
+                print("")  # 换行
+            print(f"{content}", end="", flush=True)
 
     async def on_tool_call_complete(
         self,
@@ -185,9 +232,26 @@ class SimpleEventHandlers:
         content: str,
         status: str | None,
     ):
-        """工具调用完整结果."""
-        # print(f"\n✅ 工具完成: {tool_name}")
-        pass
+        """工具调用完整结果.
+
+        Args:
+            tool_id: 工具调用 ID
+            tool_name: 工具名称
+            args: 完整参数
+            content: 完整结果
+            status: 执行状态
+        """
+        print(f"\n\n🔧 ===== 工具调用完成 =====")
+        print(f"工具: {tool_name}")
+        print(f"ID: {tool_id}")
+        if status:
+            print(f"状态: {status}")
+        # 截断显示
+        display_args = args[:50] + "..." if len(args) > 50 else args
+        display_content = content[:50] + "..." if len(content) > 50 else content
+        print(f"参数: {display_args}")
+        print(f"结果: {display_content}")
+        print(f"===========================\n")
 
     async def on_custom(self, data: dict):
         """自定义事件."""
