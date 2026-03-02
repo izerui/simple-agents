@@ -23,7 +23,7 @@ async def example_custom_handler():
     class MyHandler(SimpleEventHandlers):
         """自定义处理器."""
 
-        async def on_ai_message_chunk(self, content: str):
+        async def on_ai_message_chunk(self, content: str, is_chunk_start: bool = False):
             print(f"[AI] {content}", end="")
 
         async def on_tool_call_complete(self, tool_id, tool_name, args, content, status):
@@ -42,21 +42,17 @@ async def example_custom_handler():
 
 async def example_with_files():
     """示例3: 带文件上传."""
-    import base64
-
     client = StreamingClient("http://localhost:2024")
     handler = SimpleEventHandlers()
-
-    with open("example.pdf", "rb") as f:
-        file_data = base64.b64encode(f.read()).decode("utf-8")
-
-    files = [
-        {"type": "file", "data": file_data, "metadata": {"filename": "example.pdf"}}
-    ]
 
     print("=" * 50)
     print("示例3: 带文件上传")
     print("=" * 50)
+
+    # 支持直接传入文件路径
+    files = [
+        "example.pdf",
+    ]
 
     async for chunk in client.stream_chat_with_files(
         message="请分析这个文件",

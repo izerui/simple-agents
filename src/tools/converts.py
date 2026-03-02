@@ -20,20 +20,12 @@ def convert_to_markdown(
 ) -> dict[str, Any]:
     """将各种文件格式转换为 Markdown 格式以便研究。
 
-    该工具将文档转换为 Markdown 格式。根据用户的问题内容来决定是否启用特殊功能：
-
-    启用图片提取的时机：当用户问题涉及图片、图表、截图、图形、插图、示意图、流程图、截图中的文字、界面展示等视觉内容时，应将 generate_picture_images 设为 True
-
-    启用公式识别的时机：当用户问题涉及数学公式、方程、不等式、符号、微积分、数学表达式、化学方程式、物理公式等内容时，应将 do_formula_enrichment 设为 True
-
-    支持的文件格式：
-    - PDF、DOC、DOCX、PPTX、PNG、JPG、JPEG、GIF、BMP、AsciiDoc
-    - 所有格式都支持图片提取和公式识别功能
+    支持的文件格式：PDF、DOC、DOCX、PPTX、PNG、JPG、JPEG、GIF、BMP、AsciiDoc
 
     Args:
         source_path: 要转换的文件路径
-        generate_picture_images: 是否识别并提取图片（根据用户问题是否涉及视觉内容决定）
-        do_formula_enrichment: 是否识别公式（根据用户问题是否涉及数学公式决定）
+        generate_picture_images: 是否识别并提取图片。当用户输入中提到需要分析图片、图表、截图、图形、插图、示意图、流程图、截图中的文字、界面展示等视觉内容时，设为 True
+        do_formula_enrichment: 是否识别公式。当用户输入中提到需要分析数学公式、方程、不等式、符号、微积分、数学表达式、化学方程式、物理公式等内容时，设为 True
 
     Returns:
         包含以下内容的字典：
@@ -41,11 +33,6 @@ def convert_to_markdown(
         - source_path: 源文件的路径
         - output_file: 生成的 Markdown 文件路径
         - error: 转换失败时的错误信息
-
-    Notes:
-        - PDF 和 Word 文件使用本地转换工具，不支持图片提取和公式识别参数
-        - 其他格式使用远程 API 转换，支持图片提取和公式识别
-        - Markdown 文件使用与源文件相同的名称，但扩展名改为 .md
     """
     try:
         backend = get_backend_per_thread({})
