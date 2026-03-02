@@ -186,7 +186,8 @@ class SimpleEventHandlers:
         status: str | None,
     ):
         """工具调用完整结果."""
-        print(f"\n✅ 工具完成: {tool_name}")
+        # print(f"\n✅ 工具完成: {tool_name}")
+        pass
 
     async def on_custom(self, data: dict):
         """自定义事件."""
