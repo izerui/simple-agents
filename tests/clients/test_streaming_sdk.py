@@ -31,7 +31,7 @@ async def test_paper_evaluation():
 
     print(f"用户输入: {user_message[:50]}...")
 
-    async for chunk in client.stream_chat_with_files(
+    async for chunk in client.chat_stream(
         message=user_message,
         files=files,
         system_prompt=system_prompt,
@@ -41,6 +41,7 @@ async def test_paper_evaluation():
         on_disconnect="cancel",
         on_completion="keep",
         durability="async",
+        metadata={"user_id": "user001", "name": "张卓群的论文评价"},
     ):
         await handler.receive_chunk(chunk)
 

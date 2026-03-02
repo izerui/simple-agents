@@ -54,7 +54,7 @@ async def example_with_files():
         "example.pdf",
     ]
 
-    async for chunk in client.stream_chat_with_files(
+    async for chunk in client.chat_stream(
         message="请分析这个文件",
         files=files,
     ):

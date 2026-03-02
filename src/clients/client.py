@@ -22,7 +22,9 @@ from typing import Union
 import aiofiles
 import aiohttp
 from langgraph_sdk import get_client
+from langgraph_sdk.schema import Config
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph_sdk.schema import Config
 
 logger = logging.getLogger(__name__)
 
@@ -58,38 +60,14 @@ class StreamingClient:
         self.assistant_id = assistant_id
         self._client = get_client(url=url, api_key=api_key)
 
-    async def stream_chat(
-        self,
-        message: str | list,
-        system_prompt: str | None = None,
-        thread_id: str | None = None,
-        stream_mode: list[str] | None = None,
-        **kwargs,
-    ):
-        """流式聊天主入口，原样返回 chunks."""
-        messages = []
-        if system_prompt:
-            messages.append(SystemMessage(content=system_prompt))
-        messages.append(HumanMessage(content=message))
-
-        stream_mode = stream_mode or ["messages-tuple", "custom"]
-        chunks = self._client.runs.stream(
-            thread_id=thread_id or "default",
-            assistant_id=self.assistant_id,
-            input={"messages": messages},
-            stream_mode=stream_mode,
-            if_not_exists="create",
-            **kwargs,
-        )
-        async for chunk in chunks:
-            yield chunk
-
-    async def stream_chat_with_files(
+    async def chat_stream(
         self,
         message: str,
         files: list[FileType] | None = None,
         system_prompt: str | None = None,
         thread_id: str | None = None,
+        config: Config | None = None,
+        metadata: dict | None = None,
         **kwargs,
     ):
         """流式聊天（支持文件上传）.
@@ -102,6 +80,11 @@ class StreamingClient:
                 - 字典格式: {"type": "file", "data": "...", "metadata": {"filename": "..."}}
             system_prompt: 系统提示
             thread_id: 线程 ID
+            config: LangGraph config 配置，支持:
+                - configurable: 模型配置 (model, model_provider, base_url, api_key)
+                - configurable: 其他配置 (thread_id, tool_timeout 等)
+                - tags, recursion_limit 等
+            metadata: 元数据，用于标记对话，如 {"user_id": "xxx", "name": "测试"}
         """
         # 处理文件参数
         processed_files = []
@@ -130,6 +113,8 @@ class StreamingClient:
             assistant_id=self.assistant_id,
             input={"messages": messages},
             stream_mode=["messages-tuple", "custom"],
+            config=config,
+            metadata=metadata,
             if_not_exists="create",
             **kwargs,
         )

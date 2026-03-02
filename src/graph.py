@@ -30,6 +30,7 @@ from src.utils.util import get_backend_per_thread
 
 # Model - 使用环境变量配置
 # 支持的 providers: openai, anthropic, qwq, qwen, deepseek 等
+# 可通过 configurable_fields 运行时切换模型
 chat_model = init_chat_model(
     model=os.getenv('MODEL_MODEL_ID'),
     model_provider=os.getenv('MODEL_PROVIDER'),
@@ -37,6 +38,7 @@ chat_model = init_chat_model(
     api_key=os.getenv('MODEL_API_KEY'),
     temperature=0.0,
     streaming=True,  # 必须流式输出
+    configurable_fields=("model", "model_provider", "base_url", "api_key"),  # 支持运行时切换
 )
 
 # 设置 model profile，让 SummarizationMiddleware 自动计算压缩阈值
