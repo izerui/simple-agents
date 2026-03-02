@@ -15,7 +15,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class EventHandlers:
+class SimpleEventHandlers:
     """事件处理器基类.
 
     使用方式:
@@ -24,10 +24,10 @@ class EventHandlers:
             await handler.receive_chunk(chunk)
 
     可继承并覆盖以下方法:
-        - on_ai_message_chunk(content: str)  # AI 文本流式
+        - on_ai_message_chunk(content: str, is_chunk_start: bool)  # AI 文本流式
         - on_tool_call_start(tool_id, tool_name, args)  # 工具调用开始
         - on_tool_call_args_chunk(tool_id, args_chunk)  # 参数流式
-        - on_tool_result_chunk(tool_id, content)  # 结果流式
+        - on_tool_result_chunk(tool_id, content, tool_name, status)  # 结果流式
         - on_tool_call_complete(tool_id, tool_name, args, content, status)  # 完整结果
         - on_custom(data: dict)  # 自定义事件
         - on_error(error: Exception)  # 错误
@@ -36,6 +36,8 @@ class EventHandlers:
     def __init__(self):
         # 工具调用注册表: {tool_id: {name, args}}
         self._tool_calls_registry: dict[str, dict] = {}
+        # 标记：工具调用是否刚刚完成（用于 on_ai_message_chunk 换行判断）
+        self._last_tool_call_ended: bool = False
 
     async def receive_chunk(self, chunk: Any):
         """接收原始 chunk，解析并分发事件."""
@@ -77,31 +79,42 @@ class EventHandlers:
         """处理 AI 消息块."""
         content = msg.get("content", "")
         if content:
-            has_pending_tools = bool(self._tool_calls_registry)
-            await self.on_ai_message_chunk(content, has_pending_tools)
+            # 工具调用完成后新一轮 AI 输出开始，需要换行
+            is_chunk_start = self._last_tool_call_ended
+            if is_chunk_start:
+                self._last_tool_call_ended = False
+            await self.on_ai_message_chunk(content, is_chunk_start)
 
-        # tool_calls - 工具调用开始
+        # tool_calls - 工具调用开始（args 为空，参数通过 tool_call_chunks 流式传递）
         tool_calls = msg.get("tool_calls", [])
         for tc in tool_calls:
             tool_name = tc.get("name", "")
             tool_id = tc.get("id", "")
-            args = tc.get("args", "")
             if tool_name and tool_id:
-                args_str = args if isinstance(args, str) else ""
                 self._tool_calls_registry[tool_id] = {
                     "name": tool_name,
-                    "args": args_str,
+                    "args": "",
                 }
-                await self.on_tool_call_start(tool_id, tool_name, args_str)
+                await self.on_tool_call_start(tool_id, tool_name, "")
 
         # tool_call_chunks - 参数流式
         tool_call_chunks = msg.get("tool_call_chunks", [])
         for tcc in tool_call_chunks:
             tcc_id = tcc.get("id", "")
             args_chunk = tcc.get("args", "")
+
+            # 优先通过 ID 查找
             if tcc_id and tcc_id in self._tool_calls_registry:
                 self._tool_calls_registry[tcc_id]["args"] += args_chunk
                 await self.on_tool_call_args_chunk(tcc_id, args_chunk)
+            elif args_chunk:
+                # 没有找到匹配的 ID，尝试通过 name 查找
+                name = tcc.get("name", "")
+                for tid, info in self._tool_calls_registry.items():
+                    if info.get("name") == name:
+                        self._tool_calls_registry[tid]["args"] += args_chunk
+                        await self.on_tool_call_args_chunk(tid, args_chunk)
+                        break
 
     async def _handle_tool_message(self, msg: dict):
         """处理工具消息."""
@@ -110,9 +123,11 @@ class EventHandlers:
         tool_call_id = msg.get("tool_call_id", "")
         tool_status = msg.get("status")
 
-        # 结果流式
+        # 结果流式（传递 tool_name 和 status 便于用户处理特殊逻辑）
         if tool_content:
-            await self.on_tool_result_chunk(tool_call_id, tool_content)
+            await self.on_tool_result_chunk(tool_call_id, tool_content, tool_name, tool_status)
+            # 标记工具调用已结束，下一次 AI 输出需要换行
+            self._last_tool_call_ended = True
 
         # 完整结果（累积的参数 + 最终结果）
         args = ""
@@ -131,15 +146,15 @@ class EventHandlers:
 
     # ========== 可覆盖的处理方法 ==========
 
-    async def on_ai_message_chunk(self, content: str, has_pending_tools: bool = False):
+    async def on_ai_message_chunk(self, content: str, is_chunk_start: bool = False):
         """AI 文本流式输出.
 
         Args:
             content: AI 输出的文本
-            has_pending_tools: 是否有未完成的工具调用
+            is_chunk_start: 是否是工具调用完成后新一轮 chunk 开始（需要换行）
         """
         if content:
-            if has_pending_tools:
+            if is_chunk_start:
                 print("\n\n", end="")
             print(content, end="", flush=True)
 
@@ -151,8 +166,15 @@ class EventHandlers:
         """工具参数流式输出."""
         print(args_chunk, end="", flush=True)
 
-    async def on_tool_result_chunk(self, tool_id: str, content: str):
-        """工具结果流式输出."""
+    async def on_tool_result_chunk(self, tool_id: str, content: str, tool_name: str = "unknown", status: str | None = None):
+        """工具结果流式输出.
+
+        Args:
+            tool_id: 工具调用 ID
+            content: 工具返回的内容
+            tool_name: 工具名称（便于用户处理特殊逻辑如 write_todos）
+            status: 工具执行状态
+        """
         print(content, end="", flush=True)
 
     async def on_tool_call_complete(

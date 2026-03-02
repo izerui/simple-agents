@@ -1,0 +1,69 @@
+"""使用示例."""
+
+import asyncio
+from src.clients import StreamingClient, SimpleEventHandlers
+
+
+async def example_basic():
+    """基础用法：默认打印输出."""
+    client = StreamingClient("http://localhost:2024")
+    handler = SimpleEventHandlers()
+
+    print("=" * 50)
+    print("示例1: 基础用法")
+    print("=" * 50)
+
+    async for chunk in client.stream_chat("你好，请介绍一下自己"):
+        await handler.receive_chunk(chunk)
+
+
+async def example_custom_handler():
+    """示例2: 自定义处理器（继承类）."""
+
+    class MyHandler(SimpleEventHandlers):
+        """自定义处理器."""
+
+        async def on_ai_message_chunk(self, content: str):
+            print(f"[AI] {content}", end="")
+
+        async def on_tool_call_complete(self, tool_id, tool_name, args, content, status):
+            print(f"\n[工具] {tool_name}, 参数: {args[:50]}...")
+
+    client = StreamingClient("http://localhost:2024")
+    handler = MyHandler()
+
+    print("=" * 50)
+    print("示例2: 自定义处理器")
+    print("=" * 50)
+
+    async for chunk in client.stream_chat("列出当前目录的文件"):
+        await handler.receive_chunk(chunk)
+
+
+async def example_with_files():
+    """示例3: 带文件上传."""
+    import base64
+
+    client = StreamingClient("http://localhost:2024")
+    handler = SimpleEventHandlers()
+
+    with open("example.pdf", "rb") as f:
+        file_data = base64.b64encode(f.read()).decode("utf-8")
+
+    files = [
+        {"type": "file", "data": file_data, "metadata": {"filename": "example.pdf"}}
+    ]
+
+    print("=" * 50)
+    print("示例3: 带文件上传")
+    print("=" * 50)
+
+    async for chunk in client.stream_chat_with_files(
+        message="请分析这个文件",
+        files=files,
+    ):
+        await handler.receive_chunk(chunk)
+
+
+if __name__ == "__main__":
+    asyncio.run(example_basic())
