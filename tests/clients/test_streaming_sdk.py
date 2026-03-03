@@ -4,6 +4,8 @@ import asyncio
 import os
 import uuid
 
+from langgraph_sdk.schema import Config
+
 from src.clients import StreamingClient, SimpleEventHandlers
 
 # 测试文件目录
@@ -29,6 +31,19 @@ async def test_paper_evaluation():
     client = StreamingClient(url=host, assistant_id=assistant_id)
     handler = SimpleEventHandlers()
 
+    # 不使用默认的模型，使用指定的qwen3-max模型
+    config = Config(
+        configurable={
+            "model_provider": "openai",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            # "api_key": "sk-xxxxx",
+            # "model": "deepseek-v3.2",
+            # "model": "glm-4.7",
+            # "model": "MiniMax-M2.1",
+            "model": "qwen3-max",
+        }
+    )
+
     print(f"用户输入: {user_message[:50]}...")
 
     async for chunk in client.chat_stream(
@@ -42,6 +57,7 @@ async def test_paper_evaluation():
         on_completion="keep",
         durability="async",
         metadata={"user_id": "user001", "name": "张卓群的论文评价"},
+        config=config,
     ):
         await handler.receive_chunk(chunk)
 
