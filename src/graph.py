@@ -10,10 +10,6 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Apply model profile patches for dynamic summarization thresholds
-# Patches are automatically applied when this module is imported
-from src.patches import model_profile  # noqa: F401
-
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
@@ -45,9 +41,9 @@ chat_model = init_chat_model(
     configurable_fields=("model", "model_provider", "base_url", "api_key"),  # 支持运行时切换
 )
 
-# 设置 model profile（已移至 patches/model_profile.py，通过 __getattr__ 动态返回）
-# max_input_tokens = int(os.getenv('MODEL_MAX_INPUT_TOKENS', '80000'))
-# chat_model.profile = {"max_input_tokens": max_input_tokens}
+# 设置 model profile，让 SummarizationMiddleware 自动计算压缩阈值
+max_input_tokens = int(os.getenv('MODEL_MAX_INPUT_TOKENS', '80000'))
+chat_model.profile = {"max_input_tokens": max_input_tokens}  # type: ignore[assignment]
 
 
 # 创建自定义工具限制中间件
@@ -118,7 +114,6 @@ agent = create_deep_agent(
     ],  # 完整的中间件配置
     debug=int(os.getenv('ENABLED_AGENT_DEBUG', 0)) == 1,
 )
-
 
 # 打印 model profile 确认设置正确
 logger.info(f"chat_model.profile = {chat_model.profile}")
