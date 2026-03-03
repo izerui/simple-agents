@@ -5,6 +5,7 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.summarization import SummarizationMiddleware as LCSummarizationMiddleware
+from langchain_core.messages import AnyMessage
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import ModelRequest
@@ -84,3 +85,9 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
             runtime_config=runtime_config
         )
         _current_max_input_tokens.set(max_input_tokens)
+
+    def _should_summarize(self, messages: list[AnyMessage], total_tokens: int) -> bool:
+        # 增加日志输出
+        logging.info(f"[_should_summarize] total_tokens: {total_tokens}")
+        return super()._should_summarize(messages, total_tokens)
+
