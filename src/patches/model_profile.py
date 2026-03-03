@@ -24,7 +24,7 @@ MODEL_MAX_TOKENS = {
     "deepseek-v3.1": 98304 * 0.7,
     "deepseek-r1": 98304 * 0.7,
     # Qwen 系列
-    "qwen3-max": 258048 * 0.7,
+    "qwen3-max": 1000 * 0.7,
     "qwen3.5-plus": 983616 * 0.7,
     # Kimi 系列
     "kimi-k2.5": 262144 * 0.7,
