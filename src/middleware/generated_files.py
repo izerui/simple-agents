@@ -84,7 +84,13 @@ class GeneratedFilesMiddleware(AgentMiddleware):
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data.get('files', [])
+                # 新 API 格式: {"success": true, "err_message": null, "data": [...]}
+                if data.get("success"):
+                    return data.get("data", []) or []
+                else:
+                    err_msg = data.get("err_message", "未知错误")
+                    print(f"提取文件路径失败: {err_msg}")
+                    return []
         except Exception as e:
             print(f"调用接口提取文件路径失败: {e}")
             return []
