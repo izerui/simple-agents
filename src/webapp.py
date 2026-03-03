@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Query
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 import json
 import logging
 import os
@@ -112,54 +112,6 @@ async def download_file(
         raise HTTPException(status_code=500, detail=f"下载文件时发生错误: {str(e)}")
 
 
-# HEAD 端点：检查报告是否存在
-@router.head("/report/{thread_id}", tags=["Webapp"])
-async def check_report_exists(thread_id: str):
-    """
-    检查指定 thread_id 的 final_report.md 文件是否存在（HEAD 方法）。
-    
-    Args:
-        thread_id: 对话线程 ID
-    
-    Returns:
-        Response: 只返回 headers，不返回内容体
-    """
-    data_root_dir = os.getenv('SANDBOX_ROOT_DIR', './data/sandbox_sessions')
-    
-    # 构造文件路径：{DATA_ROOT_DIR}/{thread_id}/deepthink/final_report.md
-    file_path = os.path.join(data_root_dir, thread_id, 'deepthink', 'final_report.md')
-    
-    # 解析绝对路径
-    resolved_path = os.path.abspath(file_path)
-    resolved_root = os.path.abspath(data_root_dir)
-    
-    # 安全检查：确保文件路径在根目录下
-    if not resolved_path.startswith(resolved_root):
-        raise HTTPException(status_code=403, detail="无权访问该路径")
-    
-    # 检查文件是否存在
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="文件未找到")
-    
-    # 检查是否是文件
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=400, detail="路径不是一个文件")
-    
-    # 获取文件状态
-    file_stat = os.stat(file_path)
-    
-    # 设置响应头
-    headers = {
-        'Content-Type': 'text/markdown',
-        'Content-Length': str(file_stat.st_size),
-        'Last-Modified': os.path.getmtime(file_path).__str__()
-    }
-    
-    # HEAD 请求只返回 headers，不返回内容体
-    return Response(status_code=200, headers=headers)
-
-
-
 
 # LLM 提取文件列表接口
 _extract_model = None
@@ -200,7 +152,7 @@ async def extract_file_paths(request: ExtractFilePathsRequest):
         request: 请求体，包含 content 字段
 
     Returns:
-        JSON: {"files": ["path1", "path2"]}
+        JSON: {"success": true, "err_message": null, "data": ["path1", "path2"]}
     """
     try:
         model = _get_extract_model()
@@ -234,16 +186,84 @@ AI 回复内容：
             result = await asyncio.to_thread(structured_model.invoke, prompt)
 
         # 提取文件列表
+        files = []
         if isinstance(result, FilePaths):
-            return {"files": result.files}
+            files = result.files
         elif isinstance(result, dict):
-            return {"files": result.get('files', [])}
-        return {"files": []}
+            files = result.get('files', [])
+
+        return {
+            "success": True,
+            "err_message": None,
+            "data": files,
+        }
 
     except Exception as e:
         error_detail = f"提取文件路径失败: {str(e)}\n{traceback.format_exc()}"
         logging.getLogger(__name__).error(error_detail)
-        raise HTTPException(status_code=500, detail=error_detail)
+        return {
+            "success": False,
+            "err_message": str(e),
+            "data": None,
+        }
+
+# 模型列表端点
+@app.get("/models", tags=["Models"])
+async def list_models():
+    """
+    获取可用的模型列表。
+
+    从环境变量中读取模型配置，返回当前可用的模型信息。
+
+    支持两种配置方式：
+    1. MODEL_SUPPORTED_MODELS: 逗号分隔的模型 ID 列表
+    2. MODEL_MODEL_ID: 单个模型配置（向后兼容）
+    """
+    import os
+
+    try:
+        models = []
+
+        # 优先读取 MODEL_SUPPORTED_MODELS（逗号分隔的模型列表）
+        model_id_list = os.getenv("MODEL_SUPPORTED_MODELS", "").strip()
+        if model_id_list:
+            # 共享相同的 provider、base_url、api_key
+            provider = os.getenv("MODEL_PROVIDER")
+            base_url = os.getenv("MODEL_BASE_URL")
+
+            # 解析模型列表
+            model_ids = [m.strip() for m in model_id_list.split(",") if m.strip()]
+            default_model = os.getenv("MODEL_MODEL_ID", "").strip()
+
+            for i, model_id in enumerate(model_ids):
+                models.append({
+                    "name": model_id,
+                    "provider": provider,
+                    "base_url": base_url,
+                    "is_default": model_id == default_model or i == 0,
+                })
+        else:
+            # 向后兼容：单个模型配置
+            model_id = os.getenv("MODEL_MODEL_ID")
+            if model_id:
+                models.append({
+                    "name": model_id,
+                    "provider": os.getenv("MODEL_PROVIDER"),
+                    "base_url": os.getenv("MODEL_BASE_URL"),
+                    "is_default": True,
+                })
+
+        return {
+            "success": True,
+            "err_message": None,
+            "data": models,
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "err_message": str(e),
+            "data": None,
+        }
 
 app.include_router(router)
 
