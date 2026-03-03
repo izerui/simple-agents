@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 import warnings
 from datetime import UTC, datetime
@@ -47,6 +48,8 @@ from langchain.agents.middleware.summarization import (
     SummarizationMiddleware as LCSummarizationMiddleware,
     TokenCounter,
 )
+
+from deepagents.middleware._summarization_helper import DeepAgentsLCSummarizationMiddleware
 from langchain.agents.middleware.types import AgentMiddleware, AgentState, ExtendedModelResponse, PrivateStateAttr
 from langchain.tools import ToolRuntime
 from langchain_core.exceptions import ContextOverflowError
@@ -232,7 +235,8 @@ class _DeepAgentsSummarizationMiddleware(AgentMiddleware):
             ```
         """
         # Initialize langchain helper for core summarization logic
-        self._lc_helper = LCSummarizationMiddleware(
+        # 使用自定义的 DeepAgentsLCSummarizationMiddleware 以支持传入 max_input_tokens 参数
+        self._lc_helper = DeepAgentsLCSummarizationMiddleware(
             model=model,
             trigger=trigger,
             keep=keep,
@@ -852,6 +856,9 @@ A condensed summary follows:
         Returns:
             The model response from the handler.
         """
+        # 设置动态 max_input_tokens 到 contextvar，供 _get_profile_limits 使用
+        self._lc_helper._set_max_input_tokens_from_request(request)
+
         # Get effective messages based on previous summarization events
         effective_messages = self._get_effective_messages(request)
 
@@ -943,6 +950,9 @@ A condensed summary follows:
         Returns:
             The model response from the handler.
         """
+        # 设置动态 max_input_tokens 到 contextvar，供 _get_profile_limits 使用
+        self._lc_helper._set_max_input_tokens_from_request(request)
+
         # Get effective messages based on previous summarization events
         effective_messages = self._get_effective_messages(request)
 

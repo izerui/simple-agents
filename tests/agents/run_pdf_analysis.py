@@ -70,7 +70,8 @@ async def run_test():
     config = RunnableConfig(
         configurable={
             "thread_id": thread_id,
-            "tool_timeout": 300.0
+            "tool_timeout": 300.0,
+            "max_input_tokens": 8000,
         },
         recursion_limit=500,
     )
