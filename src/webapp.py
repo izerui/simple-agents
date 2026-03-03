@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import traceback
+from typing import Any
 from urllib.parse import quote
 
 from langsmith import tracing_context
@@ -16,6 +17,30 @@ from pydantic import BaseModel
 app = FastAPI(title="Webapp Agents API", version="0.1.0")
 
 router = APIRouter(prefix="/webapp")
+
+
+# ============ 响应模型 ============
+
+class ApiResponse(BaseModel):
+    """通用 API 响应模型"""
+    success: bool
+    err_message: str | None = None
+    data: Any = None
+
+
+class ModelInfo(BaseModel):
+    """模型信息"""
+    name: str
+    provider: str | None = None
+    base_url: str | None = None
+    is_default: bool = False
+
+
+class ModelListResponse(BaseModel):
+    """模型列表响应"""
+    success: bool
+    err_message: str | None = None
+    data: list[ModelInfo] | None = None
 
 
 # 文件下载端点
@@ -143,8 +168,8 @@ class ExtractFilePathsRequest(BaseModel):
 
 
 # 文件列表提取接口
-@router.post("/extract-file-paths", tags=["Webapp"])
-async def extract_file_paths(request: ExtractFilePathsRequest):
+@router.post("/extract-file-paths", tags=["Webapp"], response_model=ApiResponse)
+async def extract_file_paths(request: ExtractFilePathsRequest) -> ApiResponse:
     """
     从 AI 回复内容中提取生成的文件路径。
 
@@ -186,30 +211,30 @@ AI 回复内容：
             result = await asyncio.to_thread(structured_model.invoke, prompt)
 
         # 提取文件列表
-        files = []
+        files: list[str] = []
         if isinstance(result, FilePaths):
             files = result.files
         elif isinstance(result, dict):
             files = result.get('files', [])
 
-        return {
-            "success": True,
-            "err_message": None,
-            "data": files,
-        }
+        return ApiResponse(
+            success=True,
+            err_message=None,
+            data=files,
+        )
 
     except Exception as e:
         error_detail = f"提取文件路径失败: {str(e)}\n{traceback.format_exc()}"
         logging.getLogger(__name__).error(error_detail)
-        return {
-            "success": False,
-            "err_message": str(e),
-            "data": None,
-        }
+        return ApiResponse(
+            success=False,
+            err_message=str(e),
+            data=None,
+        )
 
 # 模型列表端点
-@app.get("/models", tags=["Models"])
-async def list_models():
+@router.get("/models", tags=["Models"], response_model=ModelListResponse)
+async def list_models() -> ModelListResponse:
     """
     获取可用的模型列表。
 
@@ -222,7 +247,7 @@ async def list_models():
     import os
 
     try:
-        models = []
+        models: list[ModelInfo] = []
 
         # 优先读取 MODEL_SUPPORTED_MODELS（逗号分隔的模型列表）
         model_id_list = os.getenv("MODEL_SUPPORTED_MODELS", "").strip()
@@ -236,34 +261,34 @@ async def list_models():
             default_model = os.getenv("MODEL_MODEL_ID", "").strip()
 
             for i, model_id in enumerate(model_ids):
-                models.append({
-                    "name": model_id,
-                    "provider": provider,
-                    "base_url": base_url,
-                    "is_default": model_id == default_model or i == 0,
-                })
+                models.append(ModelInfo(
+                    name=model_id,
+                    provider=provider,
+                    base_url=base_url,
+                    is_default=model_id == default_model or i == 0,
+                ))
         else:
             # 向后兼容：单个模型配置
             model_id = os.getenv("MODEL_MODEL_ID")
             if model_id:
-                models.append({
-                    "name": model_id,
-                    "provider": os.getenv("MODEL_PROVIDER"),
-                    "base_url": os.getenv("MODEL_BASE_URL"),
-                    "is_default": True,
-                })
+                models.append(ModelInfo(
+                    name=model_id,
+                    provider=os.getenv("MODEL_PROVIDER"),
+                    base_url=os.getenv("MODEL_BASE_URL"),
+                    is_default=True,
+                ))
 
-        return {
-            "success": True,
-            "err_message": None,
-            "data": models,
-        }
+        return ModelListResponse(
+            success=True,
+            err_message=None,
+            data=models,
+        )
     except Exception as e:
-        return {
-            "success": False,
-            "err_message": str(e),
-            "data": None,
-        }
+        return ModelListResponse(
+            success=False,
+            err_message=str(e),
+            data=None,
+        )
 
 app.include_router(router)
 
