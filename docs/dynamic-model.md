@@ -149,8 +149,9 @@ async for chunk in client.chat_stream(message="你好", config=config):
 |------|---------------|-------------------|
 | deepseek-v3 | 131072 | 111411 |
 | deepseek-v3.2 | 98304 | 83558 |
+| deepseek-v3.1 | 98304 | 83558 |
 | deepseek-r1 | 98304 | 83558 |
-| qwen3-max | 1000 | 850 |
+| qwen3-max | 258048 | 219340 |
 | qwen3.5-plus | 983616 | 836073 |
 | kimi-k2.5 | 262144 | 222822 |
 | glm-5 | 202752 | 172339 |
@@ -159,39 +160,50 @@ async for chunk in client.chat_stream(message="你好", config=config):
 
 ### 实现原理
 
-在 `deepagents/middleware/summarization.py` 中，`_DeepAgentsSummarizationMiddleware._get_profile_limits` 方法会动态根据运行时模型名称查询映射表：
+在 `deepagents/middleware/_summarization_helper.py` 中，`DeepAgentsLCSummarizationMiddleware._get_profile_limits` 方法支持动态获取 max_input_tokens，优先级为：
+
+1. **客户端传递** - 从 `runtime.context.max_input_tokens` 获取（最高优先级）
+2. **映射表** - 根据运行时模型名称查询映射表
+3. **model.profile** - 从模型配置中获取默认值
 
 ```python
 def _get_profile_limits(self) -> int | None:
-    """动态根据模型名称计算 max_input_tokens"""
-    MODEL_MAX_TOKENS = {
-        "qwen3-max": 1000 * 0.7,
-        "qwen3.5-plus": 983616 * 0.7,
-        # ... 其他模型
-    }
+    """Retrieve max input token limit with dynamic support."""
+    # 1. 优先从 contextvar 获取动态 max_input_tokens
+    max_input_tokens = _current_max_input_tokens.get()
+    if max_input_tokens is not None:
+        return max_input_tokens
 
-    model_name = getattr(self._lc_helper.model, 'model', None) or os.getenv('MODEL_MODEL_ID', '')
-    model_lower = model_name.lower()
-
-    for key in sorted(MODEL_MAX_TOKENS.keys(), key=len, reverse=True):
-        if model_lower.startswith(key):
-            return int(MODEL_MAX_TOKENS[key])
-
-    return self._lc_helper._get_profile_limits()
+    # 2. 从 model.profile 获取默认值
+    return super()._get_profile_limits()
 ```
+
+通过 contextvar 机制，在 `wrap_model_call` 和 `awrap_model_call` 方法开头从 `runtime.context` 提取 `max_input_tokens` 并设置，供后续所有调用点使用。
 
 ### 使用方式
 
 运行时切换模型时，压缩阈值会自动调整：
 
 ```python
-# 使用默认模型（压缩阈值较低，如 qwen3-max 为 595 tokens）
+# 使用默认模型（压缩阈值较低，如 qwen3-max 为 219340 tokens）
 config1 = Config(configurable={"thread_id": "xxx"})
 
-# 运行时切换到其他模型（压缩阈值自动调整，如 qwen3.5-plus 为 585251 tokens）
+# 运行时切换到其他模型（压缩阈值自动调整，如 qwen3.5-plus 为 836073 tokens）
 config2 = Config(configurable={
     "thread_id": "xxx",
     "model": "qwen3.5-plus"
+})
+```
+
+#### 客户端自定义 max_input_tokens
+
+客户端可以通过 `runtime.context` 传递自定义的 `max_input_tokens`，优先级最高：
+
+```python
+# 客户端传递自定义压缩阈值
+config = Config(configurable={
+    "thread_id": "xxx",
+    "max_input_tokens": 1000  # 强制使用 1000 tokens 作为压缩阈值
 })
 ```
 

@@ -37,11 +37,14 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         """
         # 1. 优先从 contextvar 获取动态 max_input_tokens
         max_input_tokens = _current_max_input_tokens.get()
+        logging.info(f"[_get_profile_limits] contextvar max_input_tokens: {max_input_tokens}")
         if max_input_tokens is not None:
             return max_input_tokens
 
         # 2. 从 model.profile 获取默认值
-        return super()._get_profile_limits()
+        profile_max = super()._get_profile_limits()
+        logging.info(f"[_get_profile_limits] profile max_input_tokens: {profile_max}")
+        return profile_max
 
     def _get_max_input_tokens(self, model: Any = None, runtime_config: dict | None = None) -> int | None:
         """获取 max_input_tokens，优先级：客户端传递 > 映射表 > 默认 profile
