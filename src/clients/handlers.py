@@ -10,12 +10,13 @@
 """
 
 import logging
-from typing import Any
+from abc import abstractmethod, ABC
+from typing import Any, override
 
 logger = logging.getLogger(__name__)
 
 
-class SimpleEventHandlers:
+class StreamingEventHandlers(ABC):
     """事件处理器基类.
 
     使用方式:
@@ -180,6 +181,76 @@ class SimpleEventHandlers:
 
     # ========== 可覆盖的处理方法 ==========
 
+    @abstractmethod
+    async def on_ai_message_chunk(self, content: str, is_chunk_start: bool = False):
+        """AI 文本流式输出.
+
+        Args:
+            content: AI 输出的文本
+            is_chunk_start: 是否是工具调用完成后新一轮 chunk 开始（需要换行）
+        """
+        pass
+
+    @abstractmethod
+    async def on_tool_call_start(self, tool_id: str, tool_name: str):
+        """工具调用开始."""
+        pass
+
+    @abstractmethod
+    async def on_tool_call_args_chunk(self, tool_id: str, args_chunk: str, is_chunk_start: bool = False):
+        """工具参数流式输出.
+
+        Args:
+            tool_id: 工具调用 ID
+            args_chunk: 参数字符串片段
+            is_chunk_start: 是否是参数流式开始
+        """
+        pass
+
+    @abstractmethod
+    async def on_tool_result_chunk(self, tool_id: str, content: str, is_chunk_start: bool = False):
+        """工具结果流式输出.
+
+        Args:
+            tool_id: 工具调用 ID
+            content: 工具返回的内容
+            is_chunk_start: 是否是结果流式开始
+        """
+        pass
+
+    @abstractmethod
+    async def on_tool_call_complete(
+        self,
+        tool_id: str,
+        tool_name: str,
+        args: str,
+        content: str,
+        status: str | None,
+    ):
+        """工具调用完整结果.
+
+        Args:
+            tool_id: 工具调用 ID
+            tool_name: 工具名称
+            args: 完整参数
+            content: 完整结果
+            status: 执行状态
+        """
+        pass
+
+    @abstractmethod
+    async def on_custom(self, data: dict):
+        """自定义事件."""
+        pass
+
+    @abstractmethod
+    async def on_error(self, error: Exception):
+        """错误事件."""
+        pass
+
+
+class SimpleStreamingEventHandlers(StreamingEventHandlers):
+
     async def on_ai_message_chunk(self, content: str, is_chunk_start: bool = False):
         """AI 文本流式输出.
 
@@ -258,6 +329,7 @@ class SimpleEventHandlers:
         print(f"\n🔔 自定义事件")
         print(f"   数据: {data}")
 
+    @abstractmethod
     async def on_error(self, error: Exception):
         """错误事件."""
         print(f"\n❌ 错误: {error}")

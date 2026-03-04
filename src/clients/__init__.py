@@ -12,10 +12,11 @@
 """
 
 from .client import StreamingClient, EventType
-from .handlers import SimpleEventHandlers
+from .handlers import StreamingEventHandlers
 
 __all__ = [
     "StreamingClient",
-    "SimpleEventHandlers",
+    "StreamingEventHandlers",
+    "SimpleStreamingEventHandlers",
     "EventType",
 ]

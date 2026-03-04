@@ -1,13 +1,14 @@
 """使用示例."""
 
 import asyncio
-from src.clients import StreamingClient, SimpleEventHandlers
+from src.clients import StreamingClient, StreamingEventHandlers
+from src.clients.handlers import SimpleStreamingEventHandlers
 
 
 async def example_basic():
     """基础用法：默认打印输出."""
     client = StreamingClient("http://localhost:2024")
-    handler = SimpleEventHandlers()
+    handler = SimpleStreamingEventHandlers()
 
     print("=" * 50)
     print("示例1: 基础用法")
@@ -20,7 +21,7 @@ async def example_basic():
 async def example_custom_handler():
     """示例2: 自定义处理器（继承类）."""
 
-    class MyHandler(SimpleEventHandlers):
+    class MyHandler(StreamingEventHandlers):
         """自定义处理器."""
 
         async def on_ai_message_chunk(self, content: str, is_chunk_start: bool = False):
@@ -43,7 +44,7 @@ async def example_custom_handler():
 async def example_with_files():
     """示例3: 带文件上传."""
     client = StreamingClient("http://localhost:2024")
-    handler = SimpleEventHandlers()
+    handler = SimpleStreamingEventHandlers()
 
     print("=" * 50)
     print("示例3: 带文件上传")

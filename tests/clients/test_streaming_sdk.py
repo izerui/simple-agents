@@ -6,7 +6,8 @@ import uuid
 
 from langgraph_sdk.schema import Config
 
-from src.clients import StreamingClient, SimpleEventHandlers
+from src.clients import StreamingClient
+from src.clients.handlers import SimpleStreamingEventHandlers
 
 # 测试文件目录
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,7 +30,7 @@ async def test_paper_evaluation():
 
     thread_id = str(uuid.uuid4())
     client = StreamingClient(url=host, assistant_id=assistant_id)
-    handler = SimpleEventHandlers()
+    handler = SimpleStreamingEventHandlers()
 
     # 不使用默认的模型，使用指定的qwen3-max模型
     config = Config(
@@ -41,24 +42,23 @@ async def test_paper_evaluation():
             # "model": "glm-4.7",
             # "model": "MiniMax-M2.1",
             "model": "qwen3-max",
-            "max_input_tokens": 8000,
         }
     )
 
     print(f"用户输入: {user_message[:50]}...")
 
     async for chunk in client.chat_stream(
-        message=user_message,
-        files=files,
-        system_prompt=system_prompt,
-        thread_id=thread_id,
-        multitask_strategy="reject",
-        stream_subgraphs=True,
-        on_disconnect="cancel",
-        on_completion="keep",
-        durability="async",
-        metadata={"user_id": "user001", "name": "张卓群的论文评价"},
-        config=config,
+            message=user_message,
+            files=files,
+            system_prompt=system_prompt,
+            thread_id=thread_id,
+            multitask_strategy="reject",
+            stream_subgraphs=True,
+            on_disconnect="cancel",
+            on_completion="keep",
+            durability="async",
+            metadata={"user_id": "user001", "name": "张卓群的论文评价"},
+            config=config,
     ):
         await handler.receive_chunk(chunk)
 

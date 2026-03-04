@@ -10,8 +10,10 @@
 import asyncio
 import uuid
 
-from src.clients import StreamingClient, SimpleEventHandlers
 from langgraph_sdk.schema import Config
+
+from src.clients import StreamingClient
+from src.clients.handlers import SimpleStreamingEventHandlers
 
 
 async def test_openai_compatible():
@@ -36,7 +38,7 @@ async def test_openai_compatible():
 
     thread_id = str(uuid.uuid4())
     client = StreamingClient(url=host, assistant_id=assistant_id)
-    handler = SimpleEventHandlers()
+    handler = SimpleStreamingEventHandlers()
 
     print(f"用户输入: {user_message}")
     print(f"线程ID: {thread_id}")
