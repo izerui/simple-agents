@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 # 用于存储当前请求的 max_input_tokens
 _current_max_input_tokens: ContextVar[int | None] = ContextVar("current_max_input_tokens", default=None)
+# 用于存储当前模型名称
+_current_model_name: ContextVar[str | None] = ContextVar("current_model_name", default=None)
 
 
 class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
@@ -83,6 +85,12 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         )
         _current_max_input_tokens.set(max_input_tokens)
 
+        # 设置当前模型名称
+        if request.model:
+            model_name = getattr(request.model, 'model', None)
+            if model_name:
+                _current_model_name.set(model_name)
+
     def _should_summarize(self, messages: list[AnyMessage], total_tokens: int) -> bool:
         max_input_tokens = self._get_profile_limits()
 
@@ -123,6 +131,10 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         reset = "\033[0m"
         bold = "\033[1m"
 
+        # 获取当前模型名称
+        model_name = _current_model_name.get()
+        model_display = f"{value_color}{bold}{model_name}{reset}" if model_name else "Unknown"
+
         # 创建彩色进度条
         bar_length = 12
         filled_length = min(int(bar_length * percentage / 100), bar_length)
@@ -130,6 +142,7 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
 
         logging.info(
             f"{status_color}{bold}📱{icon}{reset} "
+            f"Model: {model_display} | "
             f"Tokens: {value_color}{bold}{total_tokens:,}{reset}/{value_color}{bold}{max_input_tokens:,}{reset} "
             f"📊[{colored_bar}] "
             f"📈{percent_color}{bold}({percentage:.1f}%){reset}"
