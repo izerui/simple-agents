@@ -38,14 +38,11 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         """
         # 1. 优先从 contextvar 获取动态 max_input_tokens
         max_input_tokens = _current_max_input_tokens.get()
-        logging.info(f"[_get_profile_limits] contextvar max_input_tokens: {max_input_tokens}")
         if max_input_tokens is not None:
             return max_input_tokens
 
         # 2. 从 model.profile 获取默认值
-        profile_max = super()._get_profile_limits()
-        logging.info(f"[_get_profile_limits] profile max_input_tokens: {profile_max}")
-        return profile_max
+        return super()._get_profile_limits()
 
     def _get_max_input_tokens(self, model: Any = None, runtime_config: dict | None = None) -> int | None:
         """获取 max_input_tokens，优先级：客户端传递 > 映射表 > 默认 profile
@@ -87,7 +84,56 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         _current_max_input_tokens.set(max_input_tokens)
 
     def _should_summarize(self, messages: list[AnyMessage], total_tokens: int) -> bool:
-        # 增加日志输出
-        logging.info(f"[_should_summarize] total_tokens: {total_tokens}")
+        max_input_tokens = self._get_profile_limits()
+
+        # 绿色表示安全，黄色警告，红色危险
+        percentage = total_tokens / max_input_tokens * 100
+
+        if percentage < 40:
+            # 主状态颜色
+            status_color = "\033[92m"  # 绿色
+            icon = "🟢"
+            # 数值颜色（浅绿）
+            value_color = "\033[32m"
+            # 进度条颜色（亮绿）
+            bar_color = "\033[92m"
+            # 百分比颜色（深绿）
+            percent_color = "\033[32m"
+        elif percentage < 60:
+            # 主状态颜色
+            status_color = "\033[93m"  # 黄色
+            icon = "🟡"
+            # 数值颜色（浅黄）
+            value_color = "\033[33m"
+            # 进度条颜色（亮黄）
+            bar_color = "\033[93m"
+            # 百分比颜色（深黄）
+            percent_color = "\033[33m"
+        else:
+            # 主状态颜色
+            status_color = "\033[91m"  # 红色
+            icon = "🔴"
+            # 数值颜色（浅红）
+            value_color = "\033[31m"
+            # 进度条颜色（亮红）
+            bar_color = "\033[91m"
+            # 百分比颜色（深红）
+            percent_color = "\033[31m"
+
+        reset = "\033[0m"
+        bold = "\033[1m"
+
+        # 创建彩色进度条
+        bar_length = 12
+        filled_length = min(int(bar_length * percentage / 100), bar_length)
+        colored_bar = f"{bar_color}{'█' * filled_length}{reset}{'░' * (bar_length - filled_length)}"
+
+        logging.info(
+            f"{status_color}{bold}📱{icon}{reset} "
+            f"Tokens: {value_color}{bold}{total_tokens:,}{reset}/{value_color}{bold}{max_input_tokens:,}{reset} "
+            f"📊[{colored_bar}] "
+            f"📈{percent_color}{bold}({percentage:.1f}%){reset}"
+        )
+
         return super()._should_summarize(messages, total_tokens)
 
