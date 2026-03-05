@@ -1,21 +1,10 @@
 """自定义 LangChain SummarizationMiddleware，支持动态 max_input_tokens。"""
 import logging
 import os
-from contextvars import ContextVar
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from langchain.agents.middleware.summarization import SummarizationMiddleware as LCSummarizationMiddleware
 from langchain_core.messages import AnyMessage
-
-if TYPE_CHECKING:
-    from langchain.agents.middleware.types import ModelRequest
-
-# 用于存储当前请求的 max_input_tokens
-_current_max_input_tokens: ContextVar[int | None] = ContextVar("current_max_input_tokens", default=None)
-# 用于存储当前模型名称
-_current_model_name: ContextVar[str | None] = ContextVar("current_model_name", default=None)
-# 用于存储当前 thread_id
-_current_thread_id: ContextVar[str | None] = ContextVar("current_thread_id", default=None)
 
 
 class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
@@ -35,36 +24,57 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         "MiniMax-M2.5": 196608,
     }
 
+    @staticmethod
+    def _get_langgraph_config() -> dict | None:
+        """从 langgraph.config.get_config() 获取配置信息。"""
+        try:
+            from langgraph.config import get_config
+
+            cfg = get_config()
+            if isinstance(cfg, dict):
+                return cfg
+        except Exception:
+            pass
+        return None
+
     def _get_profile_limits(self) -> int | None:
         """Retrieve max input token limit with dynamic support.
 
         优先级：客户端传递 > 映射表 > model.profile
         """
-        # 1. 优先从 contextvar 获取动态 max_input_tokens
-        max_input_tokens = _current_max_input_tokens.get()
-        if max_input_tokens is not None:
-            return max_input_tokens
+        # 从 get_config() 获取配置信息
+        cfg = self._get_langgraph_config()
+        if cfg:
+            configurable = cfg.get("configurable", {})
+            model_name = configurable.get("model")
+            max_input_tokens = configurable.get("max_input_tokens")
+            result = self._get_max_input_tokens(
+                model=model_name,
+                max_input_tokens=max_input_tokens
+            )
+            if result is not None:
+                return result
 
         # 2. 从 model.profile 获取默认值
         return super()._get_profile_limits()
 
-    def _get_max_input_tokens(self, model: Any = None, runtime_config: dict | None = None) -> int | None:
+    def _get_max_input_tokens(self, model: Any = None, max_input_tokens: int | None = None) -> int | None:
         """获取 max_input_tokens，优先级：客户端传递 > 映射表 > 默认 profile
 
         Args:
-            model: 模型对象，可通过 model.model 获取模型名称
-            runtime_config: 运行时配置，可通过 runtime.config 获取
+            model: 模型名称
+            max_input_tokens: 客户端传递的 max_input_tokens
         """
-        # 1. 尝试从客户端传递的 runtime config 获取
-        if runtime_config:
-            logging.info(f"runtime config : {runtime_config}")
-            max_input_tokens = runtime_config.get('max_input_tokens')
-            if max_input_tokens is not None:
-                return max_input_tokens
+        # 1. 直接使用客户端传递的 max_input_tokens
+        if max_input_tokens is not None:
+            return max_input_tokens
 
         # 2. 尝试从映射表获取
         if model:
-            model_name = getattr(model, 'model', None) or os.getenv('MODEL_MODEL_ID', '')
+            # 支持 model 是字符串或对象
+            model_name = model if isinstance(model, str) else getattr(model, 'model', None)
+            if not model_name:
+                model_name = os.getenv('MODEL_MODEL_ID', '')
             if model_name:
                 model_lower = model_name.lower()
                 sorted_keys = sorted(self.MODEL_MAX_INPUT_TOKENS.keys(), key=len, reverse=True)
@@ -73,29 +83,6 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
                         return self.MODEL_MAX_INPUT_TOKENS[key]
 
         return None
-
-    def _set_max_input_tokens_from_request(self, request: "ModelRequest") -> None:
-        """从 request 中提取 max_input_tokens 并设置到 contextvar。
-
-        Args:
-            request: Model request to get runtime config for dynamic max_input_tokens.
-        """
-        runtime_config = getattr(request.runtime, 'context', {})
-        max_input_tokens = self._get_max_input_tokens(
-            model=request.model,
-            runtime_config=runtime_config
-        )
-        _current_max_input_tokens.set(max_input_tokens)
-
-        # 设置当前模型名称
-        if request.model:
-            model_name = getattr(request.model, 'model', None)
-            if model_name:
-                _current_model_name.set(model_name)
-
-        # 设置当前 thread_id
-        thread_id = runtime_config.get('configurable', {}).get('thread_id')
-        _current_thread_id.set(thread_id)
 
     def _should_summarize(self, messages: list[AnyMessage], total_tokens: int) -> bool:
         max_input_tokens = self._get_profile_limits()
@@ -137,12 +124,17 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         reset = "\033[0m"
         bold = "\033[1m"
 
-        # 获取当前模型名称
-        model_name = _current_model_name.get()
-        model_display = f"{value_color}{bold}{model_name}{reset}" if model_name else "Unknown"
+        # 从 get_config() 获取 model_name 和 thread_id
+        cfg = self._get_langgraph_config()
+        if cfg:
+            configurable = cfg.get("configurable", {})
+            model_name = configurable.get("model")
+            thread_id = configurable.get("thread_id")
+        else:
+            model_name = None
+            thread_id = None
 
-        # 获取当前 thread_id
-        thread_id = _current_thread_id.get()
+        model_display = f"{value_color}{bold}{model_name}{reset}" if model_name else "Unknown"
         thread_display = f"{value_color}{bold}{thread_id}{reset}" if thread_id else "Unknown"
 
         # 创建彩色进度条

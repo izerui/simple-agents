@@ -1,0 +1,85 @@
+{
+  "cfg": {
+    "tags": [
+      "serv"
+    ],
+    "metadata": {
+      "created_by": "system",
+      "user_id": "user001",
+      "name": "222",
+      "graph_id": "research",
+      "assistant_id": "74d06aba-6a30-5f5b-88fe-7d81ce376129",
+      "chat_title": "222",
+      "chat_client": "agent-chat-ui",
+      "run_attempt": 1,
+      "langgraph_version": "1.0.10",
+      "langgraph_api_version": "0.7.60",
+      "langgraph_plan": "enterprise",
+      "langgraph_host": "self-hosted",
+      "langgraph_api_url": "http://127.0.0.1:2024",
+      "model_provider": "openai",
+      "model": "deepseek-v3.2",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "langgraph_request_id": "3689d8ed-9f73-4f6d-8842-50ae867228c8",
+      "run_id": "019cbe0b-8aa5-7442-9529-f8e4d911c02b",
+      "thread_id": "51d1bc7a-5fdd-4f86-93d6-ffe6d1439ea1",
+      "langgraph_step": 5,
+      "langgraph_node": "model",
+      "langgraph_triggers": [
+        "branch:to:model"
+      ],
+      "langgraph_path": [
+        "__pregel_pull",
+        "model"
+      ],
+      "langgraph_checkpoint_ns": "model:52f75d86-cb2a-f8c7-c99a-872c28d0eb5b"
+    },
+    "recursion_limit": 1000,
+    "configurable": {
+      "model_provider": "openai",
+      "model": "deepseek-v3.2",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "langgraph_auth_user": null,
+      "langgraph_auth_user_id": "",
+      "langgraph_auth_permissions": [],
+      "langgraph_request_id": "3689d8ed-9f73-4f6d-8842-50ae867228c8",
+      "__request_start_time_ms__": 1772714953380,
+      "__after_seconds__": 0,
+      "run_id": "019cbe0b-8aa5-7442-9529-f8e4d911c02b",
+      "thread_id": "51d1bc7a-5fdd-4f86-93d6-ffe6d1439ea1",
+      "graph_id": "research",
+      "assistant_id": "74d06aba-6a30-5f5b-88fe-7d81ce376129",
+      "user_id": "",
+      "checkpoint_map": {
+        "": "1f11891b-7145-6a38-8004-70c3fc2d87f0"
+      },
+      "checkpoint_id": null,
+      "checkpoint_ns": "model:52f75d86-cb2a-f8c7-c99a-872c28d0eb5b",
+      "__pregel_runtime": {
+        "context": {
+          "model_provider": "openai",
+          "model": "deepseek-v3.2",
+          "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        }
+      },
+      "__pregel_task_id": "52f75d86-cb2a-f8c7-c99a-872c28d0eb5b",
+      "__pregel_scratchpad": {
+        "step": 5,
+        "stop": 1000
+      }
+    },
+    "callbacks": {}
+  },
+  "log_context": {
+    "api_variant": "local_dev",
+    "assistant_id": "74d06aba-6a30-5f5b-88fe-7d81ce376129",
+    "graph_id": "research",
+    "langgraph_api_version": "0.7.60",
+    "langgraph_node": "model",
+    "request_id": "3689d8ed-9f73-4f6d-8842-50ae867228c8",
+    "run_attempt": 1,
+    "run_id": "019cbe0b-8aa5-7442-9529-f8e4d911c02b",
+    "thread_id": "51d1bc7a-5fdd-4f86-93d6-ffe6d1439ea1",
+    "thread_name": "MainThread"
+  }
+}

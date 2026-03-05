@@ -856,9 +856,6 @@ A condensed summary follows:
         Returns:
             The model response from the handler.
         """
-        # 设置动态 max_input_tokens 到 contextvar，供 _get_profile_limits 使用
-        self._lc_helper._set_max_input_tokens_from_request(request)
-
         # Get effective messages based on previous summarization events
         effective_messages = self._get_effective_messages(request)
 
@@ -950,9 +947,6 @@ A condensed summary follows:
         Returns:
             The model response from the handler.
         """
-        # 设置动态 max_input_tokens 到 contextvar，供 _get_profile_limits 使用
-        self._lc_helper._set_max_input_tokens_from_request(request)
-
         # Get effective messages based on previous summarization events
         effective_messages = self._get_effective_messages(request)
 

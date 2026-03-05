@@ -329,7 +329,6 @@ class SimpleStreamingEventHandlers(StreamingEventHandlers):
         print(f"\n🔔 自定义事件")
         print(f"   数据: {data}")
 
-    @abstractmethod
     async def on_error(self, error: Exception):
         """错误事件."""
         print(f"\n❌ 错误: {error}")

@@ -33,6 +33,7 @@ async def test_openai_compatible():
             # "model": "glm-4.7",
             # "model": "MiniMax-M2.1",
             "model": "qwen3-max",
+            "max_input_tokens": 3000,
         }
     )
 

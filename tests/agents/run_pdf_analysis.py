@@ -61,9 +61,6 @@ async def run_test():
     # 创建带有附件的消息
     message = HumanMessage(content=[
         {"type": "text", "text": user_message},
-        {"type": "file", "data": pdf_content, "metadata": {"filename": pdf_path.name}, "mimeType": "application/pdf"},
-        {"type": "file", "data": md_content, "metadata": {"filename": md_path.name}, "mimeType": "text/markdown"},
-        # {"type": "image", "metadata": {"name": "跟单宝.png"}, "mime_type": "image/png", "data": image_content}
     ])
     
     inputs = {"messages": [message]}
