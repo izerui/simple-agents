@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 _current_max_input_tokens: ContextVar[int | None] = ContextVar("current_max_input_tokens", default=None)
 # 用于存储当前模型名称
 _current_model_name: ContextVar[str | None] = ContextVar("current_model_name", default=None)
+# 用于存储当前 thread_id
+_current_thread_id: ContextVar[str | None] = ContextVar("current_thread_id", default=None)
 
 
 class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
@@ -91,6 +93,10 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
             if model_name:
                 _current_model_name.set(model_name)
 
+        # 设置当前 thread_id
+        thread_id = runtime_config.get('configurable', {}).get('thread_id')
+        _current_thread_id.set(thread_id)
+
     def _should_summarize(self, messages: list[AnyMessage], total_tokens: int) -> bool:
         max_input_tokens = self._get_profile_limits()
 
@@ -135,6 +141,10 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         model_name = _current_model_name.get()
         model_display = f"{value_color}{bold}{model_name}{reset}" if model_name else "Unknown"
 
+        # 获取当前 thread_id
+        thread_id = _current_thread_id.get()
+        thread_display = f"{value_color}{bold}{thread_id}{reset}" if thread_id else "Unknown"
+
         # 创建彩色进度条
         bar_length = 12
         filled_length = min(int(bar_length * percentage / 100), bar_length)
@@ -142,6 +152,7 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
 
         logging.info(
             f"{status_color}{bold}📱{icon}{reset} "
+            f"Thread: {thread_display} | "
             f"Model: {model_display} | "
             f"Tokens: {value_color}{bold}{total_tokens:,}{reset}/{value_color}{bold}{max_input_tokens:,}{reset} "
             f"📊[{colored_bar}] "
