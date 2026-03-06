@@ -9,7 +9,12 @@ curl -X POST http://localhost:2024/runs/stream \
       ]
     },
     "config": {
-      "tags": ["serv"]
+      "tags": ["serv"],
+      "configurable": {
+        "model_provider": "openai",
+        "model": "MiniMax-M2.5",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      }
     },
     "metadata": {
       "user_id": "user001",
