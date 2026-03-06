@@ -19,7 +19,7 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         "kimi-k2.5": 262144,
         "glm-5": 202752,
         "glm-4.7": 169984,
-        "MiniMax-M2.5": 196608,
+        "minimax": 196608,
     }
 
     @staticmethod

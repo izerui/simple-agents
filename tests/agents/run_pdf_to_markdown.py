@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 import sys
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 # 加载环境变量并添加项目根目录到 Python 路径
@@ -20,26 +20,31 @@ async def run_test():
     """运行 PDF 转 Markdown 转换测试。"""
     thread_id = "test_pdf_conversion"
     user_message = "请将 files/朝天府.pdf 转换为 Markdown 格式"
-    
+
     # 打印测试标题
     print_header("PDF 转 Markdown 转换")
-    
+
     # 显示用户问题
     print_user_message(user_message)
-    
-    inputs = {"messages": [HumanMessage(content=user_message)]}
+
+    inputs = {"messages":
+        [
+            SystemMessage(content="你是文件转换大师"),
+            HumanMessage(content=user_message)
+        ]
+    }
     config = RunnableConfig(
         configurable={
             "thread_id": thread_id,
-            "tool_timeout": 60.0
+            "tool_timeout": 60.0,
         },
         recursion_limit=500,
     )
-    
+
     # 执行 agent（流式输出）
     async for event in agent.astream_events(inputs, version="v2", config=config):
         output_handler(event)
-    
+
     # 打印测试完成标识
     print_footer("PDF 转 Markdown 转换")
 
