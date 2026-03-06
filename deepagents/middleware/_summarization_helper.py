@@ -1,8 +1,6 @@
 """自定义 LangChain SummarizationMiddleware，支持动态 max_input_tokens。"""
 import logging
 import os
-from typing import Any
-
 from langchain.agents.middleware.summarization import SummarizationMiddleware as LCSummarizationMiddleware
 from langchain_core.messages import AnyMessage
 
@@ -40,47 +38,66 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
     def _get_profile_limits(self) -> int | None:
         """Retrieve max input token limit with dynamic support.
 
-        优先级：客户端传递 > 映射表 > model.profile
+        优先级：客户端传递 > 映射表 > 环境变量默认 > model.profile
         """
-        # 从 get_config() 获取配置信息
+        # 获取配置信息，max_input_tokens 已经在方法内完成优先级判断
+        _, max_input_tokens, _ = self._get_runtime_config()
+
+        # 如果仍然获取不到，fallback 到父类
+        if max_input_tokens is None:
+            return super()._get_profile_limits()
+
+        return max_input_tokens
+
+    def _get_runtime_config(self) -> tuple[str | None, int | None, str | None]:
+        """从 get_config() 获取运行时配置。
+
+        max_input_tokens 优先级：客户端传递 > 映射表 > 环境变量默认
+
+        Returns:
+            tuple: (model_name, max_input_tokens, thread_id)
+        """
         cfg = self._get_langgraph_config()
-        if cfg:
-            configurable = cfg.get("configurable", {})
-            model_name = configurable.get("model")
-            max_input_tokens = configurable.get("max_input_tokens")
-            result = self._get_max_input_tokens(
-                model=model_name,
-                max_input_tokens=max_input_tokens
-            )
-            if result is not None:
-                return result
+        if not cfg:
+            # 无法获取配置，使用环境变量默认值
+            return None, int(os.getenv('MODEL_MAX_INPUT_TOKENS', '80000')), None
 
-        # 2. 从 model.profile 获取默认值
-        return super()._get_profile_limits()
+        configurable = cfg.get("configurable", {})
 
-    def _get_max_input_tokens(self, model: Any = None, max_input_tokens: int | None = None) -> int | None:
-        """获取 max_input_tokens，优先级：客户端传递 > 映射表 > 默认 profile
+        # model_name: configurable -> 环境变量
+        model_name = configurable.get("model") or os.getenv('MODEL_MODEL_ID')
+
+        # max_input_tokens 优先级判断
+        max_input_tokens = configurable.get("max_input_tokens")
+        if max_input_tokens is None and model_name:
+            # 尝试从映射表获取
+            max_input_tokens = self._get_max_input_tokens_from_model(model_name)
+        if max_input_tokens is None:
+            # 使用环境变量默认
+            max_input_tokens = int(os.getenv('MODEL_MAX_INPUT_TOKENS', '80000'))
+
+        # thread_id: configurable
+        thread_id = configurable.get("thread_id")
+
+        return model_name, max_input_tokens, thread_id
+
+    def _get_max_input_tokens_from_model(self, model_name: str) -> int | None:
+        """根据模型名称从映射表获取 max_input_tokens。
 
         Args:
-            model: 模型名称
-            max_input_tokens: 客户端传递的 max_input_tokens
-        """
-        # 1. 直接使用客户端传递的 max_input_tokens
-        if max_input_tokens is not None:
-            return max_input_tokens
+            model_name: 模型名称
 
-        # 2. 尝试从映射表获取
-        if model:
-            # 支持 model 是字符串或对象
-            model_name = model if isinstance(model, str) else getattr(model, 'model', None)
-            if not model_name:
-                model_name = os.getenv('MODEL_MODEL_ID', '')
-            if model_name:
-                model_lower = model_name.lower()
-                sorted_keys = sorted(self.MODEL_MAX_INPUT_TOKENS.keys(), key=len, reverse=True)
-                for key in sorted_keys:
-                    if model_lower.startswith(key):
-                        return self.MODEL_MAX_INPUT_TOKENS[key]
+        Returns:
+            max_input_tokens 或 None
+        """
+        if not model_name:
+            return None
+
+        model_lower = model_name.lower()
+        sorted_keys = sorted(self.MODEL_MAX_INPUT_TOKENS.keys(), key=len, reverse=True)
+        for key in sorted_keys:
+            if model_lower.startswith(key):
+                return self.MODEL_MAX_INPUT_TOKENS[key]
 
         return None
 
@@ -124,15 +141,8 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         reset = "\033[0m"
         bold = "\033[1m"
 
-        # 从 get_config() 获取 model_name 和 thread_id
-        cfg = self._get_langgraph_config()
-        if cfg:
-            configurable = cfg.get("configurable", {})
-            model_name = configurable.get("model")
-            thread_id = configurable.get("thread_id")
-        else:
-            model_name = None
-            thread_id = None
+        # 从 get_runtime_config() 获取 model_name 和 thread_id
+        model_name, _, thread_id = self._get_runtime_config()
 
         model_display = f"{value_color}{bold}{model_name}{reset}" if model_name else "Unknown"
         thread_display = f"{value_color}{bold}{thread_id}{reset}" if thread_id else "Unknown"
