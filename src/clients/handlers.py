@@ -79,15 +79,12 @@ class StreamingEventHandlers(ABC):
     async def _handle_ai_message_chunk(self, msg: dict):
         """处理 AI 消息块."""
         content = msg.get("content", "")
-        chunk_position = msg.get("chunk_position")
-        is_message_end = chunk_position == "last"
-
         if content:
             # 工具调用完成后新一轮 AI 输出开始，需要换行
             is_chunk_start = self._last_tool_call_ended
             if is_chunk_start:
                 self._last_tool_call_ended = False
-            await self.on_ai_message_chunk(content, is_chunk_start, is_message_end)
+            await self.on_ai_message_chunk(content, is_chunk_start)
 
         # tool_calls - 工具调用开始（args 为空，参数通过 tool_call_chunks 流式传递）
         tool_calls = msg.get("tool_calls", [])
@@ -185,15 +182,12 @@ class StreamingEventHandlers(ABC):
     # ========== 可覆盖的处理方法 ==========
 
     @abstractmethod
-    async def on_ai_message_chunk(
-        self, content: str, is_chunk_start: bool = False, is_message_end: bool = False
-    ):
+    async def on_ai_message_chunk(self, content: str, is_chunk_start: bool = False):
         """AI 文本流式输出.
 
         Args:
             content: AI 输出的文本
             is_chunk_start: 是否是工具调用完成后新一轮 chunk 开始（需要换行）
-            is_message_end: 是否是整个消息流的最后一个 chunk
         """
         pass
 
@@ -257,15 +251,12 @@ class StreamingEventHandlers(ABC):
 
 class SimpleStreamingEventHandlers(StreamingEventHandlers):
 
-    async def on_ai_message_chunk(
-        self, content: str, is_chunk_start: bool = False, is_message_end: bool = False
-    ):
+    async def on_ai_message_chunk(self, content: str, is_chunk_start: bool = False):
         """AI 文本流式输出.
 
         Args:
             content: AI 输出的文本
             is_chunk_start: 是否是工具调用完成后新一轮 chunk 开始（需要换行）
-            is_message_end: 是否是整个消息流的最后一个 chunk
         """
         if content:
             if is_chunk_start:
