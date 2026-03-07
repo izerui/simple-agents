@@ -24,7 +24,9 @@ async def example_custom_handler():
     class MyHandler(StreamingEventHandlers):
         """自定义处理器."""
 
-        async def on_ai_message_chunk(self, content: str, is_chunk_start: bool = False):
+        async def on_ai_message_chunk(
+            self, content: str, is_chunk_start: bool = False, is_chunk_end: bool = False
+        ):
             print(f"[AI] {content}", end="")
 
         async def on_tool_call_complete(self, tool_id, tool_name, args, content, status):
