@@ -144,7 +144,7 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
             )
 
         # 直接打印输出，无边框
-        console.print()
+        console.print("-" * 80)
         console.print(f"  Thread: {thread_id or 'Unknown'}")
         console.print(f"  Model: {model_name or 'Unknown'}")
 
@@ -155,6 +155,6 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
             console.print(f"  Tokens: {bar_str} {percentage:.1f}% [blue]已用/限额: {total_tokens:,}[/][dim]/[/][red]{max_input_tokens:,}[/]  [dim]距摘要 {to_summarize:,}[/]")
         else:
             console.print(f"  Tokens: {bar_str} {percentage:.1f}% [blue]已用/限额: {total_tokens:,}[/][dim]/[/][red]{max_input_tokens:,}[/]  [bold red]距摘要已触发![/]")
-        console.print()
+        console.print("-" * 80)
 
         return super()._should_summarize(messages, total_tokens)
