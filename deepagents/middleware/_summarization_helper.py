@@ -45,7 +45,8 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         优先级：客户端传递 > 映射表 > 环境变量默认 > model.profile
         """
         # 获取配置信息，max_input_tokens 已经在方法内完成优先级判断
-        _, max_input_tokens, _ = self._get_runtime_config()
+        runtime_config = self._get_runtime_config()
+        max_input_tokens = runtime_config["max_input_tokens"]
 
         # 如果仍然获取不到，fallback 到父类
         if max_input_tokens is None:
@@ -53,18 +54,25 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
 
         return max_input_tokens
 
-    def _get_runtime_config(self) -> tuple[str | None, int | None, str | None]:
+    def _get_runtime_config(self) -> dict:
         """从 get_config() 获取运行时配置。
 
         max_input_tokens 优先级：客户端传递 > 映射表 > 环境变量默认
 
         Returns:
-            tuple: (model_name, max_input_tokens, thread_id)
+            dict: 包含 model_name, max_input_tokens, thread_id, tags, user_id, name
         """
         cfg = self._get_langgraph_config()
         if not cfg:
             # 无法获取配置，使用环境变量默认值
-            return None, int(os.getenv('MODEL_MAX_INPUT_TOKENS', '80000')), None
+            return {
+                "model_name": None,
+                "max_input_tokens": int(os.getenv('MODEL_MAX_INPUT_TOKENS', '80000')),
+                "thread_id": None,
+                "tags": [],
+                "user_id": None,
+                "name": None,
+            }
 
         configurable = cfg.get("configurable", {})
 
@@ -83,7 +91,22 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         # thread_id: configurable
         thread_id = configurable.get("thread_id")
 
-        return model_name, max_input_tokens, thread_id
+        # tags: config
+        tags = cfg.get("config", {}).get("tags", [])
+
+        # metadata: user_id, name
+        metadata = cfg.get("metadata", {})
+        user_id = metadata.get("user_id")
+        name = metadata.get("name")
+
+        return {
+            "model_name": model_name,
+            "max_input_tokens": max_input_tokens,
+            "thread_id": thread_id,
+            "tags": tags,
+            "user_id": user_id,
+            "name": name,
+        }
 
     def _get_max_input_tokens_from_model(self, model_name: str) -> int | None:
         """根据模型名称从映射表获取 max_input_tokens。
@@ -122,8 +145,13 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         else:
             color = "red"
 
-        # 从 get_runtime_config() 获取 model_name 和 thread_id
-        model_name, _, thread_id = self._get_runtime_config()
+        # 从 get_runtime_config() 获取配置信息
+        runtime_config = self._get_runtime_config()
+        model_name = runtime_config["model_name"]
+        thread_id = runtime_config["thread_id"]
+        tags = runtime_config["tags"]
+        user_id = runtime_config["user_id"]
+        name = runtime_config["name"]
 
         # 使用动画进度条
         progress = Progress(
@@ -147,6 +175,9 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         console.print("-" * 80)
         console.print(f"  Thread: {thread_id or 'Unknown'}")
         console.print(f"  Model: {model_name or 'Unknown'}")
+        console.print(f"  User: {user_id or 'Unknown'}")
+        console.print(f"  Name: {name or 'Unknown'}")
+        console.print(f"  Tags: {', '.join(tags) if tags else 'None'}")
 
         # 进度条
         bar_filled = int(percentage / 5)
