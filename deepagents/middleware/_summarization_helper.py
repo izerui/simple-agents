@@ -1,8 +1,12 @@
 """自定义 LangChain SummarizationMiddleware，支持动态 max_input_tokens。"""
-import logging
 import os
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 from langchain.agents.middleware.summarization import SummarizationMiddleware as LCSummarizationMiddleware
 from langchain_core.messages import AnyMessage
+
+console = Console()
 
 
 class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
@@ -102,64 +106,55 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         return None
 
     def _should_summarize(self, messages: list[AnyMessage], total_tokens: int) -> bool:
+        from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
+
         max_input_tokens = self._get_profile_limits()
 
-        # 绿色表示安全，黄色警告，红色危险
+        # 计算百分比
         percentage = total_tokens / max_input_tokens * 100
+        to_summarize = int(max_input_tokens * 0.6) - total_tokens  # 距摘要触发
 
+        # 根据百分比选择颜色
         if percentage < 40:
-            # 主状态颜色
-            status_color = "\033[92m"  # 绿色
-            icon = "🟢"
-            # 数值颜色（浅绿）
-            value_color = "\033[32m"
-            # 进度条颜色（亮绿）
-            bar_color = "\033[92m"
-            # 百分比颜色（深绿）
-            percent_color = "\033[32m"
+            color = "green"
         elif percentage < 60:
-            # 主状态颜色
-            status_color = "\033[93m"  # 黄色
-            icon = "🟡"
-            # 数值颜色（浅黄）
-            value_color = "\033[33m"
-            # 进度条颜色（亮黄）
-            bar_color = "\033[93m"
-            # 百分比颜色（深黄）
-            percent_color = "\033[33m"
+            color = "yellow"
         else:
-            # 主状态颜色
-            status_color = "\033[91m"  # 红色
-            icon = "🔴"
-            # 数值颜色（浅红）
-            value_color = "\033[31m"
-            # 进度条颜色（亮红）
-            bar_color = "\033[91m"
-            # 百分比颜色（深红）
-            percent_color = "\033[31m"
-
-        reset = "\033[0m"
-        bold = "\033[1m"
+            color = "red"
 
         # 从 get_runtime_config() 获取 model_name 和 thread_id
         model_name, _, thread_id = self._get_runtime_config()
 
-        model_display = f"{value_color}{bold}{model_name}{reset}" if model_name else "Unknown"
-        thread_display = f"{value_color}{bold}{thread_id}{reset}" if thread_id else "Unknown"
-
-        # 创建彩色进度条
-        bar_length = 12
-        filled_length = min(int(bar_length * percentage / 100), bar_length)
-        colored_bar = f"{bar_color}{'█' * filled_length}{reset}{'░' * (bar_length - filled_length)}"
-
-        logging.info(
-            f"{status_color}{bold}📱{icon}{reset} "
-            f"Thread: {thread_display} | "
-            f"Model: {model_display} | "
-            f"Tokens: {value_color}{bold}{total_tokens:,}{reset}/{value_color}{bold}{max_input_tokens:,}{reset} "
-            f"📊[{colored_bar}] "
-            f"📈{percent_color}{bold}({percentage:.1f}%){reset}"
+        # 使用动画进度条
+        progress = Progress(
+            SpinnerColumn(style=color, speed=0.5),
+            TextColumn("[bold]{task.description}[/]"),
+            BarColumn(bar_width=40),
+            TextColumn("[bold]{task.percentage:>3.0f}%[/]"),
+            console=console,
+            transient=True,
         )
 
-        return super()._should_summarize(messages, total_tokens)
+        # 创建进度条任务
+        with progress:
+            progress.add_task(
+                f"[{color}]Token[/] [white]使用进度[/]",
+                total=100,
+                completed=min(percentage, 100),
+            )
 
+        # 直接打印输出，无边框
+        console.print()
+        console.print(f"  Thread: {thread_id or 'Unknown'}")
+        console.print(f"  Model: {model_name or 'Unknown'}")
+
+        # 进度条
+        bar_filled = int(percentage / 5)
+        bar_str = f"[{color}]{'█' * bar_filled}[/{color}][dim]{'░' * (20 - bar_filled)}[/]"
+        if to_summarize > 0:
+            console.print(f"  Tokens: {bar_str} {percentage:.1f}% [blue]已用/限额: {total_tokens:,}[/][dim]/[/][red]{max_input_tokens:,}[/]  [dim]距摘要 {to_summarize:,}[/]")
+        else:
+            console.print(f"  Tokens: {bar_str} {percentage:.1f}% [blue]已用/限额: {total_tokens:,}[/][dim]/[/][red]{max_input_tokens:,}[/]  [bold red]距摘要已触发![/]")
+        console.print()
+
+        return super()._should_summarize(messages, total_tokens)
