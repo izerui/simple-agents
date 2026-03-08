@@ -18,7 +18,7 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         "deepseek-v3.2": 98304,
         "deepseek-v3.1": 98304,
         "deepseek-r1": 98304,
-        "qwen3-max": 258048,
+        "qwen3-max": 80000,
         "qwen3.5-plus": 983616,
         "kimi-k2.5": 262144,
         "glm-5": 202752,
