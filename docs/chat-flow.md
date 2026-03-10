@@ -215,19 +215,26 @@ for await (const chunk of streamResponse) {
 
 ### 3.4 工具调用流程
 
-工具调用分为 **5 个阶段**：
+工具调用分为 **4 个阶段**：
+
+- **阶段1**：处理 `tool_calls`，只补充 id 和 name（args 设为空字符串，交给阶段2生成）
+- **阶段2**：处理 `tool_call_chunks`，累加有实际内容的 args
+- **阶段3**：`chunk_position = "last"` 表示工具调用结束
+- **阶段4**：tool 消息返回工具执行结果
 
 #### 阶段 1：工具调用开始
 
-当 AI 开始调用工具时，会发送 `AIMessageChunk` 消息，同时包含：
-- `tool_calls`: 完整的工具调用信息
-- `tool_call_chunks`: 工具参数的第一个增量块
+当 AI 开始调用工具时，会发送 `AIMessageChunk` 消息，包含：
+- `tool_calls`: 完整的工具调用信息（但 args 为空对象 `{}`，不使用）
+- `tool_call_chunks`: 工具参数的第一个增量块（args 是字符串形式）
+
+**注意**：`tool_call_chunks` 中的 `id` 和 `name` 可能为空，需要通过 `message.id + index` 复合键来匹配同一个工具调用。
 
 ```json
 {
   "type": "AIMessageChunk",
-  "tool_calls": [{"name": "ls", "args": {"path": "/"}, "id": "call_xxx_1"}],
-  "tool_call_chunks": [{"name": "ls", "args": "{\"path\": \"/\"}", "id": "call_xxx_1", "index": 0}]
+  "tool_calls": [{"name": "convert_to_markdown", "args": {}, "id": "call_7778a4257cfb462b890a46d6", "type": "tool_call"}],
+  "tool_call_chunks": [{"name": "convert_to_markdown", "args": "", "id": "call_7778a4257cfb462b890a46d6", "index": 0, "type": "tool_call_chunk"}]
 }
 ```
 
@@ -235,10 +242,31 @@ for await (const chunk of streamResponse) {
 
 工具参数在流式输出时，只发送 `tool_call_chunks` 增量：
 
+- `id` 可能为空字符串 `""`
+- `name` 可能为 `null`
+- `args` 是 JSON 字符串的片段，需要累加
+
 ```json
+// 第一个增量
 {
   "type": "AIMessageChunk",
-  "tool_call_chunks": [{"name": null, "args": "\"path\": \"/\"}", "id": null, "index": 0}]
+  "tool_call_chunks": [{"name": "", "args": "{\"source_path\": \"/", "id": "", "index": 0}]
+}
+
+// 后续增量（id 仍为空）
+{
+  "type": "AIMessageChunk",
+  "tool_call_chunks": [{"name": "", "args": "190118", "id": "", "index": 0}]
+}
+
+{
+  "type": "AIMessageChunk",
+  "tool_call_chunks": [{"name": "", "args": "0052张卓", "id": "", "index": 0}]
+}
+
+{
+  "type": "AIMessageChunk",
+  "tool_call_chunks": [{"name": "", "args": "}", "id": "", "index": 0}]
 }
 ```
 
@@ -253,17 +281,16 @@ for await (const chunk of streamResponse) {
 }
 ```
 
-#### 阶段 4：result 流式
+#### 阶段 4：工具结果返回
 
-工具执行结果返回，发送 `type: "tool"` 消息（可能有多条，内容递增）：
+工具执行结果返回，发送 `type: "tool"` 消息：
 
 ```json
-// tool 消息完整结构
 {
   "type": "tool",
-  "content": "工具执行结果",
-  "tool_call_id": "call_xxx_1",
-  "name": "ls",
+  "content": "{\"success\": true, \"source_path\": \"/1901180052张卓群毕业论文3.docx\", \"output_file\": \"/1901180052张卓群毕业论文3.md\"}",
+  "tool_call_id": "call_7778a4257cfb462b890a46d6",
+  "name": "convert_to_markdown",
   "status": "success"
 }
 ```
@@ -272,22 +299,107 @@ for await (const chunk of streamResponse) {
 |------|------|
 | `type` | 固定为 "tool" |
 | `content` | 工具执行结果内容 |
-| `tool_call_id` | 工具调用 ID |
+| `tool_call_id` | 工具调用 ID（用于关联之前的参数） |
 | `name` | 工具名称 |
 | `status` | 执行状态 (success/error) |
 
-#### 阶段 5：AI 继续回复
+### 3.5 工具调用参数获取实现
 
-工具结果返回后，AI 继续输出文本内容：
+由于流式过程中 `tool_call_chunks` 的 `id` 可能为空，且同一个消息块中可能有多个工具调用，需要使用 `message.id + index` 复合键来匹配同一个工具调用。
 
-```json
-{
-  "type": "AIMessageChunk",
-  "content": "根据工具返回的结果..."
+#### 数据结构
+
+```typescript
+// 使用单个 Map 存储，key 为 messageId_index 格式
+// messageId: 消息块 ID，index: 工具在消息块中的索引
+const assistantToolCalls = new Map<string, { id: string; name: string; args: string }>()
+```
+
+#### 处理逻辑
+
+```typescript
+// 1. 处理 tool_calls - 工具调用开始（阶段1）
+// 只设置 id 和 name，args 设为空字符串，由阶段2生成
+if (message.tool_calls) {
+  const messageId = message.id
+  for (const tc of message.tool_calls) {
+    const index = message.tool_calls.indexOf(tc)
+    const messageKey = `${messageId}_${index}`
+
+    // 存储工具调用信息
+    assistantToolCalls.set(messageKey, {
+      id: tc.id,
+      name: tc.name,
+      args: ''  // 空字符串，交给阶段2生成
+    })
+  }
+}
+
+// 2. 处理 tool_call_chunks - 参数流式累加（阶段2）
+// 只累加有实际内容的 args
+if (message.tool_call_chunks) {
+  const messageId = message.id
+  for (const chunk of message.tool_call_chunks) {
+    if (chunk.index === undefined) continue
+
+    const messageKey = `${messageId}_${chunk.index}`
+
+    let existing = assistantToolCalls.get(messageKey)
+    if (!existing) {
+      // 如果还没有工具调用记录，用 chunks 创建
+      assistantToolCalls.set(messageKey, {
+        id: chunk.id || '',
+        name: chunk.name || '',
+        args: chunk.args || ''
+      })
+    } else {
+      // 已有记录 - 累加有实际内容的 args
+      // 确保 args 是字符串类型
+      const chunkArgs = typeof chunk.args === 'string' ? chunk.args : JSON.stringify(chunk.args)
+      if (chunkArgs && chunkArgs.trim()) {
+        existing.args = (existing.args || '') + chunkArgs
+      }
+      // 补充 id 和 name
+      if (chunk.id && !existing.id) existing.id = chunk.id
+      if (chunk.name) existing.name = chunk.name
+      if (chunk.args) {
+        existing.args += chunk.args
+      }
+      // 更新 id 和 name
+      if (chunk.id && !existing.id) existing.id = chunk.id
+      if (chunk.name) existing.name = chunk.name
+    }
+  }
+}
+
+// 3. 收到 tool 消息时，查找对应参数并释放内存（阶段4）
+if (message.type === 'tool') {
+  const toolCallId = message.tool_call_id
+
+  // 遍历查找匹配的 tool call（通过 id 匹配）
+  let toolArgs = ''
+  for (const [key, tc] of assistantToolCalls) {
+    if (tc.id === toolCallId) {
+      toolArgs = tc.args
+      // 找到后删除，释放内存
+      assistantToolCalls.delete(key)
+      break
+    }
+  }
+
+  console.log('工具参数:', toolArgs)
+  console.log('工具结果:', message.content)
 }
 ```
 
-### 3.5 消息类型汇总
+#### 关键点
+
+1. **阶段1只设置id和name**：tool_calls 的 args 为空对象 `{}`，不参与累加，args 由阶段2单独生成
+2. **阶段2累加有效args**：只有 args 有实际内容时才累加，避免空字符串覆盖
+3. **使用 messageId_index 复合键**：`tool_call_chunks` 的 `id` 可能为空，必须用 `message.id`（消息块ID）+ `index`（工具索引）复合键来匹配同一个工具调用
+4. **内存释放**：在 tool 消息处理完成后，删除对应的 Map 条目，释放内存避免长时间占用
+
+### 3.6 消息类型汇总
 
 | type 值 | 说明 | 关键字段 |
 |---------|------|----------|
