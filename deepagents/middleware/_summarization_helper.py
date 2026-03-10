@@ -185,7 +185,7 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         if to_summarize > 0:
             console.print(f"  Tokens: {bar_str} {percentage:.1f}% [blue]已用/限额: {total_tokens:,}[/][dim]/[/][red]{max_input_tokens:,}[/]  [dim]距摘要 {to_summarize:,}[/]")
         else:
-            console.print(f"  Tokens: {bar_str} {percentage:.1f}% [blue]已用/限额: {total_tokens:,}[/][dim]/[/][red]{max_input_tokens:,}[/]  [bold red]距摘要已触发![/]")
+            console.print(f"  Tokens: {bar_str} {percentage:.1f}% [blue]已用/限额: {total_tokens:,}[/][dim]/[/][red]{max_input_tokens:,}[/]  [bold red]摘要压缩即将触发![/]")
         console.print("-" * 80)
 
         return super()._should_summarize(messages, total_tokens)
