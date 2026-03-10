@@ -109,7 +109,7 @@ agent = create_deep_agent(
         SystemPromptMiddleware(default_system_prompt=MAIN_AGENT_INSTRUCTIONS),  # 从输入中提取 system message
         upload_files,
         StreamingToolCallFixMiddleware(),  # 修复流式输出工具调用问题，必须放在第一个
-        FixDanglingToolMessagesMiddleware(),  # 修复手动停止工具调用后遗留的孤立 ToolMessage
+        FixDanglingToolMessagesMiddleware(),  # 修复手动停止工具调用后 有tool_calls 但是没有 tool 的消息
         tool_limiter,
         GeneratedFilesMiddleware(),  # 提取生成的文件路径并发送 custom 事件
         # create_duplicate_call_prevention(get_backend_per_thread),
