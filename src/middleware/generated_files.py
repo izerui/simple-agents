@@ -7,14 +7,22 @@
 """
 
 import os
-from typing import Any
+from typing import Any, TypedDict
 
 import httpx
 from langchain.agents.middleware import AgentMiddleware, AgentState
 
 
+class GeneratedFilesState(TypedDict):
+    """扩展的 Agent State，添加 generated_files 字段"""
+    generated_files: list[str]
+
+
 class GeneratedFilesMiddleware(AgentMiddleware):
     """提取 Agent 生成的文件路径并通过 custom 事件发送"""
+
+    # 定义 state_schema，让 create_agent 自动收集并合并到 state
+    state_schema = GeneratedFilesState
 
     # 测试模式：设置为 True 则总是发送测试文件
     TEST_MODE = False
@@ -71,6 +79,8 @@ class GeneratedFilesMiddleware(AgentMiddleware):
                 "type": "generated_files",
                 "content": file_paths
             })
+            # 结合 line:16#GeneratedFilesState 持久化到 state
+            return {"generated_files": file_paths}
 
         return None
 
