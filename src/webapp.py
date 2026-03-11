@@ -184,13 +184,17 @@ async def extract_file_paths(request: ExtractFilePathsRequest) -> ApiResponse:
         content = request.content
 
         # 构建提取提示
-        prompt = f"""请从以下 AI 回复中提取所有生成的文件路径。
+        prompt = f"""请从以下 AI 回复中提取生成的文件路径。
 
-文件路径可能包括：
-- 报告文件如 deepthink/final_report.md
-- 输出文件如 output/summary.json
-- 数据文件如 data/xxx.json
-- 任何 .md, .txt, .pdf, .json, .docx 等文件
+提取示例：
+- 最终报告文件: deepthink/final_report.md
+- 输出文件: output/summary.xlsx
+- 写入文件: data/xxx.json
+
+提取规则:
+- 提取最终生成的文件路径，即AI生成的结果文件
+- 不要提取用户上传的文件
+- 不要提取文件转换过程产生的文件
 
 只返回文件路径列表的 JSON 格式，不要其他内容。格式如：{{"files": ["path1", "path2"]}}
 如果没找到任何文件路径，返回 {{"files": []}}
