@@ -95,13 +95,17 @@ class SystemPromptMiddleware(AgentMiddleware[AgentState[Any], ContextT, Response
 
         # If there's already a system message in the request, combine them
         if request.system_message:
-            # Combine user system message with existing system message
-            combined_content = list(user_system_msg.content_blocks) if hasattr(user_system_msg, 'content_blocks') else []
-
+            # Combine existing system message with user system message (existing first, user second)
             if hasattr(request.system_message, 'content_blocks'):
-                combined_content.extend(request.system_message.content_blocks)
+                combined_content = list(request.system_message.content_blocks)
             else:
-                combined_content.append({"type": "text", "text": str(request.system_message.content)})
+                combined_content = [{"type": "text", "text": str(request.system_message.content)}]
+
+            # Then add user system message after existing
+            if hasattr(user_system_msg, 'content_blocks'):
+                combined_content.extend(user_system_msg.content_blocks)
+            else:
+                combined_content.append({"type": "text", "text": str(user_system_msg.content)})
 
             new_system_message = SystemMessage(content_blocks=combined_content)
         else:
