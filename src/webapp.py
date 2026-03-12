@@ -14,6 +14,8 @@ from deepagents.backends import FilesystemBackend
 from langchain.chat_models import init_chat_model
 from pydantic import BaseModel
 
+from src.prompts import load_prompt_from_file
+
 app = FastAPI(title="Webapp Agents API", version="0.1.0")
 
 router = APIRouter(prefix="/webapp")
@@ -184,24 +186,7 @@ async def extract_file_paths(request: ExtractFilePathsRequest) -> ApiResponse:
         content = request.content
 
         # 构建提取提示
-        prompt = f"""请从以下 AI 回复中提取生成的文件路径。
-
-提取示例：
-- 最终报告文件: deepthink/final_report.md
-- 输出文件: output/summary.xlsx
-- 写入文件: data/xxx.json
-
-提取规则:
-- 提取最终生成的文件路径，即AI生成的结果文件
-- 不要提取用户上传的文件
-- 不要提取文件转换过程产生的文件
-
-只返回文件路径列表的 JSON 格式，不要其他内容。格式如：{{"files": ["path1", "path2"]}}
-如果没找到任何文件路径，返回 {{"files": []}}
-
-AI 回复内容：
-{content}
-"""
+        prompt = load_prompt_from_file("prompt/extract_file_paths_prompt.md", content=content)
 
         import asyncio
 

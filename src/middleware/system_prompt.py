@@ -4,13 +4,18 @@
 这样可以支持在 API 请求中传递自定义 system prompt。
 """
 import logging
-from typing import Any, Sequence
+from typing import Any, TypedDict
 
 from langchain.agents.middleware.types import AgentMiddleware, AgentState, ContextT, ModelRequest, ModelResponse, ResponseT
 from langchain_core.messages import AnyMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 logger = logging.getLogger(__name__)
+
+
+class UserSystemMessageState(TypedDict):
+    """扩展的 Agent State，添加 user_system_message 字段"""
+    user_system_message: str | None
 
 
 class SystemPromptMiddleware(AgentMiddleware[AgentState[Any], ContextT, ResponseT]):
@@ -22,7 +27,12 @@ class SystemPromptMiddleware(AgentMiddleware[AgentState[Any], ContextT, Response
     Usage:
         - Input: [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]
         - The system message will be extracted and used as the agent's system prompt
+        - The extracted user system message will be stored in state["user_system_message"]
+          for other middleware to access via before_agent or aafter_agent hooks
     """
+
+    # 定义 state_schema，让其他 middleware 可以访问 user_system_message
+    state_schema = UserSystemMessageState
 
     def __init__(self, default_system_prompt: str | None = None):
         """Initialize the middleware.
@@ -31,6 +41,27 @@ class SystemPromptMiddleware(AgentMiddleware[AgentState[Any], ContextT, Response
             default_system_prompt: Default system prompt to use if none provided in input.
         """
         self.default_system_prompt = default_system_prompt
+
+    def before_agent(self, state: AgentState, runtime: Any) -> dict | None:
+        """在 Agent 执行前初始化 user_system_message 字段"""
+        # 从 state 的 messages 中提取 system message
+        messages = state.get("messages", [])
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                # content 可能是 str 或 list
+                content = msg.content
+                if isinstance(content, str):
+                    return {"user_system_message": content}
+                elif isinstance(content, list):
+                    # 提取 list 中的文本
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, str):
+                            text_parts.append(item)
+                        elif isinstance(item, dict):
+                            text_parts.append(item.get("text", ""))
+                    return {"user_system_message": "".join(text_parts)}
+        return None
 
     def wrap_model_call(
         self,
