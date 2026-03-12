@@ -21,6 +21,7 @@ from src.middleware.attachment_extract import AttachmentExtractMiddleware
 from src.middleware.streaming_tool_call_fix import StreamingToolCallFixMiddleware
 from src.middleware.generated_files import GeneratedFilesMiddleware
 from src.middleware.fix_dangling_tool_messages import FixDanglingToolMessagesMiddleware
+from src.middleware.suggested_questions import SuggestedQuestionsMiddleware
 from src.middleware.system_prompt import SystemPromptMiddleware
 from src.prompts import RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
@@ -112,6 +113,7 @@ agent = create_deep_agent(
         FixDanglingToolMessagesMiddleware(),  # 修复手动停止工具调用后 有tool_calls 但是没有 tool 的消息
         tool_limiter,
         GeneratedFilesMiddleware(),  # 提取生成的文件路径并发送 custom 事件
+        SuggestedQuestionsMiddleware(),  # 生成建议问题并发送 custom 事件
         # create_duplicate_call_prevention(get_backend_per_thread),
         cus_tool_limiter('glob', 5),
     ],  # 完整的中间件配置

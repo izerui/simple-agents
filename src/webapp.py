@@ -164,9 +164,20 @@ class FilePaths(BaseModel):
     files: list[str]
 
 
+class SuggestedQuestions(BaseModel):
+    """建议问题列表"""
+    questions: list[str]
+
+
 # 请求模型
 class ExtractFilePathsRequest(BaseModel):
     content: str
+
+
+class GenerateSuggestedQuestionsRequest(BaseModel):
+    """生成建议问题的请求模型"""
+    system_prompt: str = ""
+    human_message: str = ""
 
 
 # 文件列表提取接口
@@ -214,6 +225,63 @@ async def extract_file_paths(request: ExtractFilePathsRequest) -> ApiResponse:
 
     except Exception as e:
         error_detail = f"提取文件路径失败: {str(e)}\n{traceback.format_exc()}"
+        logging.getLogger(__name__).error(error_detail)
+        return ApiResponse(
+            success=False,
+            err_message=str(e),
+            data=None,
+        )
+
+
+# 生成建议问题接口
+@router.post("/generate-suggested-questions", tags=["Webapp"], response_model=ApiResponse)
+async def generate_suggested_questions(request: GenerateSuggestedQuestionsRequest) -> ApiResponse:
+    """
+    根据系统提示词和用户消息生成建议问题。
+
+    Args:
+        request: 请求体，包含 system_prompt 和 human_message
+
+    Returns:
+        JSON: {"success": true, "err_message": null, "data": ["问题1", "问题2", "问题3"]}
+    """
+    try:
+        model = _get_extract_model()
+        system_prompt = request.system_prompt
+        human_message = request.human_message
+
+        # 构建提示
+        prompt = load_prompt_from_file(
+            "prompt/suggested_questions_prompt.md",
+            system_prompt=system_prompt,
+            human_message=human_message,
+        )
+
+        import asyncio
+
+        # 使用 with_structured_output 结构化提取
+        from langchain_core.runnables import RunnableConfig
+        structured_model = model.with_structured_output(SuggestedQuestions)
+
+        # 临时关闭追踪
+        with tracing_context(enabled=False):
+            result = await asyncio.to_thread(structured_model.invoke, prompt)
+
+        # 提取问题列表
+        questions: list[str] = []
+        if isinstance(result, SuggestedQuestions):
+            questions = result.questions
+        elif isinstance(result, dict):
+            questions = result.get('questions', [])
+
+        return ApiResponse(
+            success=True,
+            err_message=None,
+            data=questions,
+        )
+
+    except Exception as e:
+        error_detail = f"生成建议问题失败: {str(e)}\n{traceback.format_exc()}"
         logging.getLogger(__name__).error(error_detail)
         return ApiResponse(
             success=False,
