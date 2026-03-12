@@ -429,7 +429,7 @@ data字段用于存储节点和边的自定义属性：
 
 | 参数 | 说明 | 类型 | 必选 |
 |:-----|:-----|:-----|:-----|
-| rootId | 根节点id | string | 是 |
+| rootId | 根节点id，随机字符串（如 kp001） | string | 是 |
 | datetime | 时间戳 | number | 否 |
 | nodes | 节点数组 | array | 是 |
 | lines | 边数组 | array | 是 |
