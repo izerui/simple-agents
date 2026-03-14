@@ -7,6 +7,9 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse, unquote
+
+import aiohttp
 
 from langchain.agents.middleware.types import AgentMiddleware, StateT
 from langchain_core.runnables import RunnableConfig
@@ -121,10 +124,18 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                                 'data': block.get('data', ''),
                                 'mime_type': block.get('mime_type')
                             })
+                        # {"type": "file_url", "url": "https://example.com/myfile.pdf", "metadata": {"filename": "myfile.pdf"}, "mimeType": "application/pdf"}
+                        elif block_type == "file_url":
+                            extracted_attachments.append({
+                                'type': 'file_url',
+                                'filename': block.get('metadata', {}).get('filename'),
+                                'url': block.get('url', ''),
+                                'mime_type': block.get('mimeType')
+                            })
                 # 过滤掉文件和图像类型的块
                 filtered_content = [
                     block for block in msg.content
-                    if not (isinstance(block, dict) and block.get("type") in ("file", "image"))
+                    if not (isinstance(block, dict) and block.get("type") in ("file", "image", "file_url"))
                 ]
 
                 # 在内容中添加上传文件的提示信息
@@ -159,9 +170,15 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         # 准备上传的文件列表
         files_to_upload = []
         for attachment in extracted_attachments:
-            filename = attachment['filename']
-            # 解码 base64 数据
-            data = base64.b64decode(attachment['data'])
+            if attachment['type'] == 'file_url':
+                download_result = await self._download_attachment_from_url(attachment)
+                if download_result is None:
+                    continue
+                filename, data = download_result
+            else:
+                filename = attachment['filename']
+                # 解码 base64 数据
+                data = base64.b64decode(attachment['data'])
             files_to_upload.append((filename, data))
 
         # 上传文件
@@ -172,6 +189,47 @@ class AttachmentExtractMiddleware(AgentMiddleware):
             )
             uploads: list[FileUploadResponse] = await backend.aupload_files(files_to_upload)
             logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
+
+    async def _download_attachment_from_url(self, attachment: dict) -> tuple[str, bytes] | None:
+        url = attachment.get('url', '')
+        if not isinstance(url, str) or not url:
+            logger.warning("跳过 URL 附件：url 为空或非法")
+            return None
+
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            logger.warning(f"跳过 URL 附件：不支持的协议 {url}")
+            return None
+
+        timeout = aiohttp.ClientTimeout(total=30)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        logger.warning(f"URL 附件下载失败: {url}, status={response.status}")
+                        return None
+                    data = await response.read()
+        except Exception as e:
+            logger.warning(f"URL 附件下载异常: {url}, error={e}")
+            return None
+
+        if not data:
+            logger.warning(f"URL 附件下载为空内容: {url}")
+            return None
+
+        filename = self._resolve_download_filename(attachment, parsed.path)
+        return filename, data
+
+    def _resolve_download_filename(self, attachment: dict, url_path: str) -> str:
+        metadata_filename = attachment.get('filename')
+        if isinstance(metadata_filename, str) and metadata_filename.strip():
+            return Path(metadata_filename).name
+
+        resolved_name = Path(unquote(url_path)).name
+        if resolved_name:
+            return resolved_name
+
+        return 'downloaded_file'
 
     def _ensure_skills_in_sandbox(self, backend: FilesystemBackend):
         """确保 skills 目录存在于沙箱中
