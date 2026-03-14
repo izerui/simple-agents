@@ -5,6 +5,7 @@
 """
 
 import os
+import re
 from typing import Any, TypedDict
 
 import httpx
@@ -29,6 +30,23 @@ class SuggestedQuestionsMiddleware(AgentMiddleware):
         """初始化"""
         super().__init__()
 
+    @staticmethod
+    def _compact_system_prompt(system_prompt: str) -> str:
+        """压缩 system prompt，只保留对建议问题生成真正有帮助的用户偏好。"""
+        if not system_prompt:
+            return ""
+
+        text = system_prompt.strip()
+
+        # 优先提取用户附加偏好段，避免把完整默认系统提示再次送入小任务。
+        marker = "[用户附加偏好 - 低优先级补充]"
+        if marker in text:
+            text = text.split(marker, 1)[-1].strip()
+
+        # 轻量压缩空白和长度，保留可读性。
+        text = re.sub(r"\s+", " ", text)
+        return text[:600]
+
     async def aafter_agent(self, state: AgentState, runtime: Any) -> dict | None:
         """在 Agent 执行完成后生成建议问题"""
         messages = state.get("messages", [])
@@ -36,7 +54,7 @@ class SuggestedQuestionsMiddleware(AgentMiddleware):
             return None
 
         # 获取 system prompt
-        system_prompt = state.get("user_system_message", "")
+        system_prompt = self._compact_system_prompt(state.get("user_system_message", ""))
 
         # 获取最后5条消息，区分 AI 和 HUMAN
         recent_messages = messages[-5:] if len(messages) > 5 else messages
