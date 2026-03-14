@@ -39,7 +39,7 @@ class SuggestedQuestionsMiddleware(AgentMiddleware):
         text = system_prompt.strip()
 
         # 优先提取用户附加偏好段，避免把完整默认系统提示再次送入小任务。
-        marker = "[用户附加偏好 - 低优先级补充]"
+        marker = "[调用方附加系统要求]"
         if marker in text:
             text = text.split(marker, 1)[-1].strip()
 
