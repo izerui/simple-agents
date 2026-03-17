@@ -15,6 +15,12 @@ description: 知识建模图生成技能。帮助高校教师为课程创建知�
 
 > **提示**：如果是生成新的 JSON，最好先读取 JSON 格式示例文件 [demo.json](references/demo.json) 作为参考。
 
+> **⚠️ 关键结构警告**（常见导入失败原因）：
+> - 边数组名必须是 `lines`，**不能**用 `edges`
+> - 边属性名：`from`/`to`（**不能**用 `source`/`target`），`text`（**不能**用 `label`）
+> - 每条边必须包含：`fromJunctionPoint`、`toJunctionPoint`、`showStartArrow`、`showEndArrow`
+> - 节点 `data.startPostion` 必须与 `x`、`y` 坐标一致
+
 ### 前置说明
 
 **已有JSON文件处理**：
@@ -210,6 +216,112 @@ description: 知识建模图生成技能。帮助高校教师为课程创建知�
 - 第三层节点：以第二层节点为基准计算坐标
 - 以此类推，确保每一层都不与相邻层重叠
 
+### 步骤0：生成前后的结构约束（最高优先级）
+
+**首要目标：生成出来的 JSON 必须可导入、可显示、可解析。**
+
+在满足结构可用之前，不要优先追求“更美观”的连接线或布局。任何坐标优化、连接点优化，都不能破坏 JSON 的结构合法性。
+
+**硬性要求：**
+
+1. **严格使用本技能定义的 JSON schema**
+   - 根对象只能使用：`rootId`、`datetime`、`nodes`、`lines`
+   - 边数组名必须是 `lines`，**不能**写成 `edges`
+   - 边属性必须使用 `from`、`to`、`text`，**不能**写成 `source`、`target`、`label`
+
+2. **禁止杜撰属性、禁止混入其他图库格式**
+   - 不要参考其他流程图、关系图库、思维导图库的字段命名习惯
+   - 不要输出本规范未定义、且无法确定被支持的字段
+   - 如果不确定某个字段是否支持，宁可不加，也不要臆造
+
+3. **关键字段必须完整**
+   - 节点必须有：`id`、`text`、`x`、`y`、`data.type`
+   - 边必须有：`id`、`from`、`to`、`text`
+   - 为保证导入后可正常显示，边还必须明确：`fromJunctionPoint`、`toJunctionPoint`、`showStartArrow`、`showEndArrow`
+
+4. **引用必须有效**
+   - `rootId` 必须存在于 `nodes[].id` 中
+   - 每条边的 `from`、`to` 必须都能在 `nodes[].id` 中找到
+   - 所有 `id` 不能重复
+
+5. **节点坐标字段必须自洽**
+   - `data.startPostion.x` 必须与节点 `x` 一致
+   - `data.startPostion.y` 必须与节点 `y` 一致
+   - 不允许出现节点显示坐标与 data 中记录坐标不一致的情况
+
+6. **生成后必须先做结构验证，再做布局验证**
+   - 先检查 JSON 结构、字段名、字段完整性、引用关系是否正确
+   - 确认结构可用后，再检查节点重叠、连线交叉、连接点协调性
+
+### 结构禁止输出字段对照表
+
+| 禁止输出 | 必须改为 | 原因 |
+|:---------|:---------|:-----|
+| `edges` | `lines` | 本技能边数组固定使用 `lines` |
+| `source` | `from` | 本技能边起点字段固定使用 `from` |
+| `target` | `to` | 本技能边终点字段固定使用 `to` |
+| `label` | `text` | 本技能关系文本字段固定使用 `text` |
+| 其他外部图库专用字段 | 本规范已定义字段 | 禁止混入其他图库 schema，避免导入失败 |
+
+### 语义驱动的渲染约束
+
+**节点颜色、形状、知识类型、关系文本都必须由节点内容与实际语义决定，不能为了美观或对称随意指定。**
+
+1. **节点颜色必须匹配节点语义**
+   - 核心知识点 → 红色 `#FF4D4F`
+   - 结构化知识框架 → 蓝色 `#1890FF`
+   - 先决知识点 → 绿色 `#52C41A`
+   - 普通知识点 → 黑色 `#000000`
+   - 不允许把普通节点随意标成核心节点颜色
+
+2. **节点形状必须匹配节点类型**
+   - `nodeShape=0`：圆形，仅在确有需要表示特殊节点类型时使用
+   - `nodeShape=1`：矩形，默认知识点节点使用矩形
+   - 不能为了视觉变化随意在同类节点之间混用圆形和矩形
+
+3. **`data.type` 必须匹配知识内容本身**
+   - 概念、定义、原理 → `2`（陈述性知识）
+   - 步骤、流程、操作方法 → `3`（程序性知识）
+   - 学习方法、选择策略、分析策略 → `5`（认知策略）
+   - 案例、示例、范例 → `6`（事实范例）
+   - 思政支撑内容 → `9`（思政点）
+   - 不能为了凑类型覆盖而强行改写节点语义
+
+4. **关系文本必须反映真实语义关系**
+   - 上位包含下位：`包含` / `内容包含`
+   - 组成部分：`组成`
+   - 步骤流程：`步骤包含`
+   - 前置依赖：`是前提`
+   - 示例支撑：`是范例`
+   - 支撑说明：`支持`
+   - 不允许为了让图更“好看”随意替换关系词
+
+5. **渲染属性服从语义，不服从随意排版**
+   - 先判断节点/关系语义，再决定颜色、形状、关系名
+   - 在语义确定后，再做坐标布局和连接点调优
+   - 不能反过来先决定样式，再倒推语义
+
+### 生成前自检 Prompt
+
+在开始生成 JSON 前，先逐条自检，全部满足后再输出：
+
+```text
+1. 我输出的根对象是否只包含 rootId、datetime、nodes、lines？
+2. 我是否严格使用 lines，而没有写成 edges？
+3. 我是否严格使用 from / to / text，而没有写成 source / target / label？
+4. 我是否杜撰了任何本规范未定义、或无法确认支持的属性？如果有，必须删除。
+5. 我的 rootId 是否对应某个真实存在的 nodes[].id？
+6. 每个节点是否都包含 id、text、x、y、data.type？
+7. 每个节点的 data.startPostion.x / y 是否与节点 x / y 完全一致？
+8. 每条边是否都包含 id、from、to、text、fromJunctionPoint、toJunctionPoint、showStartArrow、showEndArrow？
+9. 每条边的 from / to 是否都能在 nodes[].id 中找到？
+10. 节点颜色、nodeShape、data.type 是否由节点语义决定，而不是为了美观随意指定？
+11. 关系 text 是否真实表达语义关系（包含、组成、步骤包含、是前提、是范例、支持等）？
+12. 我是否先保证 JSON 结构可用，再考虑连接点协调、布局美观和线条优化？
+```
+
+如果以上任一项不能确定，则不要急于输出，先回到结构和语义层面修正，再继续生成。
+
 ### 步骤1：确定节点属性
 
 根据知识点类型设置节点属性（文字颜色和边框颜色同时改变）：
@@ -290,51 +402,162 @@ description: 知识建模图生成技能。帮助高校教师为课程创建知�
 | fromJunctionPoint | 起点连接位置（border:动态最近边框/left:左/right:右/top:上/bottom:下），不设置时默认border | string | 否 | "border" |
 | toJunctionPoint | 终点连接位置（border:动态最近边框/left:左/right:右/top:上/bottom:下），不设置时默认border | string | 否 | "border" |
 
-**连接点优先级规则：**
+**连接点规则重构原则：先保证结构可用，再优化视觉协调。**
 
-根据目标节点相对于起始节点的位置，结合节点宽高自动计算最佳连接点。
+连接点计算不能只做“方向判断”，还要结合二维坐标系、多条关系分布、整体局部避让来调优。
 
-**判断逻辑：**
+### 3.1 连接点优化目标
 
-设起始节点A(xA, yA, widthA, heightA)，目标节点B(xB, yB, widthB, heightB)
+连接点选择时，按以下优先级综合考虑：
 
+1. **结构合法**：必须输出规范字段：`fromJunctionPoint`、`toJunctionPoint`
+2. **方向正确**：连线出发方向与目标节点相对方位一致
+3. **局部顺畅**：尽量减少折返、贴边滑行、过长绕行
+4. **多关系均匀分布**：同一节点同一侧的多条关系不能全部挤在中点
+5. **整体更协调**：尽量减少交叉，保持主干结构清晰
+
+### 3.2 二维坐标系下的相对方位判断
+
+设起始节点 A(xA, yA, widthA, heightA)，目标节点 B(xB, yB, widthB, heightB)
+
+先计算两个节点中心点：
+
+```text
+centerA = (xA + widthA/2, yA + heightA/2)
+centerB = (xB + widthB/2, yB + heightB/2)
+
+dx = centerB.x - centerA.x
+dy = centerB.y - centerA.y
 ```
-// 判断相对位置
-B在A右侧：B.x > A.x + A.width/2
-B在A左侧：B.x + B.width < A.x
-B在A下方：B.y > A.y + A.height/2
-B在A上方：B.y + B.height < A.y
+
+再判断 B 相对 A 的主要方向：
+
+- `|dx| >> |dy|`：以左右关系为主
+- `|dy| >> |dx|`：以上下关系为主
+- `|dx|` 与 `|dy|` 接近：视为斜向关系（左上 / 左下 / 右上 / 右下）
+
+### 3.3 连接点选择不再是“唯一固定映射”，而是“候选组合 + 择优”
+
+#### （1）正向关系的基础候选
+
+| B相对A的位置 | 优先候选 |
+|:-------------|:---------|
+| 正右 | `from=right`, `to=left` |
+| 正左 | `from=left`, `to=right` |
+| 正上 | `from=top`, `to=bottom` |
+| 正下 | `from=bottom`, `to=top` |
+
+#### （2）斜向关系的候选组合
+
+| B相对A的位置 | 候选方案1 | 候选方案2 |
+|:-------------|:-----------|:-----------|
+| 右上 | `right → bottom` | `top → left` |
+| 右下 | `right → top` | `bottom → left` |
+| 左上 | `left → bottom` | `top → right` |
+| 左下 | `left → top` | `bottom → right` |
+
+#### （3）择优规则
+
+当斜向关系存在多个可选组合时，不要机械固定使用某一个，而要比较：
+
+- 哪个方案更符合当前主方向
+- 哪个方案与现有连线交叉更少
+- 哪个方案让同一侧多条关系分布更均匀
+- 哪个方案更少穿越密集节点区域
+
+如果两个方案差异不明显，优先选择更符合主方向的那个。
+
+### 3.4 同一节点多条关系的连接点分布规则
+
+**关键原则：同一节点同一侧的多条边，不能都连接到该侧的中点。**
+
+应该按以下方式处理：
+
+1. 先按边的方向把关系分组：
+   - left 侧一组
+   - right 侧一组
+   - top 侧一组
+   - bottom 侧一组
+
+2. 对每一组内部，再按目标节点中心点排序：
+   - 左右侧分组：按目标节点 `centerY` 排序
+   - 上下侧分组：按目标节点 `centerX` 排序
+
+3. 在该边上按顺序均匀分配锚点，而不是共用一个点
+
+#### 示例A：A右侧有4个子节点
+
+```text
+A.right 侧需要连接 B、C、D、E
+先按 B/C/D/E 的 centerY 从上到下排序
+再把 A.right 边分成 4 个落点区域
+让 4 条线分别从不同高度连出
 ```
 
-**连接点选择规则：**
+#### 示例B：多个节点同时连向同一个目标节点左侧
 
-| 目标节点位置 | toJunctionPoint（终点） | fromJunctionPoint（起点） |
-|:-------------|:----------------------|:------------------------|
-| 右上（B在A右上方） | bottom | right |
-| 右下（B在A右下方） | top | right |
-| 左上（B在A左上方） | bottom | left |
-| 左下（B在A左下方） | top | left |
-| 正右（B在A正右侧） | left | right |
-| 正左（B在A正左侧） | right | left |
-| 正上（B在A正上方） | bottom | top |
-| 正下（B在A正下方） | top | bottom |
-| 其他情况 | border | border |
-
-**说明：**
-- 根据B相对于A的位置，选择能让连线最短的连接点组合
-- 连接点选择原则：fromJunctionPoint选择离目标节点近的边，toJunctionPoint选择离起始节点近的边
-- 无法用简单规则判断时（如跨越多行多列），默认使用 border 自动计算最近边框
-
-**示例：**
+```text
+B、C、D 都连向 A.left
+不能都连到 A.left 的中心点
+应按 B/C/D 的 centerY 排序后，
+在 A.left 边上从上到下分配多个落点
 ```
-示例1：起始节点A(x=0,y=0,width=200,height=60)，目标节点B(x=300,y=-50)
-→ B在A右侧上方 → fromJunctionPoint="right", toJunctionPoint="bottom"
 
-示例2：起始节点A(x=0,y=0,width=200,height=60)，目标节点B(x=300,y=100)
-→ B在A右侧下方 → fromJunctionPoint="right", toJunctionPoint="top"
+### 3.5 单条边方向正确，但整体不协调时的调优规则
 
-示例3：起始节点A(x=0,y=0,width=200,height=60)，目标节点B(x=400,y=200)
-→ B在A右下方，跨越多列多行 → fromJunctionPoint="border", toJunctionPoint="border"
+如果某条边单独看方向没问题，但放到整体图中不协调，则优先按以下顺序调优：
+
+1. **先调整连接点组合**
+   - 例如右上关系从 `right → bottom` 改为 `top → left`
+
+2. **再调整同侧锚点顺序**
+   - 让多条线的出线顺序与目标节点排序一致
+
+3. **必要时才调整节点布局**
+   - 给高密度边区域留出更大的走线空间
+
+### 3.6 典型案例（案例优先）
+
+#### 案例1：B 在 A 左边
+
+```text
+A 在右，B 在左
+优先：A.left → B.right
+```
+
+#### 案例2：B 在 A 左下
+
+```text
+候选1：A.left → B.top
+候选2：A.bottom → B.right
+如果 A 左侧已有很多连线，而底部较空，则优先候选2
+```
+
+#### 案例3：B 在 A 右上
+
+```text
+候选1：A.right → B.bottom
+候选2：A.top → B.left
+如果 A.right 已经有多条边密集分布，则改用 A.top → B.left 更协调
+```
+
+#### 案例4：A 同时连接多个右侧子节点
+
+```text
+A.right 不能所有边都从中点发出
+应按子节点从上到下排序后，
+在 A.right 边上分配多个锚点
+让连线像“扇形展开”而不是“挤成一束”
+```
+
+#### 案例5：两个方案方向都对，但一个更协调
+
+```text
+若 B 在 A 右上方：
+- A.right → B.bottom 方向正确
+- A.top → B.left 方向也正确
+此时应选择与其他线交叉更少、边上更均匀的方案
+而不是机械套用固定表
 ```
 | fromJuctionPointOffsetX | 起点连接点X偏移 | int | 否 | 0 |
 | fromJuctionPointOffsetY | 起点连接点Y偏移 | int | 否 | 0 |
@@ -396,9 +619,13 @@ data字段用于存储节点和边的自定义属性：
 3. 包含类关系至少2个子内容
 4. 无孤立节点
 
-### 步骤7：JSON结构验证
+### 步骤7：JSON结构验证（生成后必须执行）
 
-生成 JSON 后，必须验证结构是否符合要求：
+生成 JSON 后，必须验证结构是否符合要求。**注意：这一步不是可选项，而是生成流程中的必做步骤。**
+
+在任何情况下，都不能因为“布局看起来更美观”而牺牲 JSON 结构合法性。
+
+**先做结构验证，再做布局验证。**
 
 **1. 根对象结构**：
 ```json
@@ -406,9 +633,22 @@ data字段用于存储节点和边的自定义属性：
   "rootId": "kp001",  // 字符串，必填
   "datetime": 1234567890,  // 数字，可选
   "nodes": [...],  // 数组，必填
-  "lines": [...]  // 数组，必填
+  "lines": [...]  // 数组，必填，注意是 "lines" 不是 "edges"
 }
 ```
+
+**⚠️ 常见错误警告**：
+
+| 错误用法 | 正确用法 | 说明 |
+|---------|---------|------|
+| `"edges": [...]` | `"lines": [...]` | 边数组必须命名为 `lines` |
+| `"source": "node-1"` | `"from": "node-1"` | 源节点属性必须是 `from` |
+| `"target": "node-2"` | `"to": "node-2"` | 目标节点属性必须是 `to` |
+| `"label": "包含"` | `"text": "包含"` | 关系名称属性必须是 `text` |
+| 缺少 `fromJunctionPoint` | 添加 `"fromJunctionPoint": "right"` | 必须指定连接点位置 |
+| 缺少 `toJunctionPoint` | 添加 `"toJunctionPoint": "left"` | 必须指定连接点位置 |
+| 缺少 `showStartArrow`/`showEndArrow` | 添加箭头属性 | 必须指定箭头显示 |
+| `data.startPostion` 与 `x,y` 不一致 | 保持一致 | `startPostion` 必须与节点坐标同步 |
 
 **2. 节点对象属性**（每个节点必须包含）：
 | 属性 | 类型 | 必填 | 说明 |
@@ -418,6 +658,7 @@ data字段用于存储节点和边的自定义属性：
 | x | number | 是 | x坐标 |
 | y | number | 是 | y坐标 |
 | data.type | number | 是 | 知识点类型：2, 3, 5, 6, 9 |
+| data.startPostion | object | 是 | 必须与 x, y 坐标一致：`{"x": 节点x, "y": 节点y}` |
 | fontColor | string | 否 | 文字颜色 |
 | borderColor | string | 否 | 边框颜色 |
 | nodeShape | number | 否 | 形状：0=圆形，1=矩形 |
@@ -426,16 +667,181 @@ data字段用于存储节点和边的自定义属性：
 | 属性 | 类型 | 必填 | 说明 |
 |:-----|:-----|:-----|:-----|
 | id | string | 是 | 边id，不能重复 |
-| from | string | 是 | 源节点id |
-| to | string | 是 | 目标节点id |
-| text | string | 否 | 关系名称 |
+| from | string | 是 | 源节点id（注意：不是 `source`） |
+| to | string | 是 | 目标节点id（注意：不是 `target`） |
+| text | string | 是 | 关系名称（注意：不是 `label`） |
+| fromJunctionPoint | string | 是 | 起点连接位置（border/left/right/top/bottom） |
+| toJunctionPoint | string | 是 | 终点连接位置（border/left/right/top/bottom） |
+| showStartArrow | boolean | 是 | 是否显示起点箭头 |
+| showEndArrow | boolean | 是 | 是否显示终点箭头 |
+| lineWidth | number | 否 | 线条粗细，默认1 |
+| lineShape | number | 否 | 线条样式，默认1 |
+| color | string | 否 | 线条颜色，默认#000000 |
+| opacity | number | 否 | 透明度，默认1 |
 
-**4. 布局验证**：
+**4. 结构可用性强制检查清单**：
+
+生成后必须逐条核对：
+
+- 根对象是否只使用 `rootId`、`datetime`、`nodes`、`lines`
+- 是否错误使用了 `edges`
+- 每个节点是否都包含 `id`、`text`、`x`、`y`、`data.type`
+- 每个节点的 `data.startPostion.x` 是否等于 `x`
+- 每个节点的 `data.startPostion.y` 是否等于 `y`
+- 每条边是否都包含 `id`、`from`、`to`、`text`
+- 每条边是否都包含 `fromJunctionPoint`、`toJunctionPoint`、`showStartArrow`、`showEndArrow`
+- 是否错误使用了 `source`、`target`、`label`
+- `rootId` 是否存在于 `nodes[].id`
+- 每条边的 `from`、`to` 是否都能在 `nodes[].id` 中找到
+- 所有节点 id、边 id 是否都唯一
+- 是否出现了本规范未定义、无法确认支持的杜撰属性
+
+**5. 布局验证**：
 - 节点不能重叠
 - 连接线不能交叉
 - 节点间距至少 18px
+- 同一节点同一侧多条关系不能共用一个中点
+- 连线方向应与节点相对位置基本一致
 
 ---
+
+## 最小可用 JSON 模板
+
+> **用途**：当生成新的知识建模图 JSON 时，优先以这个模板为骨架补全内容。
+>
+> **原则**：先保证字段名、结构、引用关系完全合法，再补充节点内容、坐标和连接点优化。
+
+```json
+{
+  "rootId": "node-1",
+  "datetime": 1770620051255,
+  "nodes": [
+    {
+      "id": "node-1",
+      "text": "核心主题",
+      "type": "node",
+      "isShow": true,
+      "isHide": false,
+      "expanded": true,
+      "styleClass": "",
+      "className": "",
+      "nodeShape": 1,
+      "borderWidth": 1,
+      "borderColor": "#FF4D4F",
+      "fontColor": "#FF4D4F",
+      "textHorizontalAlign": "center",
+      "textVerticalAlign": "middle",
+      "color": "#ffffff",
+      "opacity": 1,
+      "fixed": true,
+      "width": 200,
+      "height": 60,
+      "x": 0,
+      "y": 0,
+      "offset_x": 0,
+      "offset_y": 0,
+      "disableDrag": false,
+      "singleNode": false,
+      "invisiable": false,
+      "zIndex": 301,
+      "data": {
+        "type": 2,
+        "ownerContainerId": "",
+        "backgroundImage": "",
+        "imageFit": "cover",
+        "startPostion": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": "node-2",
+      "text": "子知识点",
+      "type": "node",
+      "isShow": true,
+      "isHide": false,
+      "expanded": true,
+      "styleClass": "",
+      "className": "",
+      "nodeShape": 1,
+      "borderWidth": 0,
+      "borderColor": "#000000",
+      "fontColor": "#000000",
+      "textHorizontalAlign": "center",
+      "textVerticalAlign": "middle",
+      "color": "#ffffff",
+      "opacity": 1,
+      "fixed": true,
+      "width": 140,
+      "height": 45,
+      "x": 300,
+      "y": 0,
+      "offset_x": 0,
+      "offset_y": 0,
+      "disableDrag": false,
+      "singleNode": false,
+      "invisiable": false,
+      "zIndex": 301,
+      "data": {
+        "type": 2,
+        "ownerContainerId": "",
+        "backgroundImage": "",
+        "imageFit": "cover",
+        "startPostion": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "lines": [
+    {
+      "id": "line-1",
+      "from": "node-1",
+      "to": "node-2",
+      "text": "包含",
+      "color": "#000000",
+      "opacity": 1,
+      "fontBold": false,
+      "fontItalic": false,
+      "fontUnderline": false,
+      "lineWidth": 1,
+      "lineShape": 1,
+      "isHide": false,
+      "animation": 0,
+      "dashType": 0,
+      "disableDefaultClickEffect": false,
+      "showStartArrow": false,
+      "showEndArrow": true,
+      "startMarkerId": "",
+      "endMarkerId": "",
+      "forDisplayOnly": false,
+      "fromJunctionPoint": "right",
+      "toJunctionPoint": "left",
+      "fromJuctionPointOffsetX": 0,
+      "fromJuctionPointOffsetY": 0,
+      "toJuctionPointOffsetX": 0,
+      "toJuctionPointOffsetY": 0,
+      "polyLineRadius": 0,
+      "hidden": false,
+      "data": {
+        "type": 2
+      }
+    }
+  ]
+}
+```
+
+### 使用这个模板时必须检查
+
+- 根对象必须是 `rootId`、`datetime`、`nodes`、`lines`
+- `rootId` 必须等于某个真实节点的 `id`
+- 每个节点的 `data.startPostion` 必须与 `x`、`y` 完全一致
+- 每条边必须使用 `from` / `to` / `text`，不能写成 `source` / `target` / `label`
+- 每条边必须引用真实存在的节点 id
+- 每条边都应明确 `fromJunctionPoint`、`toJunctionPoint`、`showStartArrow`、`showEndArrow`
+- 先保证模板结构合法，再扩展节点数量、关系数量和布局细节
 
 ## 快速参考
 
