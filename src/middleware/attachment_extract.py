@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, unquote
 
+import aiofiles.os
 import aiohttp
 
 from langchain.agents.middleware.types import AgentMiddleware, StateT
@@ -177,9 +178,15 @@ class AttachmentExtractMiddleware(AgentMiddleware):
                 filename, data = download_result
             else:
                 filename = attachment['filename']
-                # 解码 base64 数据
-                data = base64.b64decode(attachment['data'])
+                data = self._decode_attachment_base64(attachment)
+                if data is None:
+                    logger.warning(f"跳过附件上传，base64 解码失败: {filename}")
+                    continue
             files_to_upload.append((filename, data))
+
+        # 上传前删除 backend 中已有的同名文件，以及同 stem 不同后缀文件
+        if files_to_upload:
+            await self._remove_conflicting_backend_files(backend, files_to_upload)
 
         # 上传文件
         if files_to_upload:
@@ -189,6 +196,51 @@ class AttachmentExtractMiddleware(AgentMiddleware):
             )
             uploads: list[FileUploadResponse] = await backend.aupload_files(files_to_upload)
             logger.info(f"文件上传完成，共 {len(uploads)} 个上传任务")
+
+    async def _remove_conflicting_backend_files(self, backend: FilesystemBackend, files_to_upload: list[tuple[str, bytes]]):
+        target_names = {Path(filename).name for filename, _ in files_to_upload}
+        target_stems = {Path(filename).stem for filename, _ in files_to_upload}
+        removed_files: list[str] = []
+
+        existing_paths = await asyncio.to_thread(lambda: list(backend.cwd.iterdir()))
+        for existing_path in existing_paths:
+            if not await asyncio.to_thread(existing_path.is_file):
+                continue
+
+            existing_name = existing_path.name
+            existing_stem = existing_path.stem
+            if existing_name in target_names or existing_stem in target_stems:
+                try:
+                    resolved_path = await asyncio.to_thread(backend._resolve_path, existing_name)
+                    await aiofiles.os.remove(resolved_path)
+                    removed_files.append(existing_name)
+                except FileNotFoundError:
+                    continue
+                except OSError as e:
+                    logger.warning(f"删除已有冲突文件失败: {existing_path}, error={e}")
+
+        if removed_files:
+            logger.info(f"上传前删除已有冲突文件: {removed_files}")
+
+    def _decode_attachment_base64(self, attachment: dict) -> bytes | None:
+        raw_data = attachment.get('data', '')
+        if not isinstance(raw_data, str) or not raw_data:
+            return None
+
+        base64_data = raw_data.strip()
+        if ',' in base64_data and ';base64' in base64_data:
+            base64_data = base64_data.split(',', 1)[1]
+
+        missing_padding = len(base64_data) % 4
+        if missing_padding:
+            base64_data += '=' * (4 - missing_padding)
+
+        try:
+            return base64.b64decode(base64_data)
+        except Exception as e:
+            filename = attachment.get('filename', 'unknown')
+            logger.warning(f"附件 base64 解码失败: {filename}, error={e}")
+            return None
 
     async def _download_attachment_from_url(self, attachment: dict) -> tuple[str, bytes] | None:
         url = attachment.get('url', '')
