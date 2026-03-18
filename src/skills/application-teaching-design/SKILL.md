@@ -1,5 +1,5 @@
 ---
-name: application-teaching-design-3.13-2
+name: application-teaching-design
 description: 生成可直接交付的课程设计 JSON 结果文件。只要用户提到课程设计、教学设计、教案结构化输出、demo.json 风格结果、教学设计落库 JSON、按固定字段生成教学活动/任务序列，就应优先使用本技能。适用于基于课程名称、任务内容、学时安排、专业背景、知识建模图 JSON、教材/课件/案例等资料，产出与 `references/demo.json` 同层级、同字段风格的完整课程设计 JSON，而不是 Markdown 教案或自然语言说明。
 ---
 
