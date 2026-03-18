@@ -47,6 +47,48 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def iter_semantic_errors(instance: object) -> list[str]:
+    if not isinstance(instance, dict):
+        return []
+
+    errors: list[str] = []
+
+    root_activity_sequence = instance.get("活动序列")
+    if not isinstance(root_activity_sequence, dict):
+        return errors
+
+    course_design = instance.get("课程设计")
+    if not isinstance(course_design, list):
+        return errors
+
+    course_activity_section = None
+    for item in course_design:
+        if isinstance(item, dict) and item.get("key") == "活动序列":
+            course_activity_section = item
+            break
+
+    if not isinstance(course_activity_section, dict):
+        return errors
+
+    course_activity_value = course_activity_section.get("value")
+    sorted_names = course_activity_section.get("sorted_names")
+
+    if isinstance(course_activity_value, dict):
+        root_names = list(root_activity_sequence.keys())
+        course_names = list(course_activity_value.keys())
+        if root_names != course_names:
+            errors.append(
+                "根层 `活动序列` 与 `课程设计[].活动序列.value` 的活动名称顺序或内容不一致"
+            )
+
+        if isinstance(sorted_names, list) and sorted_names != course_names:
+            errors.append(
+                "`课程设计[].活动序列.sorted_names` 与 `课程设计[].活动序列.value` 的活动名称不一致"
+            )
+
+    return errors
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -76,6 +118,13 @@ def main() -> int:
         print(f"INVALID: {target_path}")
         for index, error in enumerate(errors, start=1):
             print(f"{index}. {format_path(error)}: {error.message}")
+        return 1
+
+    semantic_errors = iter_semantic_errors(instance)
+    if semantic_errors:
+        print(f"INVALID: {target_path}")
+        for index, error in enumerate(semantic_errors, start=1):
+            print(f"{index}. $: {error}")
         return 1
 
     print(f"VALID: {target_path}")
