@@ -6,10 +6,13 @@
 
 import os
 import re
+import logging
 from typing import Any, TypedDict
 
 import httpx
 from langchain.agents.middleware import AgentMiddleware, AgentState
+
+logger = logging.getLogger(__name__)
 
 
 class SuggestedQuestionsState(TypedDict):
@@ -104,8 +107,8 @@ class SuggestedQuestionsMiddleware(AgentMiddleware):
                     return data.get("data", []) or []
                 else:
                     err_msg = data.get("err_message", "未知错误")
-                    print(f"生成建议问题失败: {err_msg}")
+                    logger.warning("生成建议问题失败: %s", err_msg)
                     return []
         except Exception as e:
-            print(f"调用接口生成建议问题失败: {e}")
+            logger.warning("调用接口生成建议问题失败: %r", e)
             return []
