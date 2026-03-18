@@ -235,7 +235,96 @@ async for chunk in client.chat_stream(
 
 ---
 
-## 7. 端到端测试
+## 7. 前端执行后回传结果示例
+
+动态工具最常见的使用方式是：
+
+1. 服务端把动态工具 schema 暴露给模型
+2. 模型生成 tool call 参数
+3. 前端拿到参数后执行真实动作
+4. 前端把执行结果再发回服务端，进入下一轮推理
+
+示例流程：
+
+### 第一步：模型生成 tool call
+
+模型调用：
+
+```json
+{
+  "name": "browser_click",
+  "args": {
+    "selector": "#submit",
+    "timeout": 1000
+  }
+}
+```
+
+后端 stub 返回：
+
+```json
+{
+  "ok": true,
+  "tool": "browser_click",
+  "arguments": {
+    "selector": "#submit",
+    "timeout": 1000
+  }
+}
+```
+
+### 第二步：前端执行真实动作
+
+例如浏览器端拿到参数后执行：
+
+```javascript
+const args = { selector: "#submit", timeout: 1000 };
+const element = document.querySelector(args.selector);
+if (!element) {
+  throw new Error(`元素不存在: ${args.selector}`);
+}
+element.click();
+```
+
+### 第三步：把执行结果作为下一轮消息回传
+
+前端可以将真实执行结果重新发回服务端：
+
+```python
+async for chunk in client.chat_stream(
+    message=(
+        "上一轮工具 browser_click 已由客户端真实执行。"
+        "执行结果如下：selector=#submit，status=success，"
+        "页面提示：提交成功。"
+        "请基于这个结果继续下一步分析。"
+    ),
+    thread_id=thread_id,
+    config=Config(configurable={}),
+):
+    print(chunk)
+```
+
+如果你希望更结构化，也可以把执行结果包装成明确的 JSON 文本再发回，例如：
+
+```json
+{
+  "tool": "browser_click",
+  "executed_by": "frontend",
+  "status": "success",
+  "selector": "#submit",
+  "message": "提交成功"
+}
+```
+
+推荐实践：
+
+- **模型负责决策与参数生成**
+- **前端负责真实执行**
+- **服务端负责上下文衔接**
+
+---
+
+## 8. 端到端测试
 
 运行测试脚本：
 
@@ -255,7 +344,7 @@ AI 输出: OK
 
 ---
 
-## 8. 支持的 schema 类型
+## 9. 支持的 schema 类型
 
 当前 JSON Schema 到 Pydantic 的转换支持这些基础类型：
 
@@ -275,7 +364,7 @@ AI 输出: OK
 
 ---
 
-## 9. 注意事项
+## 10. 注意事项
 
 ### 9.1 生效范围是 run 级
 
@@ -312,7 +401,7 @@ AI 输出: OK
 
 ---
 
-## 10. 常见问题
+## 11. 常见问题
 
 ### Q1：为什么只注入 `request.tools` 还不够？
 
@@ -336,7 +425,7 @@ AI 输出: OK
 
 ---
 
-## 11. 推荐实践
+## 12. 推荐实践
 
 如果你的目标是前端执行真实动作，推荐这样设计：
 
@@ -356,7 +445,7 @@ AI 输出: OK
 
 ---
 
-## 12. 相关文件
+## 13. 相关文件
 
 - `src/middleware/dynamic_schema_tools.py`
 - `src/graph.py`

@@ -20,6 +20,8 @@
 
 这些工具在 `core/tools/` 目录中定义，通过 `graph.py` 的 `tools` 参数显式传递给 Agent。
 
+> 补充阅读：如果你希望在 **每次 run 请求时** 动态追加工具 schema，而不是在服务启动时静态注册工具，请参考：`docs/dynamic-tools.md`
+
 ---
 
 ### 1. think_tool - 战略反思工具
