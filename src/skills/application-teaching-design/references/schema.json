@@ -522,7 +522,7 @@
         },
         "活动名称": {
           "$ref": "#/$defs/nonEmptyString",
-          "description": "活动的语义化名称。"
+          "description": "活动名称。"
         },
         "知识建模图": {
           "$ref": "#/$defs/knowledgeMap",
