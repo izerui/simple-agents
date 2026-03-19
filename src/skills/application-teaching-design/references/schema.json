@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/application-teaching-design/final-schema.json",
   "title": "Application Teaching Design Final Schema",
+  "description": "课程教学设计最终 JSON 结构。面向前端导入、保存、回填与校验，顶层包含课程信息、学习目标、学习先决知识、知识建模图、课程资源与活动序列。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,34 +18,42 @@
   ],
   "properties": {
     "标题": {
-      "$ref": "#/$defs/nonEmptyString"
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "课程教学设计文档标题。"
     },
     "课程设计名称": {
-      "$ref": "#/$defs/nonEmptyString"
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "课程设计名称、周次课次或当前教学设计名称。"
     },
     "课程信息": {
-      "$ref": "#/$defs/courseInfo"
+      "$ref": "#/$defs/courseInfo",
+      "description": "课程基础信息与整次课程设计的课上/课下学时安排。"
     },
     "学习目标": {
-      "$ref": "#/$defs/learningGoals"
+      "$ref": "#/$defs/learningGoals",
+      "description": "整次课程设计的知识目标、能力目标、素质目标。"
     },
     "学习先决知识": {
       "type": "array",
+      "description": "进入本次学习前学生应已具备的知识点、概念、方法或基础能力。名称优先复用知识建模图中的知识点命名。",
       "items": {
         "$ref": "#/$defs/knowledgePoint"
       }
     },
     "知识建模图": {
-      "$ref": "#/$defs/knowledgeMap"
+      "$ref": "#/$defs/knowledgeMap",
+      "description": "整次课程设计的知识建模图，可承接系统建模编码、文本表达或图片引用。"
     },
     "课上资源": {
       "type": "array",
+      "description": "课程级课上资源，按资源分类汇总展示。",
       "items": {
         "$ref": "#/$defs/resourceDescriptor"
       }
     },
     "课下资源": {
       "type": "array",
+      "description": "课程级课下资源，按资源分类汇总展示。",
       "items": {
         "$ref": "#/$defs/resourceDescriptor"
       }
@@ -52,6 +61,7 @@
     "活动序列": {
       "type": "array",
       "minItems": 1,
+      "description": "整次课程设计的活动数组。活动数量不固定，按真实教学流程顺序组织。",
       "items": {
         "$ref": "#/$defs/activity"
       }
@@ -68,14 +78,25 @@
     },
     "learningLevel": {
       "type": "string",
+      "description": "单个学习水平枚举值。",
       "enum": [
         "记忆",
         "理解",
         "运用"
       ]
     },
+    "learningLevels": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "学习水平数组。前端允许多选，至少选择 1 项，不可重复。",
+      "items": {
+        "$ref": "#/$defs/learningLevel"
+      }
+    },
     "location": {
       "type": "string",
+      "description": "任务学习地点。课上、课下二选一。",
       "enum": [
         "课上",
         "课下"
@@ -84,19 +105,23 @@
     "knowledgePoint": {
       "type": "object",
       "additionalProperties": false,
+      "description": "知识点对象，用于知识目标、活动目标、学习先决知识等场景。",
       "required": [
         "名称",
         "学习水平"
       ],
       "properties": {
         "名称": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "知识点、知识组块或稳定拆分项名称。优先复用知识建模图中的命名。"
         },
         "学习水平": {
-          "$ref": "#/$defs/learningLevel"
+          "$ref": "#/$defs/learningLevels",
+          "description": "该知识点对应的学习水平数组，可多选。"
         },
         "说明": {
-          "type": "string"
+          "type": "string",
+          "description": "对掌握要求的补充说明。"
         }
       }
     },
@@ -118,19 +143,23 @@
     "knowledgeMap": {
       "type": "object",
       "additionalProperties": false,
+      "description": "知识建模图对象，可通过系统建模编码、文本或图片列表表达。",
       "required": [
         "文本",
         "图片列表"
       ],
       "properties": {
         "系统建模编码": {
-          "type": "string"
+          "type": "string",
+          "description": "系统建模选择后的编码，用于与前端建模能力对接。"
         },
         "文本": {
-          "type": "string"
+          "type": "string",
+          "description": "知识结构的文本表达。"
         },
         "图片列表": {
           "type": "array",
+          "description": "建模图图片引用列表。",
           "items": {
             "$ref": "#/$defs/imageRef"
           }
@@ -140,31 +169,38 @@
     "resourceDescriptor": {
       "type": "object",
       "additionalProperties": false,
+      "description": "资源描述对象。用于课程级、活动级和任务级的资源说明类条目。",
       "required": [
         "资源分类",
         "资源描述"
       ],
       "properties": {
         "资源分类": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "资源分类标题，例如教材及参考书目、案例、学习中心、教学课件、测试题。"
         },
         "资源名称": {
-          "type": "string"
+          "type": "string",
+          "description": "资源标题或文件名，可选。"
         },
         "资源描述": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "资源内容说明，可直接作为前端分类内容展示。"
         },
         "链接": {
-          "type": "string"
+          "type": "string",
+          "description": "外部资源链接，可选。"
         },
         "定位": {
-          "type": "string"
+          "type": "string",
+          "description": "页码、章节、题号等定位信息，可选。"
         }
       }
     },
     "fileResource": {
       "type": "object",
       "additionalProperties": false,
+      "description": "上传附件对象。用于任务级资源上传，与学习资源描述分离。",
       "required": [
         "文件名称"
       ],
@@ -227,6 +263,7 @@
     },
     "richTextContent": {
       "type": "array",
+      "description": "富文本内容块数组。用于师生交互过程、学习成果、评价标准等字段。",
       "items": {
         "$ref": "#/$defs/richTextBlock"
       }
@@ -234,6 +271,7 @@
     "timeAllocation": {
       "type": "object",
       "additionalProperties": false,
+      "description": "课上与课下时间分配对象，统一使用整数分钟。",
       "required": [
         "课上分钟",
         "课下分钟"
@@ -241,17 +279,20 @@
       "properties": {
         "课上分钟": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "课上时间，单位为分钟。"
         },
         "课下分钟": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "课下时间，单位为分钟。"
         }
       }
     },
     "courseInfo": {
       "type": "object",
       "additionalProperties": false,
+      "description": "课程基础信息与整次课程设计的整体学时安排。",
       "required": [
         "课程名称",
         "课程类型",
@@ -278,11 +319,13 @@
           "$ref": "#/$defs/nonEmptyString"
         },
         "学时安排": {
-          "$ref": "#/$defs/timeAllocation"
+          "$ref": "#/$defs/timeAllocation",
+          "description": "整次课程设计的课上/课下时间总和。"
         },
         "任务内容": {
           "type": "array",
           "minItems": 1,
+          "description": "本次课程设计围绕的任务内容或任务主题。",
           "items": {
             "$ref": "#/$defs/nonEmptyString"
           }
@@ -292,6 +335,7 @@
     "learningGoals": {
       "type": "object",
       "additionalProperties": false,
+      "description": "整次课程设计的学习目标，按知识目标、能力目标、素质目标分栏。",
       "required": [
         "知识目标",
         "能力目标",
@@ -301,12 +345,14 @@
         "知识目标": {
           "type": "array",
           "minItems": 1,
+          "description": "知识点目标（学习水平），使用知识点对象数组表示。",
           "items": {
             "$ref": "#/$defs/knowledgePoint"
           }
         },
         "能力目标": {
           "type": "array",
+          "description": "能力目标列表，每项应为可观察、可完成的能力表述。",
           "items": {
             "$ref": "#/$defs/nonEmptyString"
           }
@@ -314,6 +360,7 @@
         "素质目标": {
           "type": "array",
           "minItems": 1,
+          "description": "素质目标（课程思政点）列表。",
           "items": {
             "$ref": "#/$defs/nonEmptyString"
           }
@@ -323,6 +370,7 @@
     "teachingMethod": {
       "type": "object",
       "additionalProperties": false,
+      "description": "教学方式（或学习方式）对象。方式可多选，需与任务描述一致。",
       "required": [
         "方式",
         "其他"
@@ -332,6 +380,7 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
+          "description": "教学方式标签数组。",
           "items": {
             "type": "string",
             "enum": [
@@ -349,13 +398,15 @@
           }
         },
         "其他": {
-          "type": "string"
+          "type": "string",
+          "description": "当方式包含“其他”时填写具体说明，否则为空字符串。"
         }
       }
     },
     "task": {
       "type": "object",
       "additionalProperties": false,
+      "description": "任务对象。表示某一活动下可独立实施的教学/学习任务单元。",
       "required": [
         "任务id",
         "排序",
@@ -382,60 +433,74 @@
           "minimum": 1
         },
         "任务名称": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "任务的语义化名称。"
         },
         "知识建模图": {
-          "$ref": "#/$defs/knowledgeMap"
+          "$ref": "#/$defs/knowledgeMap",
+          "description": "任务级知识建模图，仅覆盖该任务处理的知识范围。"
         },
         "知识组块": {
           "type": "array",
           "minItems": 1,
+          "description": "该任务直接处理的知识点、知识模块或稳定拆分项列表。",
           "items": {
             "$ref": "#/$defs/nonEmptyString"
           }
         },
         "任务描述": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "任务的核心描述，应体现任务意图、教学策略与预期学习结果。"
         },
         "任务时长分钟": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "任务时长，单位为分钟。"
         },
         "学习地点": {
-          "$ref": "#/$defs/location"
+          "$ref": "#/$defs/location",
+          "description": "任务学习地点，只能为课上或课下。"
         },
         "教学方式": {
-          "$ref": "#/$defs/teachingMethod"
+          "$ref": "#/$defs/teachingMethod",
+          "description": "与任务描述中的教学策略保持一致的教学/学习方式。"
         },
         "师生交互过程": {
-          "$ref": "#/$defs/richTextContent"
+          "$ref": "#/$defs/richTextContent",
+          "description": "任务实施过程中的师生互动或实施过程描述。"
         },
         "学习成果": {
-          "$ref": "#/$defs/richTextContent"
+          "$ref": "#/$defs/richTextContent",
+          "description": "学生在任务中应形成的可呈现、可观察、可测评成果。"
         },
         "评价标准": {
-          "$ref": "#/$defs/richTextContent"
+          "$ref": "#/$defs/richTextContent",
+          "description": "与学习成果匹配的达标判定标准。"
         },
         "学习资源": {
           "type": "array",
+          "description": "任务中实际引用、分发、阅读或使用的资源描述条目。",
           "items": {
             "$ref": "#/$defs/resourceDescriptor"
           }
         },
         "上传资源": {
           "type": "array",
+          "description": "任务级附件上传信息，与学习资源分离。",
           "items": {
             "$ref": "#/$defs/fileResource"
           }
         },
         "备注": {
-          "type": "string"
+          "type": "string",
+          "description": "对任务执行或理解有帮助的补充说明。"
         }
       }
     },
     "activity": {
       "type": "object",
       "additionalProperties": false,
+      "description": "活动对象。表示整次课程设计中的一个阶段化教学活动。",
       "required": [
         "活动id",
         "排序",
@@ -458,35 +523,43 @@
           "minimum": 1
         },
         "活动名称": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "活动的语义化名称。"
         },
         "知识建模图": {
-          "$ref": "#/$defs/knowledgeMap"
+          "$ref": "#/$defs/knowledgeMap",
+          "description": "活动级知识建模图。"
         },
         "活动目标": {
           "type": "array",
           "minItems": 1,
+          "description": "单个活动下的目标列表，应优先从活动知识建模图中抽取。",
           "items": {
             "$ref": "#/$defs/knowledgePoint"
           }
         },
         "导入任务描述": {
-          "type": "string"
+          "type": "string",
+          "description": "活动导入内容，用于唤醒先决知识并引出本次活动内容。"
         },
         "师生交互过程": {
-          "$ref": "#/$defs/richTextContent"
+          "$ref": "#/$defs/richTextContent",
+          "description": "活动级师生交互过程，通常用于承接导入环节互动。"
         },
         "时间分配": {
-          "$ref": "#/$defs/timeAllocation"
+          "$ref": "#/$defs/timeAllocation",
+          "description": "该活动内部的课上/课下时间汇总。"
         },
         "课上资源": {
           "type": "array",
+          "description": "活动级课上资源汇总。",
           "items": {
             "$ref": "#/$defs/resourceDescriptor"
           }
         },
         "课下资源": {
           "type": "array",
+          "description": "活动级课下资源汇总。",
           "items": {
             "$ref": "#/$defs/resourceDescriptor"
           }
@@ -494,6 +567,7 @@
         "任务序列": {
           "type": "array",
           "minItems": 1,
+          "description": "该活动下的任务数组，按执行顺序排列。",
           "items": {
             "$ref": "#/$defs/task"
           }
