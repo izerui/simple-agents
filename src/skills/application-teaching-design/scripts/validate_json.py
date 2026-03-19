@@ -63,9 +63,6 @@ def iter_semantic_errors(instance: object) -> list[str]:
     total_in_class = 0
     total_after_class = 0
 
-    seen_activity_ids: set[str] = set()
-    seen_task_ids: set[str] = set()
-
     learning_goals = instance.get("学习目标")
     if isinstance(learning_goals, dict):
         ability_goals = learning_goals.get("能力目标")
@@ -76,16 +73,6 @@ def iter_semantic_errors(instance: object) -> list[str]:
     for index, activity in enumerate(activities, start=1):
         if not isinstance(activity, dict):
             continue
-
-        activity_id = activity.get("活动id")
-        if isinstance(activity_id, str):
-            if activity_id in seen_activity_ids:
-                errors.append(f"活动id 重复: {activity_id}")
-            seen_activity_ids.add(activity_id)
-
-        if activity.get("排序") != index:
-            activity_name = activity.get("活动名称", activity_id or "未知活动")
-            errors.append(f"活动 `{activity_name}` 的排序应为 {index}")
 
         activity_time = activity.get("时间分配")
         tasks = activity.get("任务序列")
@@ -102,19 +89,9 @@ def iter_semantic_errors(instance: object) -> list[str]:
         task_in_class = 0
         task_after_class = 0
 
-        for task_index, task in enumerate(tasks, start=1):
+        for task in tasks:
             if not isinstance(task, dict):
                 continue
-
-            task_id = task.get("任务id")
-            if isinstance(task_id, str):
-                if task_id in seen_task_ids:
-                    errors.append(f"任务id 重复: {task_id}")
-                seen_task_ids.add(task_id)
-
-            if task.get("排序") != task_index:
-                task_name = task.get("任务名称", task_id or "未知任务")
-                errors.append(f"任务 `{task_name}` 的排序应为 {task_index}")
 
             duration = task.get("任务时长分钟")
             location = task.get("学习地点")
@@ -124,10 +101,10 @@ def iter_semantic_errors(instance: object) -> list[str]:
             method = task.get("教学方式")
             method_values = method.get("方式") if isinstance(method, dict) else []
             if location == "课上" and isinstance(method_values, list) and "自主学习" in method_values:
-                task_name = task.get("任务名称", task_id or "未知任务")
+                task_name = task.get("任务名称", "未知任务")
                 errors.append(f"任务 `{task_name}` 学习地点为课上时，教学方式不能包含“自主学习”")
             if location == "课下" and isinstance(method_values, list) and "讲授" in method_values:
-                task_name = task.get("任务名称", task_id or "未知任务")
+                task_name = task.get("任务名称", "未知任务")
                 errors.append(f"任务 `{task_name}` 学习地点为课下时，教学方式不能包含“讲授”")
 
             if location == "课上":
@@ -136,7 +113,7 @@ def iter_semantic_errors(instance: object) -> list[str]:
                 task_after_class += duration
 
         if task_in_class != activity_in_class or task_after_class != activity_after_class:
-            activity_name = activity.get("活动名称", activity_id or "未知活动")
+            activity_name = activity.get("活动名称", "未知活动")
             errors.append(
                 f"活动 `{activity_name}` 的时间分配与任务时长汇总不一致"
             )

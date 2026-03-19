@@ -406,8 +406,6 @@
       "additionalProperties": false,
       "description": "任务对象。表示某一活动下可独立实施的教学/学习任务单元。",
       "required": [
-        "任务id",
-        "排序",
         "任务名称",
         "知识建模图",
         "知识组块",
@@ -423,13 +421,6 @@
         "备注"
       ],
       "properties": {
-        "任务id": {
-          "$ref": "#/$defs/idString"
-        },
-        "排序": {
-          "type": "integer",
-          "minimum": 1
-        },
         "任务名称": {
           "$ref": "#/$defs/nonEmptyString",
           "description": "任务的语义化名称。"
@@ -500,8 +491,6 @@
       "additionalProperties": false,
       "description": "活动对象。表示整次课程设计中的一个阶段化教学活动。",
       "required": [
-        "活动id",
-        "排序",
         "活动名称",
         "知识建模图",
         "活动目标",
@@ -513,13 +502,6 @@
         "任务序列"
       ],
       "properties": {
-        "活动id": {
-          "$ref": "#/$defs/idString"
-        },
-        "排序": {
-          "type": "integer",
-          "minimum": 1
-        },
         "活动名称": {
           "$ref": "#/$defs/nonEmptyString",
           "description": "活动名称。"
