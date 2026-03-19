@@ -25,7 +25,7 @@ description: 生成可直接导入、可显示、可继续迭代修改的知识�
   - 本技能的校验脚本
   - 生成结果后必须用它校验 schema 合法性和建模图业务约束
   - 只有校验通过，结果才算完成
-  - 用法：`python3 src/skills/relation-graph/scripts/validate_json.py path/to/result.json`
+  - 用法：`python3 /skills/relation-graph/scripts/validate_json.py /path/to/result.json`
 
 使用顺序：
 - 先按本 `SKILL.md` 理解任务口径和处理顺序
