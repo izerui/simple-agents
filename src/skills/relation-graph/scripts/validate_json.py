@@ -122,9 +122,6 @@ def iter_semantic_errors(instance: Any) -> list[str]:
     if len(node_ids) != len(set(node_ids)):
         errors.append("nodes 中存在重复 id")
 
-    if isinstance(root_id, str) and root_id not in node_by_id:
-        errors.append("rootId 必须存在于 nodes[].id 中")
-
     for index, line in enumerate(lines):
         if not isinstance(line, dict):
             continue
@@ -136,10 +133,12 @@ def iter_semantic_errors(instance: Any) -> list[str]:
         from_id = line.get("from")
         to_id = line.get("to")
 
-        if isinstance(from_id, str) and from_id not in node_by_id:
-            errors.append(f"连线 `{line_id or index}` 的 from 未引用有效节点")
-        if isinstance(to_id, str) and to_id not in node_by_id:
-            errors.append(f"连线 `{line_id or index}` 的 to 未引用有效节点")
+        if isinstance(from_id, str):
+            if from_id not in node_by_id:
+                errors.append(f"连线 `{line_id or index}` 的 from 未引用有效节点")
+        if isinstance(to_id, str):
+            if to_id not in node_by_id:
+                errors.append(f"连线 `{line_id or index}` 的 to 未引用有效节点")
 
         if "fromJunctionPoint" not in line:
             errors.append(f"连线 `{line_id or index}` 缺少 fromJunctionPoint")

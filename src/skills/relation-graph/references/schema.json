@@ -14,7 +14,7 @@
     "rootId": {
       "type": "string",
       "minLength": 1,
-      "description": "根节点 id，必须存在于 nodes[].id 中。"
+      "description": "根对象标识。技能约定推荐使用 root-随机字符串 格式。"
     },
     "datetime": {
       "type": "number",
