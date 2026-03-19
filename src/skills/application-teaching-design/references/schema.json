@@ -1,474 +1,501 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/application-teaching-design/schema.json",
-  "title": "Application Teaching Design",
+  "$id": "https://example.com/application-teaching-design/final-schema.json",
+  "title": "Application Teaching Design Final Schema",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "标题",
     "课程设计名称",
-    "课程设计",
+    "课程信息",
+    "学习目标",
+    "学习先决知识",
+    "知识建模图",
+    "课上资源",
+    "课下资源",
     "活动序列"
   ],
   "properties": {
     "标题": {
-      "type": "string"
+      "$ref": "#/$defs/nonEmptyString"
     },
     "课程设计名称": {
-      "type": "string"
+      "$ref": "#/$defs/nonEmptyString"
     },
-    "课程设计": {
+    "课程信息": {
+      "$ref": "#/$defs/courseInfo"
+    },
+    "学习目标": {
+      "$ref": "#/$defs/learningGoals"
+    },
+    "学习先决知识": {
       "type": "array",
-      "minItems": 8,
-      "maxItems": 8,
-      "prefixItems": [
-        {
-          "$ref": "#/$defs/courseGoalsSection"
-        },
-        {
-          "$ref": "#/$defs/prerequisiteSection"
-        },
-        {
-          "$ref": "#/$defs/knowledgeMapSection"
-        },
-        {
-          "$ref": "#/$defs/inClassResourcesSection"
-        },
-        {
-          "$ref": "#/$defs/afterClassResourcesSection"
-        },
-        {
-          "$ref": "#/$defs/inClassTimeSection"
-        },
-        {
-          "$ref": "#/$defs/afterClassTimeSection"
-        },
-        {
-          "$ref": "#/$defs/courseActivitySequenceSection"
-        }
-      ],
-      "items": false
+      "items": {
+        "$ref": "#/$defs/knowledgePoint"
+      }
+    },
+    "知识建模图": {
+      "$ref": "#/$defs/knowledgeMap"
+    },
+    "课上资源": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resourceDescriptor"
+      }
+    },
+    "课下资源": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resourceDescriptor"
+      }
     },
     "活动序列": {
-      "type": "object",
-      "minProperties": 1,
-      "propertyNames": {
-        "$ref": "#/$defs/activityNameString"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/activityDetail"
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/activity"
       }
     }
   },
   "$defs": {
-    "activityNameString": {
+    "nonEmptyString": {
       "type": "string",
-      "minLength": 1,
-      "pattern": "^\\S+$"
+      "minLength": 1
     },
-    "emptyImages": {
-      "type": "array",
-      "maxItems": 0
-    },
-    "minutesString": {
+    "idString": {
       "type": "string",
-      "pattern": "^\\d+分钟$"
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
     },
-    "locationString": {
+    "learningLevel": {
+      "type": "string",
+      "enum": [
+        "记忆",
+        "理解",
+        "运用"
+      ]
+    },
+    "location": {
       "type": "string",
       "enum": [
         "课上",
         "课下"
       ]
     },
-    "knowledgeMapObject": {
+    "knowledgePoint": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "key",
-        "value",
-        "images"
+        "名称",
+        "学习水平"
       ],
       "properties": {
-        "key": {
-          "const": "知识建模图"
+        "名称": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "value": {
+        "学习水平": {
+          "$ref": "#/$defs/learningLevel"
+        },
+        "说明": {
           "type": "string"
-        },
-        "images": {
-          "$ref": "#/$defs/emptyImages"
         }
       }
     },
-    "knowledgeChunkObject": {
+    "imageRef": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "key",
-        "value",
-        "images"
+        "地址"
       ],
       "properties": {
-        "key": {
-          "const": "知识组块"
+        "地址": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "value": {
+        "说明": {
           "type": "string"
-        },
-        "images": {
-          "$ref": "#/$defs/emptyImages"
         }
       }
     },
-    "teacherStudentInteractionObject": {
+    "knowledgeMap": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "key",
-        "value",
-        "images"
+        "文本",
+        "图片列表"
       ],
       "properties": {
-        "key": {
-          "const": "师生交互过程"
+        "系统建模编码": {
+          "type": "string"
         },
-        "value": {
+        "文本": {
+          "type": "string"
+        },
+        "图片列表": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/imageRef"
           }
-        },
-        "images": {
-          "$ref": "#/$defs/emptyImages"
         }
       }
     },
-    "learningOutcomeObject": {
+    "resourceDescriptor": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "key",
-        "value",
-        "images"
+        "资源分类",
+        "资源描述"
       ],
       "properties": {
-        "key": {
-          "const": "学习成果及评价标准"
+        "资源分类": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "value": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "images": {
-          "$ref": "#/$defs/emptyImages"
-        }
-      }
-    },
-    "teachingMethodObject": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "key",
-        "value",
-        "checkbox",
-        "checkbox_other"
-      ],
-      "properties": {
-        "key": {
-          "const": "教学方式（或学习方式）"
-        },
-        "value": {
+        "资源名称": {
           "type": "string"
         },
-        "checkbox": {
-          "type": "array",
-          "minItems": 2,
-          "maxItems": 2,
-          "prefixItems": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "uniqueItems": true
-            }
-          ],
-          "items": false
+        "资源描述": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "checkbox_other": {
+        "链接": {
+          "type": "string"
+        },
+        "定位": {
           "type": "string"
         }
       }
     },
-    "courseGoalsSection": {
+    "fileResource": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "key",
-        "value"
+        "文件名称"
       ],
       "properties": {
-        "key": {
-          "const": "学习目标"
+        "文件名称": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "value": {
+        "文件类型": {
+          "type": "string"
+        },
+        "文件地址": {
+          "type": "string"
+        },
+        "文件大小": {
+          "type": "string"
+        },
+        "说明": {
+          "type": "string"
+        }
+      }
+    },
+    "richTextBlock": {
+      "oneOf": [
+        {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "知识点（学习水平）",
-            "素质目标（课程思政点）"
+            "类型",
+            "内容"
           ],
           "properties": {
-            "知识点（学习水平）": {
-              "type": "string"
+            "类型": {
+              "const": "文本"
             },
-            "素质目标（课程思政点）": {
-              "type": "string"
-            },
-            "能力目标": {
-              "type": "string"
+            "内容": {
+              "$ref": "#/$defs/nonEmptyString"
             }
           }
-        }
-      }
-    },
-    "prerequisiteSection": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "key",
-        "value"
-      ],
-      "properties": {
-        "key": {
-          "const": "学习先决知识"
         },
-        "value": {
+        {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "知识点（学习水平）"
+            "类型",
+            "地址"
           ],
           "properties": {
-            "知识点（学习水平）": {
+            "类型": {
+              "const": "图片"
+            },
+            "地址": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "说明": {
               "type": "string"
             }
           }
         }
+      ]
+    },
+    "richTextContent": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/richTextBlock"
       }
     },
-    "knowledgeMapSection": {
-      "$ref": "#/$defs/knowledgeMapObject"
-    },
-    "inClassResourcesSection": {
+    "timeAllocation": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "key",
-        "value"
+        "课上分钟",
+        "课下分钟"
       ],
       "properties": {
-        "key": {
-          "const": "课上资源"
+        "课上分钟": {
+          "type": "integer",
+          "minimum": 0
         },
-        "value": {
-          "type": "string"
+        "课下分钟": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
-    "afterClassResourcesSection": {
+    "courseInfo": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "key",
-        "value"
+        "课程名称",
+        "课程类型",
+        "教学形式",
+        "适用专业",
+        "学生层次",
+        "学时安排",
+        "任务内容"
       ],
       "properties": {
-        "key": {
-          "const": "课下资源"
+        "课程名称": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "value": {
-          "type": "string"
-        }
-      }
-    },
-    "inClassTimeSection": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "key",
-        "value"
-      ],
-      "properties": {
-        "key": {
-          "const": "课上时间"
+        "课程类型": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "value": {
-          "$ref": "#/$defs/minutesString"
-        }
-      }
-    },
-    "afterClassTimeSection": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "key",
-        "value"
-      ],
-      "properties": {
-        "key": {
-          "const": "课下时间"
+        "教学形式": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "value": {
-          "$ref": "#/$defs/minutesString"
-        }
-      }
-    },
-    "activitySummaryRecord": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "活动目标",
-        "地点",
-        "时间",
-        "学习资源"
-      ],
-      "properties": {
-        "活动目标": {
-          "type": "string"
+        "适用专业": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "地点": {
-          "$ref": "#/$defs/locationString"
+        "学生层次": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "时间": {
-          "$ref": "#/$defs/minutesString"
+        "学时安排": {
+          "$ref": "#/$defs/timeAllocation"
         },
-        "学习资源": {
-          "type": "string"
-        }
-      }
-    },
-    "courseActivitySequenceSection": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "key",
-        "value",
-        "sorted_names"
-      ],
-      "properties": {
-        "key": {
-          "const": "活动序列"
-        },
-        "value": {
-          "type": "object",
-          "minProperties": 1,
-          "propertyNames": {
-            "$ref": "#/$defs/activityNameString"
-          },
-          "additionalProperties": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "$ref": "#/$defs/activitySummaryRecord"
-            }
-          }
-        },
-        "sorted_names": {
+        "任务内容": {
           "type": "array",
           "minItems": 1,
           "items": {
-            "$ref": "#/$defs/activityNameString"
-          },
-          "uniqueItems": true
+            "$ref": "#/$defs/nonEmptyString"
+          }
         }
       }
     },
-    "taskDetail": {
+    "learningGoals": {
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "知识目标",
+        "能力目标",
+        "素质目标"
+      ],
+      "properties": {
+        "知识目标": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/knowledgePoint"
+          }
+        },
+        "能力目标": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "素质目标": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "teachingMethod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "方式",
+        "其他"
+      ],
+      "properties": {
+        "方式": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "讲授",
+              "小组讨论",
+              "答疑",
+              "实验",
+              "实训",
+              "自主学习",
+              "翻转课堂",
+              "案例分析",
+              "项目实践",
+              "其他"
+            ]
+          }
+        },
+        "其他": {
+          "type": "string"
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "任务id",
+        "排序",
         "任务名称",
+        "知识建模图",
         "知识组块",
         "任务描述",
-        "任务时长",
+        "任务时长分钟",
         "学习地点",
+        "教学方式",
         "师生交互过程",
+        "学习成果",
+        "评价标准",
         "学习资源",
-        "学习成果及评价标准",
+        "上传资源",
         "备注"
       ],
       "properties": {
+        "任务id": {
+          "$ref": "#/$defs/idString"
+        },
+        "排序": {
+          "type": "integer",
+          "minimum": 1
+        },
         "任务名称": {
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "知识建模图": {
+          "$ref": "#/$defs/knowledgeMap"
         },
         "知识组块": {
-          "$ref": "#/$defs/knowledgeChunkObject"
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
         },
         "任务描述": {
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "任务时长": {
-          "$ref": "#/$defs/minutesString"
+        "任务时长分钟": {
+          "type": "integer",
+          "minimum": 1
         },
         "学习地点": {
-          "$ref": "#/$defs/locationString"
+          "$ref": "#/$defs/location"
         },
-        "教学方式（或学习方式）": {
-          "$ref": "#/$defs/teachingMethodObject"
+        "教学方式": {
+          "$ref": "#/$defs/teachingMethod"
         },
         "师生交互过程": {
-          "$ref": "#/$defs/teacherStudentInteractionObject"
+          "$ref": "#/$defs/richTextContent"
+        },
+        "学习成果": {
+          "$ref": "#/$defs/richTextContent"
+        },
+        "评价标准": {
+          "$ref": "#/$defs/richTextContent"
         },
         "学习资源": {
-          "type": "string"
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resourceDescriptor"
+          }
         },
-        "学习成果及评价标准": {
-          "$ref": "#/$defs/learningOutcomeObject"
+        "上传资源": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fileResource"
+          }
         },
         "备注": {
           "type": "string"
         }
       }
     },
-    "activityDetail": {
+    "activity": {
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "活动id",
+        "排序",
+        "活动名称",
         "知识建模图",
-        "活动任务序列（导入任务描述）",
         "活动目标",
+        "导入任务描述",
         "师生交互过程",
-        "活动任务序列（任务）"
+        "时间分配",
+        "课上资源",
+        "课下资源",
+        "任务序列"
       ],
       "properties": {
-        "知识建模图": {
-          "$ref": "#/$defs/knowledgeMapObject"
+        "活动id": {
+          "$ref": "#/$defs/idString"
         },
-        "活动任务序列（导入任务描述）": {
-          "type": "string"
+        "排序": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "活动名称": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "知识建模图": {
+          "$ref": "#/$defs/knowledgeMap"
         },
         "活动目标": {
-          "type": "string"
-        },
-        "师生交互过程": {
-          "type": "string"
-        },
-        "活动任务序列（任务）": {
           "type": "array",
           "minItems": 1,
           "items": {
-            "$ref": "#/$defs/taskDetail"
+            "$ref": "#/$defs/knowledgePoint"
+          }
+        },
+        "导入任务描述": {
+          "type": "string"
+        },
+        "师生交互过程": {
+          "$ref": "#/$defs/richTextContent"
+        },
+        "时间分配": {
+          "$ref": "#/$defs/timeAllocation"
+        },
+        "课上资源": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resourceDescriptor"
+          }
+        },
+        "课下资源": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resourceDescriptor"
+          }
+        },
+        "任务序列": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/task"
           }
         }
       }
