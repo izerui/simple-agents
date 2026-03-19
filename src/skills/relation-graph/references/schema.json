@@ -1,0 +1,406 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/relation-graph/schema.json",
+  "title": "Relation Graph Schema",
+  "description": "知识建模图最终 JSON 结构。面向导入、显示、解析和在已有图谱上的增量修改。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rootId",
+    "nodes",
+    "lines"
+  ],
+  "properties": {
+    "rootId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "根节点 id，必须存在于 nodes[].id 中。"
+    },
+    "datetime": {
+      "type": "number",
+      "description": "时间戳，可选。"
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/node"
+      },
+      "description": "节点数组。"
+    },
+    "lines": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/line"
+      },
+      "description": "连线数组。数组名固定为 lines，不能使用 edges。"
+    }
+  },
+  "$defs": {
+    "colorHex": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "fontColorValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/colorHex"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "0",
+            "Themed"
+          ]
+        }
+      ]
+    },
+    "junctionPoint": {
+      "type": "string",
+      "enum": [
+        "border",
+        "left",
+        "right",
+        "top",
+        "bottom"
+      ]
+    },
+    "nodeData": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "startPostion"
+      ],
+      "properties": {
+        "type": {
+          "type": "integer",
+          "enum": [
+            2,
+            3,
+            5,
+            6
+          ],
+          "description": "知识类型：2=陈述性知识（矩形），3=程序性知识（胶囊），5=认知策略（圆柱），6=事实范例（波浪矩形）。"
+        },
+        "ownerContainerId": {
+          "type": "string"
+        },
+        "backgroundImage": {
+          "type": "string"
+        },
+        "imageFit": {
+          "type": "string"
+        },
+        "startPostion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "description": "必须与节点 x、y 坐标保持一致。"
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "text",
+        "x",
+        "y",
+        "data"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "default": "node"
+        },
+        "isShow": {
+          "type": "boolean",
+          "default": true
+        },
+        "isHide": {
+          "type": "boolean",
+          "default": false
+        },
+        "expanded": {
+          "type": "boolean",
+          "default": true
+        },
+        "selected": {
+          "type": "boolean"
+        },
+        "styleClass": {
+          "type": "string",
+          "default": ""
+        },
+        "className": {
+          "type": "string",
+          "default": ""
+        },
+        "nodeShape": {
+          "type": "integer",
+          "enum": [
+            1
+          ],
+          "default": 1,
+          "description": "底层固定值，不代表真实形状。真正形状由 data.type 决定。"
+        },
+        "borderWidth": {
+          "type": "integer",
+          "default": 0
+        },
+        "borderColor": {
+          "$ref": "#/$defs/colorHex"
+        },
+        "fontColor": {
+          "$ref": "#/$defs/fontColorValue"
+        },
+        "fontFamily": {
+          "type": "string"
+        },
+        "fontSize": {
+          "type": "integer"
+        },
+        "fontBold": {
+          "type": "boolean"
+        },
+        "fontItalic": {
+          "type": "boolean"
+        },
+        "fontUnderline": {
+          "type": "boolean"
+        },
+        "textHorizontalAlign": {
+          "type": "string",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "textVerticalAlign": {
+          "type": "string",
+          "enum": [
+            "top",
+            "middle",
+            "bottom"
+          ]
+        },
+        "color": {
+          "$ref": "#/$defs/colorHex"
+        },
+        "opacity": {
+          "type": "number"
+        },
+        "fixed": {
+          "type": "boolean"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "offset_x": {
+          "type": "integer"
+        },
+        "offset_y": {
+          "type": "integer"
+        },
+        "disableDrag": {
+          "type": "boolean"
+        },
+        "singleNode": {
+          "type": "boolean"
+        },
+        "invisiable": {
+          "type": "boolean"
+        },
+        "zIndex": {
+          "type": "integer"
+        },
+        "data": {
+          "$ref": "#/$defs/nodeData"
+        }
+      }
+    },
+    "lineData": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "integer"
+        }
+      }
+    },
+    "line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "from",
+        "to",
+        "text",
+        "showStartArrow",
+        "showEndArrow"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string"
+        },
+        "styleClass": {
+          "type": "string",
+          "default": ""
+        },
+        "lineWidth": {
+          "type": "integer",
+          "default": 1
+        },
+        "color": {
+          "$ref": "#/$defs/colorHex"
+        },
+        "isHide": {
+          "type": "boolean",
+          "default": false
+        },
+        "lineShape": {
+          "type": "integer",
+          "enum": [
+            1,
+            44,
+            6
+          ],
+          "default": 1
+        },
+        "fontColor": {
+          "$ref": "#/$defs/fontColorValue"
+        },
+        "fontBold": {
+          "type": "boolean"
+        },
+        "fontItalic": {
+          "type": "boolean"
+        },
+        "fontUnderline": {
+          "type": "boolean"
+        },
+        "opacity": {
+          "type": "number",
+          "default": 1
+        },
+        "arrow": {
+          "type": "string"
+        },
+        "animation": {
+          "type": "integer",
+          "default": 0
+        },
+        "dashType": {
+          "type": "integer",
+          "enum": [
+            0,
+            1
+          ],
+          "default": 0
+        },
+        "disableDefaultClickEffect": {
+          "type": "boolean",
+          "default": false
+        },
+        "showStartArrow": {
+          "type": "boolean"
+        },
+        "showEndArrow": {
+          "type": "boolean"
+        },
+        "startMarkerId": {
+          "type": "string",
+          "default": ""
+        },
+        "endMarkerId": {
+          "type": "string",
+          "default": ""
+        },
+        "forDisplayOnly": {
+          "type": "boolean",
+          "default": false
+        },
+        "fromJunctionPoint": {
+          "$ref": "#/$defs/junctionPoint"
+        },
+        "toJunctionPoint": {
+          "$ref": "#/$defs/junctionPoint"
+        },
+        "fromJuctionPointOffsetX": {
+          "type": "integer",
+          "default": 0
+        },
+        "fromJuctionPointOffsetY": {
+          "type": "integer",
+          "default": 0
+        },
+        "toJuctionPointOffsetX": {
+          "type": "integer",
+          "default": 0
+        },
+        "toJuctionPointOffsetY": {
+          "type": "integer",
+          "default": 0
+        },
+        "polyLineRadius": {
+          "type": "integer",
+          "default": 0
+        },
+        "hidden": {
+          "type": "boolean",
+          "default": false
+        },
+        "useTextPath": {
+          "type": "boolean",
+          "default": false
+        },
+        "data": {
+          "$ref": "#/$defs/lineData"
+        }
+      }
+    }
+  }
+}
