@@ -53,8 +53,7 @@
       "type": "object",
       "minProperties": 1,
       "propertyNames": {
-        "type": "string",
-        "minLength": 1
+        "$ref": "#/$defs/activityNameString"
       },
       "additionalProperties": {
         "$ref": "#/$defs/activityDetail"
@@ -62,6 +61,11 @@
     }
   },
   "$defs": {
+    "activityNameString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S+$"
+    },
     "emptyImages": {
       "type": "array",
       "maxItems": 0
@@ -370,8 +374,7 @@
           "type": "object",
           "minProperties": 1,
           "propertyNames": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/$defs/activityNameString"
           },
           "additionalProperties": {
             "type": "array",
@@ -385,8 +388,7 @@
           "type": "array",
           "minItems": 1,
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/$defs/activityNameString"
           },
           "uniqueItems": true
         }
