@@ -15,7 +15,6 @@ from jsonschema.exceptions import ValidationError
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 DEFAULT_SCHEMA_PATH = SKILL_DIR / "references" / "schema.json"
-DEFAULT_TARGET_PATH = SKILL_DIR / "references" / "example.json"
 
 
 def load_json(path: Path) -> object:
@@ -35,9 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "target",
-        nargs="?",
-        default=str(DEFAULT_TARGET_PATH),
-        help="Path to the JSON file to validate. Defaults to references/example.json.",
+        help="Path to the JSON file to validate.",
     )
     parser.add_argument(
         "--schema",
