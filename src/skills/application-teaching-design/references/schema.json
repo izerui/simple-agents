@@ -89,7 +89,7 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "description": "学习水平数组。前端允许多选，至少选择 1 项，不可重复。",
+      "description": "学习水平数组。前端勾选框字段，允许多选，但至少选择 1 项，不可重复。",
       "items": {
         "$ref": "#/$defs/learningLevel"
       }
@@ -370,7 +370,7 @@
     "teachingMethod": {
       "type": "object",
       "additionalProperties": false,
-      "description": "教学方式（或学习方式）对象。方式可多选，需与任务描述一致。",
+      "description": "教学方式（或学习方式）对象。方式为前端勾选框字段，可多选，但至少选择 1 项，且需与任务描述一致。当前前端可选项为：讲授、小组讨论、答疑、实验、实训、自主学习、翻转课堂、其他。",
       "required": [
         "方式",
         "其他"
@@ -380,7 +380,7 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "description": "教学方式标签数组。",
+          "description": "教学方式标签数组。允许多选，但至少选择 1 项。",
           "items": {
             "type": "string",
             "enum": [
@@ -391,8 +391,6 @@
               "实训",
               "自主学习",
               "翻转课堂",
-              "案例分析",
-              "项目实践",
               "其他"
             ]
           }
