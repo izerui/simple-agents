@@ -202,6 +202,9 @@ class AttachmentExtractMiddleware(AgentMiddleware):
         target_stems = {Path(filename).stem for filename, _ in files_to_upload}
         removed_files: list[str] = []
 
+        if not await asyncio.to_thread(backend.cwd.exists):
+            return
+
         existing_paths = await asyncio.to_thread(lambda: list(backend.cwd.iterdir()))
         for existing_path in existing_paths:
             if not await asyncio.to_thread(existing_path.is_file):
