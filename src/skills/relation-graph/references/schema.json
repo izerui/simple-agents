@@ -84,13 +84,25 @@
           "description": "知识类型：2=陈述性知识（矩形），3=程序性知识（胶囊），5=认知策略（圆柱），6=事实范例（波浪矩形）。"
         },
         "ownerContainerId": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            ""
+          ],
+          "default": ""
         },
         "backgroundImage": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            ""
+          ],
+          "default": ""
         },
         "imageFit": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "cover"
+          ],
+          "default": "cover"
         },
         "startPostion": {
           "type": "object",
@@ -124,7 +136,9 @@
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "^node-[A-Za-z0-9]+$",
+          "description": "节点 id，必须使用 node-随机字符串 格式。唯一性由业务校验脚本保证。"
         },
         "text": {
           "type": "string",
@@ -132,29 +146,58 @@
         },
         "type": {
           "type": "string",
+          "enum": [
+            "node"
+          ],
           "default": "node"
         },
         "isShow": {
           "type": "boolean",
+          "enum": [
+            true
+          ],
           "default": true
         },
         "isHide": {
           "type": "boolean",
+          "enum": [
+            false
+          ],
           "default": false
         },
         "expanded": {
           "type": "boolean",
+          "enum": [
+            true
+          ],
           "default": true
         },
         "selected": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "dragging": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "styleClass": {
           "type": "string",
+          "enum": [
+            ""
+          ],
           "default": ""
         },
         "className": {
           "type": "string",
+          "enum": [
+            ""
+          ],
           "default": ""
         },
         "nodeShape": {
@@ -167,88 +210,273 @@
         },
         "borderWidth": {
           "type": "integer",
-          "default": 0
+          "enum": [
+            1
+          ],
+          "default": 1
         },
         "borderColor": {
-          "$ref": "#/$defs/colorHex"
+          "type": "string",
+          "enum": [
+            "#FF0000",
+            "#00B0F0",
+            "#00B050",
+            "#000000"
+          ]
         },
         "fontColor": {
-          "$ref": "#/$defs/fontColorValue"
+          "type": "string",
+          "enum": [
+            "#FF0000",
+            "#00B0F0",
+            "#00B050",
+            "#000000"
+          ]
         },
         "fontFamily": {
           "type": "string"
         },
         "fontSize": {
-          "type": "integer"
+          "type": "integer",
+          "enum": [
+            14
+          ],
+          "default": 14
         },
         "fontBold": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "fontItalic": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "fontUnderline": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "textHorizontalAlign": {
           "type": "string",
           "enum": [
-            "left",
-            "center",
-            "right"
-          ]
+            "center"
+          ],
+          "default": "center"
         },
         "textVerticalAlign": {
           "type": "string",
           "enum": [
-            "top",
-            "middle",
-            "bottom"
-          ]
+            "middle"
+          ],
+          "default": "middle"
         },
         "color": {
-          "$ref": "#/$defs/colorHex"
+          "type": "string",
+          "enum": [
+            "#ffffff"
+          ],
+          "default": "#ffffff"
         },
         "opacity": {
-          "type": "number"
+          "type": "number",
+          "enum": [
+            1
+          ],
+          "default": 1
         },
         "fixed": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "width": {
-          "type": "number"
+          "type": "number",
+          "description": "节点宽度。应根据节点文字宽度自适应生成。"
         },
         "height": {
-          "type": "number"
+          "type": "number",
+          "description": "节点高度。应根据节点文字高度自适应生成。"
         },
         "x": {
-          "type": "number"
+          "type": "number",
+          "description": "节点水平坐标。画布中心点为原点 (0,0)，左侧为负，右侧为正。"
         },
         "y": {
-          "type": "number"
+          "type": "number",
+          "description": "节点垂直坐标。画布中心点为原点 (0,0)，上方为负，下方为正。"
+        },
+        "Fx": {
+          "type": "number",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "Fy": {
+          "type": "number",
+          "enum": [
+            0
+          ],
+          "default": 0
         },
         "offset_x": {
-          "type": "integer"
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
         },
         "offset_y": {
-          "type": "integer"
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
         },
         "disableDrag": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "singleNode": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "invisiable": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "zIndex": {
-          "type": "integer"
+          "type": "integer",
+          "enum": [
+            300
+          ],
+          "default": 300
         },
         "data": {
           "$ref": "#/$defs/nodeData"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ]
+          },
+          "then": {
+            "required": [
+              "fontColor"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "fontColor"
+            ]
+          },
+          "then": {
+            "required": [
+              "borderColor"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ],
+            "properties": {
+              "borderColor": {
+                "const": "#FF0000"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fontColor": {
+                "const": "#FF0000"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ],
+            "properties": {
+              "borderColor": {
+                "const": "#00B0F0"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fontColor": {
+                "const": "#00B0F0"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ],
+            "properties": {
+              "borderColor": {
+                "const": "#00B050"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fontColor": {
+                "const": "#00B050"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ],
+            "properties": {
+              "borderColor": {
+                "const": "#000000"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fontColor": {
+                "const": "#000000"
+              }
+            }
+          }
+        }
+      ]
     },
     "lineData": {
       "type": "object",
@@ -273,94 +501,141 @@
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "^line-[A-Za-z0-9]+$",
+          "description": "连线 id，必须使用 line-随机字符串 格式。唯一性由业务校验脚本保证。"
         },
         "from": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "起始节点 id，对应连线起点。"
         },
         "to": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "结束节点 id，对应连线终点。"
         },
         "text": {
-          "type": "string"
-        },
-        "styleClass": {
           "type": "string",
-          "default": ""
+          "description": "关系文本。优先使用：支持、具有特征、包含、步骤包含、是前提、关键点包含、并列、定义、具有属性、是一种、组成、构成；若语义不适配可自定义。"
         },
         "lineWidth": {
           "type": "integer",
+          "enum": [
+            1
+          ],
           "default": 1
         },
         "color": {
-          "$ref": "#/$defs/colorHex"
+          "type": "string",
+          "enum": [
+            "#000000"
+          ],
+          "default": "#000000"
         },
         "isHide": {
           "type": "boolean",
+          "enum": [
+            false
+          ],
           "default": false
         },
         "lineShape": {
           "type": "integer",
           "enum": [
-            1,
-            44,
-            6
+            1
           ],
           "default": 1
         },
-        "fontColor": {
-          "$ref": "#/$defs/fontColorValue"
-        },
         "fontBold": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "fontItalic": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "fontUnderline": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "opacity": {
           "type": "number",
+          "enum": [
+            1
+          ],
           "default": 1
         },
         "arrow": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "RGIns-12-arrow-000000-w5"
+          ],
+          "default": "RGIns-12-arrow-000000-w5"
         },
         "animation": {
           "type": "integer",
+          "enum": [
+            0
+          ],
           "default": 0
         },
         "dashType": {
           "type": "integer",
           "enum": [
-            0,
-            1
+            0
           ],
           "default": 0
         },
         "disableDefaultClickEffect": {
           "type": "boolean",
+          "enum": [
+            false
+          ],
           "default": false
         },
         "showStartArrow": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
         },
         "showEndArrow": {
-          "type": "boolean"
+          "type": "boolean",
+          "enum": [
+            true
+          ],
+          "default": true
         },
         "startMarkerId": {
           "type": "string",
+          "enum": [
+            ""
+          ],
           "default": ""
         },
         "endMarkerId": {
           "type": "string",
+          "enum": [
+            ""
+          ],
           "default": ""
         },
         "forDisplayOnly": {
           "type": "boolean",
+          "enum": [
+            false
+          ],
           "default": false
         },
         "fromJunctionPoint": {
@@ -371,30 +646,44 @@
         },
         "fromJuctionPointOffsetX": {
           "type": "integer",
+          "enum": [
+            0
+          ],
           "default": 0
         },
         "fromJuctionPointOffsetY": {
           "type": "integer",
+          "enum": [
+            0
+          ],
           "default": 0
         },
         "toJuctionPointOffsetX": {
           "type": "integer",
+          "enum": [
+            0
+          ],
           "default": 0
         },
         "toJuctionPointOffsetY": {
           "type": "integer",
+          "enum": [
+            0
+          ],
           "default": 0
         },
         "polyLineRadius": {
           "type": "integer",
+          "enum": [
+            0
+          ],
           "default": 0
         },
         "hidden": {
           "type": "boolean",
-          "default": false
-        },
-        "useTextPath": {
-          "type": "boolean",
+          "enum": [
+            false
+          ],
           "default": false
         },
         "data": {

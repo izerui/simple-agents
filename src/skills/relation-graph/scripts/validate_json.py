@@ -17,9 +17,7 @@ from jsonschema.exceptions import ValidationError
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 DEFAULT_SCHEMA_PATH = SKILL_DIR / "references" / "schema.json"
-ALLOWED_NODE_COLORS = {"#FF0000", "#00B0F0", "#00B050", "#000000"}
 ALLOWED_LINE_COLOR = "#000000"
-LEGACY_FONT_COLORS = {"0", "Themed"}
 MIN_NODE_GAP = 18
 
 
@@ -104,16 +102,6 @@ def iter_semantic_errors(instance: Any) -> list[str]:
                     errors.append(f"节点 `{node_id or index}` 的 data.startPostion.x 必须与 x 一致")
                 if not values_equal(start_position.get("y"), node.get("y")):
                     errors.append(f"节点 `{node_id or index}` 的 data.startPostion.y 必须与 y 一致")
-
-        font_color = node.get("fontColor")
-        border_color = node.get("borderColor")
-        if isinstance(font_color, str) and font_color not in LEGACY_FONT_COLORS:
-            if font_color not in ALLOWED_NODE_COLORS:
-                errors.append(f"节点 `{node_id or index}` 的 fontColor 必须使用允许的颜色值")
-            if isinstance(border_color, str) and font_color != border_color:
-                errors.append(f"节点 `{node_id or index}` 的 fontColor 与 borderColor 必须一致")
-        if isinstance(border_color, str) and border_color not in ALLOWED_NODE_COLORS:
-            errors.append(f"节点 `{node_id or index}` 的 borderColor 必须使用允许的颜色值")
 
         node_shape = node.get("nodeShape")
         if node_shape is not None and node_shape != 1:

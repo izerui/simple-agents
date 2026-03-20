@@ -158,8 +158,6 @@ description: 生成可直接导入、可显示、可继续迭代修改的知识�
 - `data.type`
 - 节点颜色
 - 真实形状
-- `lineShape`
-- `dashType`
 - 程序性知识标注规则
 
 ## 生成步骤
@@ -260,10 +258,8 @@ description: 生成可直接导入、可显示、可继续迭代修改的知识�
    - 普通知识点：黑色 `#000000`，图形边线和字体均标黑
    - `fontColor` 与 `borderColor` 必须完全一致
 2. 节点形状规则
-   - `nodeShape` 固定使用 `1`，它只是底层固定值，不用于表达真实形状
    - 节点真实形状由 `data.type` 决定
    - 根节点也不例外，根节点真实形状同样由 `data.type` 决定，不因其是根节点而单独改形
-   - 不要用 `nodeShape` 推断或切换知识点形状
 3. `data.type` 必须匹配知识内容本身
    - 概念、定义、原理：`2`
    - 步骤、流程、操作方法：`3`
@@ -275,11 +271,6 @@ description: 生成可直接导入、可显示、可继续迭代修改的知识�
    - 优先使用界面中受支持的关系词，例如：`支持`、`具有特征`、`内容包含`、`步骤包含`、`是前提`、`关键点包含`
    - 若这些关系词不足以准确表达语义，也允许使用更适配的描述文字
    - 关系文本的首要原则是语义准确，其次才是与常用关系词保持一致
-5. 线条样式约束
-   - `lineShape` 只在 `1`、`44`、`6` 中选择
-   - 在能保证结构可用、方向正确、且不增加交叉的前提下，优先使用 `1`
-6. 线条颜色约束
-   - 线条 `color` 保持默认值 `#000000`
 
 ### 生成前自检 Prompt
 
@@ -293,85 +284,109 @@ description: 生成可直接导入、可显示、可继续迭代修改的知识�
 7. 每个节点的 data.startPostion.x / y 是否与节点 x / y 完全一致？
 8. 每条边是否都包含 id、from、to、text、fromJunctionPoint、toJunctionPoint、showStartArrow、showEndArrow？
 9. 每条边的 from / to 是否都能在 nodes[].id 中找到？
-10. 节点颜色、真实形状、nodeShape、data.type 是否由节点语义决定，而不是为了美观随意指定？
+10. 节点颜色、真实形状、data.type 是否由节点语义决定，而不是为了美观随意指定？
 11. 关系 text 是否真实表达语义关系？
 12. 我是否先保证 JSON 结构可用，再考虑连接点协调、布局美观和线条优化？
 ```
 
-### 节点对象补充口径
+### 节点对象属性说明
 
-| 参数 | 说明 | 类型 | 必选 | 默认值 |
-|:-----|:-----|:-----|:-----|:-------|
-| id | 节点 id，不能重复，格式为 `node-随机字符串` | string | 是 | - |
-| text | 节点文本 | string | 是 | - |
-| type | 节点类型 | string | 否 | `node` |
-| isShow | 是否显示 | boolean | 否 | true |
-| isHide | 是否隐藏 | boolean | 否 | false |
-| expanded | 展开状态 | boolean | 否 | true |
-| styleClass | 节点样式 class | string | 否 | `""` |
-| className | 节点类名 | string | 否 | `""` |
-| nodeShape | 底层固定值，不代表真实形状 | int | 否 | 1 |
-| borderWidth | 边框粗细 | int | 否 | 0 |
-| borderColor | 边框颜色 | string | 否 | `#000000` |
-| fontColor | 节点文本颜色 | string | 否 | `#000000` |
-| fontFamily | 字体 | string | 否 | - |
-| fontSize | 字体大小 | int | 否 | 14 |
-| fontBold | 字体加粗 | boolean | 否 | false |
-| fontItalic | 字体斜体 | boolean | 否 | false |
-| fontUnderline | 字体下划线 | boolean | 否 | false |
-| textHorizontalAlign | 水平位置 | string | 否 | `center` |
-| textVerticalAlign | 垂直位置 | string | 否 | `middle` |
-| color | 背景颜色 | string | 否 | `#ffffff` |
-| opacity | 透明度 | number | 否 | 1 |
-| fixed | 是否固定位置 | boolean | 否 | true |
-| width | 节点宽度 | number | 否 | 自动 |
-| height | 节点高度 | number | 否 | 自动 |
-| x | x 坐标 | number | 是 | - |
-| y | y 坐标 | number | 是 | - |
-| offset_x | 横向偏移量 | int | 否 | 0 |
-| offset_y | 纵向偏移量 | int | 否 | 0 |
-| disableDrag | 是否禁止拖拽 | boolean | 否 | false |
-| singleNode | 是否为独立节点 | boolean | 否 | false |
-| invisiable | 是否不可见 | boolean | 否 | false |
-| zIndex | 层级 | int | 否 | 300 |
-| data | 自定义属性 | object | 是 | - |
+| 参数 | 说明 | 类型 | 必选 | 默认值 | 字段分类 |
+|:-----|:-----|:-----|:-----|:-------|:---------|
+| id | 节点 id，不能重复，格式为 `node-随机字符串` | string | 是 | - | LLM 补充（必填） |
+| text | 节点文本 | string | 是 | - | LLM 补充（必填） |
+| type | 节点类型（只能为 `node`） | string | 否 | `node` | 固定（不要改） |
+| isShow | 是否显示 | boolean | 否 | true | 固定（不要改） |
+| isHide | 是否隐藏 | boolean | 否 | false | 固定（不要改） |
+| expanded | 展开状态 | boolean | 否 | true | 固定（不要改） |
+| selected | 是否选中 | boolean | 否 | false | 固定（不要改） |
+| dragging | 是否拖拽中 | boolean | 否 | false | 固定（不要改） |
+| styleClass | 节点样式 class | string | 否 | `""` | 固定（不要改） |
+| className | 节点类名 | string | 否 | `""` | 固定（不要改） |
+| nodeShape | 底层固定值，不代表真实形状 | int | 否 | 1 | 固定（不要改） |
+| borderWidth | 边框粗细 | int | 否 | 1 | 固定（不要改） |
+| borderColor | 边框颜色 | string | 否 | - | LLM 补充（4 色之一，且与 `fontColor` 一致） |
+| fontColor | 节点文本颜色 | string | 否 | - | LLM 补充（4 色之一，且与 `borderColor` 一致） |
+| fontFamily | 字体 | string | 否 | - | 可选补充 |
+| fontSize | 字体大小 | int | 否 | 14 | 固定（不要改） |
+| fontBold | 字体加粗 | boolean | 否 | false | 固定（不要改） |
+| fontItalic | 字体斜体 | boolean | 否 | false | 固定（不要改） |
+| fontUnderline | 字体下划线 | boolean | 否 | false | 固定（不要改） |
+| textHorizontalAlign | 水平位置 | string | 否 | `center` | 固定（不要改） |
+| textVerticalAlign | 垂直位置 | string | 否 | `middle` | 固定（不要改） |
+| color | 背景颜色 | string | 否 | `#ffffff` | 固定（不要改） |
+| opacity | 透明度 | number | 否 | 1 | 固定（不要改） |
+| fixed | 是否固定位置 | boolean | 否 | false | 固定（不要改） |
+| width | 节点宽度（需适配节点文字宽度） | number | 否 | - | LLM 补充（按文本生成） |
+| height | 节点高度（需适配节点文字高度） | number | 否 | - | LLM 补充（按文本生成） |
+| x | 水平坐标（画布中心为原点） | number | 是 | - | LLM 补充（必填） |
+| y | 垂直坐标（画布中心为原点） | number | 是 | - | LLM 补充（必填） |
+| Fx | 力导向 X 分量 | number | 否 | 0 | 固定（不要改） |
+| Fy | 力导向 Y 分量 | number | 否 | 0 | 固定（不要改） |
+| offset_x | 横向偏移量 | int | 否 | 0 | 固定（不要改） |
+| offset_y | 纵向偏移量 | int | 否 | 0 | 固定（不要改） |
+| disableDrag | 是否禁止拖拽 | boolean | 否 | false | 固定（不要改） |
+| singleNode | 是否为独立节点 | boolean | 否 | false | 固定（不要改） |
+| invisiable | 是否不可见 | boolean | 否 | false | 固定（不要改） |
+| zIndex | 层级 | int | 否 | 300 | 固定（不要改） |
+| data | 自定义属性 | object | 是 | - | LLM 补充（必填） |
 
-### 连线对象补充口径
+### 连线对象属性说明
 
-| 参数 | 说明 | 类型 | 必选 | 默认值 |
-|:-----|:-----|:-----|:-----|:-------|
-| id | 边 id，格式为 `line-随机字符串` | string | 是 | - |
-| from | 源节点 id，格式为 `node-随机字符串` | string | 是 | - |
-| to | 目标节点 id，格式为 `node-随机字符串` | string | 是 | - |
-| text | 关系名称 | string | 是 | - |
-| styleClass | 线条样式 class | string | 否 | `""` |
-| lineWidth | 线条粗细 | int | 否 | 1 |
-| color | 线条颜色 | string | 否 | `#000000` |
-| isHide | 是否隐藏 | boolean | 否 | false |
-| lineShape | 线条样式 | int | 否 | 1 |
-| fontColor | 线条文字颜色 | string | 否 | `#000000` |
-| opacity | 透明度 | number | 否 | 1 |
-| arrow | 箭头样式标识 | string | 否 | - |
-| animation | 动画效果 | int | 否 | 0 |
-| dashType | 虚线类型 | int | 否 | 0 |
-| disableDefaultClickEffect | 禁用默认点击效果 | boolean | 否 | false |
-| showStartArrow | 显示起点箭头 | boolean | 是 | false |
-| showEndArrow | 显示终点箭头 | boolean | 是 | true |
-| startMarkerId | 起点标记 id | string | 否 | `""` |
-| endMarkerId | 终点标记 id | string | 否 | `""` |
-| forDisplayOnly | 仅用于显示 | boolean | 否 | false |
-| fromJunctionPoint | 起点连接位置 | string | 是 | `border` |
-| toJunctionPoint | 终点连接位置 | string | 是 | `border` |
-| fromJuctionPointOffsetX | 起点连接点 X 偏移 | int | 否 | 0 |
-| fromJuctionPointOffsetY | 起点连接点 Y 偏移 | int | 否 | 0 |
-| toJuctionPointOffsetX | 终点连接点 X 偏移 | int | 否 | 0 |
-| toJuctionPointOffsetY | 终点连接点 Y 偏移 | int | 否 | 0 |
-| polyLineRadius | 折线半径 | int | 否 | 0 |
-| hidden | 是否隐藏 | boolean | 否 | false |
-| useTextPath | 连线文字沿着连线路径走 | boolean | 否 | false |
-| data | 自定义属性 | object | 否 | `{}` |
+| 参数                        | 说明                       | 类型      | 必选 | 默认值       | 字段分类 |
+|:--------------------------|:-------------------------|:--------|:---|:----------|:---------|
+| id                        | 边 id，格式为 `line-随机字符串`    | string  | 是  | -         | LLM 补充（必填） |
+| from                      | 起始节点 id（对应连线起点）  | string  | 是  | -         | LLM 补充（必填） |
+| to                        | 结束节点 id（对应连线终点） | string  | 是  | -         | LLM 补充（必填） |
+| text                      | 关系名称（优先从 `支持`、`具有特征`、`包含`、`步骤包含`、`是前提`、`关键点包含`、`并列`、`定义`、`具有属性`、`是一种`、`组成`、`构成` 中选择；若不适配可自定义） | string  | 是  | -         | LLM 补充（必填） |
+| styleClass                | 线条样式 class               | string  | 否  | -         | 不输出（固定为 `undefined`） |
+| className                 | 线条类名                     | string  | 否  | -         | 不输出（固定为 `undefined`） |
+| lineWidth                 | 线条粗细                     | int     | 否  | 1         | 固定（不要改） |
+| color                     | 线条颜色                     | string  | 否  | `#000000` | 固定（不要改） |
+| isHide                    | 是否隐藏                     | boolean | 否  | false     | 固定（不要改） |
+| lineShape                 | 线条样式                     | int     | 否  | 1         | 固定（不要改） |
+| fontColor                 | 线条文字颜色                   | string  | 否  | -         | 不输出（固定为 `undefined`） |
+| fontFamily                | 线条字体                     | string  | 否  | -         | 不输出（固定为 `undefined`） |
+| fontSize                  | 线条字体大小                   | number  | 否  | -         | 不输出（固定为 `undefined`） |
+| fontBold                  | 线条字体加粗                   | boolean | 否  | false     | 固定（不要改） |
+| fontItalic                | 线条字体斜体                   | boolean | 否  | false     | 固定（不要改） |
+| fontUnderline             | 线条字体下划线                  | boolean | 否  | false     | 固定（不要改） |
+| opacity                   | 透明度                      | number  | 否  | 1         | 固定（不要改） |
+| arrow                     | 箭头样式标识                   | string  | 否  | `RGIns-12-arrow-000000-w5` | 固定（不要改） |
+| animation                 | 动画效果                     | int     | 否  | 0         | 固定（不要改） |
+| dashType                  | 虚线类型                     | int     | 否  | 0         | 固定（不要改） |
+| disableDefaultClickEffect | 禁用默认点击效果                 | boolean | 否  | false     | 固定（不要改） |
+| showStartArrow            | 显示起点箭头                   | boolean | 是  | false     | 固定（不要改） |
+| showEndArrow              | 显示终点箭头                   | boolean | 是  | true      | 固定（不要改） |
+| startMarkerId             | 起点标记 id                  | string  | 否  | `""`      | 固定（不要改） |
+| endMarkerId               | 终点标记 id                  | string  | 否  | `""`      | 固定（不要改） |
+| forDisplayOnly            | 仅用于显示                    | boolean | 否  | false     | 固定（不要改） |
+| fromJunctionPoint         | 起点连接位置（连线在起始节点上的落点；`border/left/right/top/bottom` 都是相对起始节点） | string  | 是  | `border`  | LLM 补充（按连接点计算） |
+| toJunctionPoint           | 终点连接位置（连线在结束/目标节点上的落点；`border/left/right/top/bottom` 都是相对目标节点） | string  | 是  | `border`  | LLM 补充（按连接点计算） |
+| fromJuctionPointOffsetX   | 起点连接点 X 偏移               | int     | 否  | 0         | 固定（不要改） |
+| fromJuctionPointOffsetY   | 起点连接点 Y 偏移               | int     | 否  | 0         | 固定（不要改） |
+| toJuctionPointOffsetX     | 终点连接点 X 偏移               | int     | 否  | 0         | 固定（不要改） |
+| toJuctionPointOffsetY     | 终点连接点 Y 偏移               | int     | 否  | 0         | 固定（不要改） |
+| polyLineRadius            | 折线半径                     | int     | 否  | 0         | 固定（不要改） |
+| hidden                    | 是否隐藏                     | boolean | 否  | false     | 固定（不要改） |
+| useTextPath               | 连线文字沿着连线路径走              | boolean | 否  | -         | 不输出（固定为 `undefined`） |
+| placeText                 | 文本放置方式                   | string  | 否  | -         | 不输出（固定为 `undefined`） |
+| textAnchor                | 文本锚点                     | string  | 否  | -         | 不输出（固定为 `undefined`） |
+| force_elastic             | 力导向弹性                    | number  | 否  | -         | 不输出（固定为 `undefined`） |
+| polyLineStartDistance     | 折线起始距离                   | number  | 否  | -         | 不输出（固定为 `undefined`） |
+| ctrlPointsFor49           | 49号线型控制点                 | array   | 否  | -         | 不输出（固定为 `undefined`） |
+| ctrlPointsFor44           | 44号线型控制点                 | array   | 否  | -         | 不输出（固定为 `undefined`） |
+| ctrlPoints                | 控制点                      | array   | 否  | -         | 不输出（固定为 `undefined`） |
+| isHideArrow               | 是否隐藏箭头                   | boolean | 否  | -         | 不输出（固定为 `undefined`） |
+| lineDirection             | 线条方向                     | string  | 否  | -         | 不输出（固定为 `undefined`） |
+| reverseText               | 反转文本                     | boolean | 否  | -         | 不输出（固定为 `undefined`） |
+| data                      | 自定义属性                    | object  | 否  | `{}`      | 固定（不要改） |
 
 ### data 字段口径
+
+节点 `data.startPostion` 约束：
+- `data.startPostion.x` 必须跟随节点 `x`
+- `data.startPostion.y` 必须跟随节点 `y`
 
 节点 `data` 示例：
 
@@ -447,11 +462,16 @@ description: 生成可直接导入、可显示、可继续迭代修改的知识�
 - 向右移动：`x` 增大
 - 向上移动：`y` 减小
 - 向下移动：`y` 增大
+- 中心点左上：`(-x, -y)`
+- 中心点左下：`(-x, +y)`
+- 中心点右上：`(+x, -y)`
+- 中心点右下：`(+x, +y)`
 
 ### 节点定位
 
 - 节点位置由 `x`、`y`、`width`、`height` 决定
 - 节点中心点 = `(x + width/2, y + height/2)`
+- `width`、`height` 需要根据节点文字内容自适应生成
 
 ### 布局原则
 
@@ -752,8 +772,6 @@ A.right 不能所有边都从中点发出
 
 ### 节点形状说明
 
-- `nodeShape` 固定为 `1`
-- `nodeShape` 不代表真实形状，只是底层固定值
 - 真正形状由 `data.type` 决定
 - 根节点与普通节点遵循同一规则，根节点形状不单独特殊处理
 
@@ -763,19 +781,6 @@ A.right 不能所有边都从中点发出
 - 形状用于表达知识类型，由 `data.type` 决定
 - 不要因为节点是核心节点就擅自修改其知识类型形状
 - 也不要因为节点是程序性知识、认知策略或事实范例，就擅自改动其语义颜色
-
-### 线条形状 `lineShape`
-
-- `1`：直线
-- `44`：折线
-- `6`：曲线
-
-默认优先级：直线优先，必要时再用折线，最后才用曲线。
-
-### 虚线类型 `dashType`
-
-- `0`：实线
-- `1`：虚线
 
 ### 常用关系文本
 
