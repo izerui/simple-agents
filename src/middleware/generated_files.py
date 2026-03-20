@@ -87,7 +87,7 @@ class GeneratedFilesMiddleware(AgentMiddleware):
     async def _extract_file_paths(self, content: str) -> list[str]:
         """调用 webapp 接口提取文件路径"""
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=300.0) as client:
                 response = await client.post(
                     f"{self.EXTRACT_API_URL}/webapp/extract-file-paths",
                     json={"content": content}

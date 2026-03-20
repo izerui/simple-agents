@@ -92,7 +92,7 @@ class SuggestedQuestionsMiddleware(AgentMiddleware):
     async def _generate_suggested_questions(self, system_prompt: str, human_message: str) -> list[str]:
         """调用 webapp 接口生成建议问题"""
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=300.0) as client:
                 response = await client.post(
                     f"{self.EXTRACT_API_URL}/webapp/generate-suggested-questions",
                     json={
