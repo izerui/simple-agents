@@ -1,9 +1,7 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Query
 from fastapi.responses import StreamingResponse
-import json
 import logging
 import os
-import re
 import traceback
 from typing import Any
 from urllib.parse import quote
@@ -201,21 +199,19 @@ async def extract_file_paths(request: ExtractFilePathsRequest) -> ApiResponse:
 
         import asyncio
 
-        # 使用 with_structured_output 结构化提取，在线程中执行避免阻塞
-        # 临时禁用 LangSmith 追踪
-        from langchain_core.runnables import RunnableConfig
-        structured_model = model.with_structured_output(FilePaths)
+        # 使用工具调用提取，仅当模型实际调用工具时才读取工具参数
+        tool_model = model.bind_tools([FilePaths], tool_choice="FilePaths")
 
         # 使用 tracing_context 临时关闭追踪
         with tracing_context(enabled=False):
-            result = await asyncio.to_thread(structured_model.invoke, prompt)
+            result = await asyncio.to_thread(tool_model.invoke, prompt)
 
-        # 提取文件列表
+        # 仅提取工具调用参数；未调用工具时返回空列表
         files: list[str] = []
-        if isinstance(result, FilePaths):
-            files = result.files
-        elif isinstance(result, dict):
-            files = result.get('files', [])
+        tool_calls = getattr(result, 'tool_calls', None) or []
+        if tool_calls:
+            args = tool_calls[0].get('args', {}) or {}
+            files = args.get('files', []) or []
 
         return ApiResponse(
             success=True,
@@ -259,20 +255,19 @@ async def generate_suggested_questions(request: GenerateSuggestedQuestionsReques
 
         import asyncio
 
-        # 使用 with_structured_output 结构化提取
-        from langchain_core.runnables import RunnableConfig
-        structured_model = model.with_structured_output(SuggestedQuestions)
+        # 使用工具调用提取，仅当模型实际调用工具时才读取工具参数
+        tool_model = model.bind_tools([SuggestedQuestions], tool_choice="SuggestedQuestions")
 
         # 临时关闭追踪
         with tracing_context(enabled=False):
-            result = await asyncio.to_thread(structured_model.invoke, prompt)
+            result = await asyncio.to_thread(tool_model.invoke, prompt)
 
-        # 提取问题列表
+        # 仅提取工具调用参数；未调用工具时返回空列表
         questions: list[str] = []
-        if isinstance(result, SuggestedQuestions):
-            questions = result.questions
-        elif isinstance(result, dict):
-            questions = result.get('questions', [])
+        tool_calls = getattr(result, 'tool_calls', None) or []
+        if tool_calls:
+            args = tool_calls[0].get('args', {}) or {}
+            questions = args.get('questions', []) or []
 
         return ApiResponse(
             success=True,
