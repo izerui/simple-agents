@@ -41,7 +41,7 @@ chat_model = init_chat_model(
     api_key=os.getenv('MODEL_API_KEY'),
     temperature=0.0,
     streaming=True,  # 必须流式输出
-    timeout=300,  # 超时 5 分钟
+    timeout=600,  # 超时 10 分钟
     max_retries=3,  # 最多重试 3 次
     configurable_fields=("model", "model_provider", "base_url", "api_key"),  # 支持运行时切换
 )
