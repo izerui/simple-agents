@@ -16,7 +16,7 @@ from jsonschema.exceptions import ValidationError
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
-DEFAULT_SCHEMA_PATH = SKILL_DIR / "references" "schema.json"
+DEFAULT_SCHEMA_PATH = SKILL_DIR / "references" / "schema.json"
 ALLOWED_LINE_COLOR = "#000000"
 FIXED_NODE_BACKGROUND_COLOR = "#ffffff"
 MIN_NODE_GAP = 20

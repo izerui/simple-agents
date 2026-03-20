@@ -102,8 +102,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^node-[A-Za-z0-9]+$",
-          "description": "节点 id，必须使用 node-随机字符串 格式。唯一性由业务校验脚本保证。"
+          "description": "节点 id，必须非空且唯一。"
         },
         "text": {
           "type": "string",
@@ -471,8 +470,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^line-[A-Za-z0-9]+$",
-          "description": "连线 id，必须使用 line-随机字符串 格式。唯一性由业务校验脚本保证。"
+          "description": "连线 id，必须非空且唯一。"
         },
         "from": {
           "type": "string",
