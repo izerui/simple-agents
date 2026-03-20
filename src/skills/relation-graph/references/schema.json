@@ -543,9 +543,12 @@
         "lineShape": {
           "type": "integer",
           "enum": [
-            1
+            1,
+            44,
+            6
           ],
-          "default": 1
+          "default": 1,
+          "description": "连线形状/类型：1=直线，44=折线，6=曲线。"
         },
         "fontBold": {
           "type": "boolean",

@@ -359,7 +359,7 @@ description: 生成可直接导入、可显示、可继续迭代修改的知识�
 | lineWidth                 | 线条粗细                     | int     | 否  | 1         | 固定（不要改） |
 | color                     | 线条颜色                     | string  | 否  | `#000000` | 固定（不要改） |
 | isHide                    | 是否隐藏                     | boolean | 否  | false     | 固定（不要改） |
-| lineShape                 | 线条样式                     | int     | 否  | 1         | 固定（不要改） |
+| lineShape                 | 连线形状/类型（`1`=直线，`44`=折线，`6`=曲线） | int     | 否  | 1         | LLM 补充（按布局选择） |
 | fontColor                 | 线条文字颜色                   | string  | 否  | -         | 不输出（固定为 `undefined`） |
 | fontFamily                | 线条字体                     | string  | 否  | -         | 不输出（固定为 `undefined`） |
 | fontSize                  | 线条字体大小                   | number  | 否  | -         | 不输出（固定为 `undefined`） |
