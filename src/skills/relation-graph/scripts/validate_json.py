@@ -18,6 +18,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 DEFAULT_SCHEMA_PATH = SKILL_DIR / "references" / "schema.json"
 ALLOWED_LINE_COLOR = "#000000"
+FIXED_NODE_BACKGROUND_COLOR = "#ffffff"
 MIN_NODE_GAP = 18
 
 
@@ -106,6 +107,12 @@ def iter_semantic_errors(instance: Any) -> list[str]:
         node_shape = node.get("nodeShape")
         if node_shape is not None and node_shape != 1:
             errors.append(f"节点 `{node_id or index}` 的 nodeShape 必须固定为 1；真实形状由 data.type 决定")
+
+        node_color = node.get("color")
+        if node_color is not None and node_color != FIXED_NODE_BACKGROUND_COLOR:
+            errors.append(
+                f"节点 `{node_id or index}` 的 color 必须固定为 {FIXED_NODE_BACKGROUND_COLOR}"
+            )
 
     if len(node_ids) != len(set(node_ids)):
         errors.append("nodes 中存在重复 id")
