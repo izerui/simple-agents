@@ -35,6 +35,23 @@ class GeneratedFilesMiddleware(AgentMiddleware):
         super().__init__()
         self.tools = []
 
+    @staticmethod
+    def _normalize_content(content: Any) -> str:
+        """将消息 content 归一化为纯文本字符串。"""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            text_parts: list[str] = []
+            for item in content:
+                if isinstance(item, str):
+                    text_parts.append(item)
+                elif isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str):
+                        text_parts.append(text)
+            return "".join(text_parts)
+        return str(content)
+
     async def aafter_agent(self, state: AgentState, runtime: Any) -> dict | None:
         """在 Agent 执行完成后提取文件路径"""
         messages = state.get("messages", [])
@@ -68,7 +85,8 @@ class GeneratedFilesMiddleware(AgentMiddleware):
         if not last_message:
             return None
 
-        content = last_message.content if hasattr(last_message, 'content') else str(last_message)
+        raw_content = last_message.content if hasattr(last_message, 'content') else str(last_message)
+        content = self._normalize_content(raw_content)
 
         # 调用 webapp 接口获取文件列表
         file_paths = await self._extract_file_paths(content)
