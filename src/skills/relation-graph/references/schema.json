@@ -41,20 +41,6 @@
       "type": "string",
       "pattern": "^#[0-9A-Fa-f]{6}$"
     },
-    "fontColorValue": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/colorHex"
-        },
-        {
-          "type": "string",
-          "enum": [
-            "0",
-            "Themed"
-          ]
-        }
-      ]
-    },
     "junctionPoint": {
       "type": "string",
       "enum": [
@@ -81,28 +67,7 @@
             5,
             6
           ],
-          "description": "知识类型：2=陈述性知识（矩形），3=程序性知识（胶囊），5=认知策略（圆柱），6=事实范例（波浪矩形）。"
-        },
-        "ownerContainerId": {
-          "type": "string",
-          "enum": [
-            ""
-          ],
-          "default": ""
-        },
-        "backgroundImage": {
-          "type": "string",
-          "enum": [
-            ""
-          ],
-          "default": ""
-        },
-        "imageFit": {
-          "type": "string",
-          "enum": [
-            "cover"
-          ],
-          "default": "cover"
+          "description": "知识类型：2=陈述性知识（矩形），3=程序性知识（胶囊），5=认知策略（圆柱），6=事实范例（波浪矩形）。按内容选：概念/定义/原理用2，步骤/流程用3，学习方法/策略用5，案例/范例用6"
         },
         "startPostion": {
           "type": "object",
@@ -234,7 +199,11 @@
           ]
         },
         "fontFamily": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "宋体"
+          ],
+          "default": "宋体"
         },
         "fontSize": {
           "type": "integer",
@@ -508,12 +477,12 @@
         "from": {
           "type": "string",
           "minLength": 1,
-          "description": "起始节点 id，对应连线起点。"
+          "description": "起始节点的 id。"
         },
         "to": {
           "type": "string",
           "minLength": 1,
-          "description": "结束节点 id，对应连线终点。"
+          "description": "结束节点的 id。"
         },
         "text": {
           "type": "string",
@@ -548,7 +517,7 @@
             6
           ],
           "default": 1,
-          "description": "连线形状/类型：1=直线，44=折线，6=曲线。"
+          "description": "连线形状/类型：1=直线（优先），44=折线，6=曲线。"
         },
         "fontBold": {
           "type": "boolean",
@@ -642,10 +611,12 @@
           "default": false
         },
         "fromJunctionPoint": {
-          "$ref": "#/$defs/junctionPoint"
+          "$ref": "#/$defs/junctionPoint",
+          "description": "起始节点上的连接位置，根据两节点相对位置选择，使连线更顺畅"
         },
         "toJunctionPoint": {
-          "$ref": "#/$defs/junctionPoint"
+          "$ref": "#/$defs/junctionPoint",
+          "description": "结束节点上的连接位置，根据两节点相对位置选择，使连线更顺畅"
         },
         "fromJuctionPointOffsetX": {
           "type": "integer",

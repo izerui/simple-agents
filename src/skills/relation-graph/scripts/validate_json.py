@@ -16,10 +16,10 @@ from jsonschema.exceptions import ValidationError
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
-DEFAULT_SCHEMA_PATH = SKILL_DIR / "references" / "schema.json"
+DEFAULT_SCHEMA_PATH = SKILL_DIR / "references" "schema.json"
 ALLOWED_LINE_COLOR = "#000000"
 FIXED_NODE_BACKGROUND_COLOR = "#ffffff"
-MIN_NODE_GAP = 18
+MIN_NODE_GAP = 20
 
 
 def load_json(path: Path) -> Any:
@@ -139,10 +139,6 @@ def iter_semantic_errors(instance: Any) -> list[str]:
             errors.append(f"连线 `{line_id or index}` 缺少 fromJunctionPoint")
         if "toJunctionPoint" not in line:
             errors.append(f"连线 `{line_id or index}` 缺少 toJunctionPoint")
-        if "showStartArrow" not in line:
-            errors.append(f"连线 `{line_id or index}` 缺少 showStartArrow")
-        if "showEndArrow" not in line:
-            errors.append(f"连线 `{line_id or index}` 缺少 showEndArrow")
 
         line_color = line.get("color")
         if isinstance(line_color, str) and line_color != ALLOWED_LINE_COLOR:
@@ -167,7 +163,7 @@ def iter_semantic_errors(instance: Any) -> list[str]:
                 left_id = left.get("id", i)
                 right_id = right.get("id", j)
                 errors.append(
-                    f"节点 `{left_id}` 与 `{right_id}` 未满足至少 {MIN_NODE_GAP}px 的间距要求"
+                    f"节点 `{left_id}` 与 `{right_id}` 间距过近，未满足最小间距要求"
                 )
 
     if node_ids:
