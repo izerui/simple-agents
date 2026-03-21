@@ -7,78 +7,78 @@ description: 生成可直接导入、可显示、可继续迭代修改的知识�
 
 帮助高校教师为课程创建完整的知识建模图。
 
-## ⚠️ 生成约束
+## 生成约束
 
-生成 JSON 前必须确认：
+生成前必须满足：
 
-1. **严格按 schema.json 生成**：所有字段名、类型、枚举值必须完全符合 `references/schema.json` 定义
-2. **使用正确的 id 格式**：id 必须是非空且唯一的字符串
-   - 根对象 id：推荐使用 `root-随机字符串` 格式
-   - 节点 id：推荐使用 `node-随机字符串` 格式
-   - 连线 id：推荐使用 `line-随机字符串` 格式
+1. 严格符合 `references/schema.json`
+2. 所有 `id` 必须非空且唯一
+   - 根对象：推荐 `root-随机字符串`
+   - 节点：推荐 `node-随机字符串`
+   - 连线：推荐 `line-随机字符串`
+3. 使用当前布局脚本与布局参考
 
----
+## 关键文件
 
-## 关联文件
+### `references/schema.json`
+- 最终输出的唯一结构基准
+- 若与其他说明冲突，以它为准
 
-### references/schema.json
-- **用途**：最终输出的唯一结构基准
-- **何时查看**：确认根对象、字段名、必填项、类型、枚举值和对象层级时
-- **优先级**：若本文档与 schema.json 冲突，以 schema.json 为准
+### `references/layout-semantic.md`
+- 布局规则、分区规则、增量追加规则
+- 规划主干区、步骤区、枚举区、案例区、策略区时必须先读
 
-### scripts/validate_json.py
-- **用途**：校验 schema 合法性和建模图业务约束
-- **使用时机**：生成 JSON 后必须运行，只有返回 VALID 才算完成
-- **用法**：`python /skills/relation-graph/scripts/validate_json.py /path/to/result.json`
+### 布局脚本
+- `scripts/layout_graph.py`：执行布局的脚本
+- 新建图、增量图都通过布局脚本完成布局处理
+- 技能目录 `/skills/relation-graph/` 只用于读取脚本、参考资料、schema，不用于写入请求文件或结果文件
+- 请求 JSON、布局结果 JSON、最终结果 JSON 都必须写入当前工作区的 `output/` 目录
+- 只要是本技能生成的 JSON 文件，无论中间文件还是最终文件，都必须放在 `output/`
+- 不要写入 `/skills/relation-graph/output/...`
+- 用法：`python /skills/relation-graph/scripts/layout_graph.py /path/to/request.json --output output/layout-result.json --pretty`
+- 调用时必须显式传入请求 JSON 路径和 `--output` 路径，不能依赖脚本默认值
 
----
+### `scripts/validate_json.py`
+- 最终结果校验脚本
+- 最终 JSON 生成后必须运行，只有返回 `VALID` 才算完成
+- 用法：`python /skills/relation-graph/scripts/validate_json.py output/result.json --schema /skills/relation-graph/references/schema.json`
 
 ## 术语约定
 
-- **节点（node）**：`nodes[]` 内对象
-- **连线（line）**：`lines[]` 内对象（本文件不再使用 `edge` 术语）
-- **根对象**：最外层 JSON 对象
-- **关系文本**：连线的 `text` 字段
-
----
+- 节点（node）：`nodes[]` 内对象
+- 连线（line）：`lines[]` 内对象
+- 根对象：最外层 JSON 对象
+- 关系文本：连线的 `text` 字段
 
 ## 任务目标
 
-你的目标是直接产出可导入、可显示、可继续迭代的知识建模图 JSON，不是解释建模思路。
+直接产出可导入、可显示、可继续迭代的知识建模图 JSON，不要用解释替代结果。
 
 默认要求：
-- 严格符合 `references/schema.json`
-- 面向导入、显示、解析和后续增量修改
-- 所有字段名称、引用关系、坐标记录、连线属性都必须可直接落入建模图前端
+- 严格符合 schema
+- 所有字段都可直接落入前端
+- 新建与增量都遵循当前布局参考
+- 写入 JSON 文件时必须一次性写入完整对象，不能省略固定字段，不能只写差量字段，不能依赖后续脚本补齐
 
----
+## 增量修改
 
-## 已有建模图处理原则
+如果用户提供当前建模图 JSON，应理解为在原图基础上修改，而不是重建。
 
-如果用户提供了**当前建模图.json**文件，应理解为在现有基础上修改，而非重建。
-
-### 判断标准
-- 文件名为"当前建模图.json"或类似名称（如"建模图.json"、"知识图谱.json"）
-- 文件内容是符合本技能规范的知识建模图 JSON（包含 `rootId`、`nodes`、`lines`）
-
-### 增量修改原则
-- 优先以用户上传的当前 JSON 为基准数据
-- 尽量保持现有节点、连线、坐标、颜色、形状、文本、`data` 等属性不变
-- 只有新增或明确要求修改的节点、连线，才重新计算或调整
+规则：
+- 优先以用户上传的当前 JSON 为基准
+- 只有新增或明确要求修改的节点、连线才调整
 - 新增节点和连线在原 JSON 基础上追加
-- 避免破坏用户已经手工优化过的位置关系
+- 避免破坏用户已手工优化的位置关系
+- 未改旧节点应加入 `preserveNodeIds`
+- `preserveNodeIds` 中的节点坐标保持不变，不参与重排
+- `targetNodeIds` 只包含本轮新增节点或允许局部调整的节点
+- 未明确修改的旧节点样式沿用原 JSON；脚本只做必要规范化补齐，例如 `data.startPostion` 对齐、schema 允许色值归一化
+- 新节点按语义区域局部追加，不做整图重排
 
-### 新建 vs 修改
-- **新建建模图**：按本技能规则生成
-- **修改现有建模图**：先理解原图结构，再只做局部增量修改
+## 数据要求
 
----
-
-## 根对象字段说明
-
-根对象是 JSON 的最外层结构。
-
-### 结构示例
+### 根对象
+最外层 JSON 结构：
 
 ```json
 {
@@ -89,524 +89,437 @@ description: 生成可直接导入、可显示、可继续迭代修改的知识�
 }
 ```
 
-#### rootId
-- **类型**：string
-- **格式**：非空字符串，推荐使用 `root-随机字符串` 格式
-- **说明**：根对象标识
-- **约束**：不与节点 id 复用
+要求：
+- `rootId`：根对象标识，非空字符串，推荐使用 `root-随机字符串` 格式，且不能与节点 id 重复
+- `nodes`：至少 1 个节点
+- `lines`：连线数组，数组名固定为 `lines`
+- `datetime`：时间戳，可选，类型为 `number`
 
-#### nodes
-- **类型**：array
-- **说明**：节点数组
-- **约束**：至少包含 1 个节点
+### 节点
+节点至少应正确提供：
+- `id`
+- `text`
+- `x`
+- `y`
+- `data.type`
 
-#### lines
-- **类型**：array
-- **说明**：连线数组
-- **约束**：数组名固定为 `lines`
+关键约束：
+- `x/y` 必须由 AI 按布局规则直接给出
+- `data.startPostion.x/y` 必须与节点 `x/y` 完全一致
+- `borderColor` 与 `fontColor` 必须一致
+- `width/height` 可缺省，由脚本估算补齐
 
-#### datetime
-- **类型**：number
-- **说明**：时间戳
+增量/布局场景下：
+- 仅调整 `x/y`
+- 如有必要可补齐 `width/height`
+- 必须同步更新 `data.startPostion`
+- 未明确要求修改的节点样式字段应沿用原 JSON，不要借布局名义重写
 
----
+布局阶段允许改动的节点字段：
+- `x`
+- `y`
+- `width`
+- `height`
+- `data.startPostion`
 
-## 节点对象字段说明
+逐字段说明：
+- `id`：节点标识，类型为 `string`，必须非空且唯一，推荐使用 `node-随机字符串`
+- `text`：节点显示文本
+- `text` 不允许换行
+- `x`：节点水平坐标，画布中心点为原点 `(0,0)`，左侧为负，右侧为正
+- `y`：节点垂直坐标，画布中心点为原点 `(0,0)`，上方为负，下方为正
+- `width`：节点宽度，应根据节点文字内容自适应生成
+- `height`：节点高度，应根据节点文字内容自适应生成
+- `borderColor`：节点边框颜色，由节点语义决定
+- `fontColor`：节点文本颜色，必须与 `borderColor` 一致
 
-#### id
-- **类型**：string
-- **格式**：非空字符串，推荐使用 `node-随机字符串` 格式
-- **说明**：节点标识
-- **约束**：不能重复，在整个 JSON 中必须唯一
+常用固定字段：
+- `type`: `node`
+- `isShow`: `true`
+- `isHide`: `false`
+- `expanded`: `true`
+- `selected`: `false`
+- `dragging`: `false`
+- `styleClass`: `""`
+- `className`: `""`
+- `nodeShape`: `1`（底层固定值，不代表真实形状）
+- `borderWidth`: `1`
+- `fontSize`: `14`
+- `fontFamily`: `"宋体"`
+- `fontBold`: `false`
+- `fontItalic`: `false`
+- `fontUnderline`: `false`
+- `textHorizontalAlign`: `"center"`
+- `textVerticalAlign`: `"middle"`
+- `color`: `"#ffffff"`（节点背景色，不用于语义表达）
+- `opacity`: `1`
+- `fixed`: `true`
+- `Fx`: `0`
+- `Fy`: `0`
+- `offset_x`: `0`
+- `offset_y`: `0`
+- `disableDrag`: `false`
+- `singleNode`: `false`
+- `invisiable`: `false`
+- `zIndex`: `300`
 
-#### text
-- **类型**：string
-- **说明**：节点显示的文本内容
+颜色语义：
+- `#FF0000`：核心知识点
+- `#00B0F0`：核心结构化知识框架
+- `#00B050`：先决知识点
+- `#000000`：普通知识点
 
-#### x
-- **类型**：number
-- **说明**：节点水平坐标，画布中心点为原点 (0,0)，左侧为负，右侧为正
+节点 `data` 结构示例：
 
-#### y
-- **类型**：number
-- **说明**：节点垂直坐标，画布中心点为原点 (0,0)，上方为负，下方为正
-
-#### width
-- **类型**：number
-- **说明**：节点宽度，需根据节点文字内容自适应生成
-
-#### height
-- **类型**：number
-- **说明**：节点高度，需根据节点文字内容自适应生成
-
-#### borderColor
-- **类型**：string
-- **说明**：边框颜色，由节点语义决定，必须与 fontColor 一致
-- **取值**：
-  - `#FF0000`：核心知识点
-  - `#00B0F0`：核心结构化知识框架
-  - `#00B050`：先决知识点
-  - `#000000`：普通知识点
-
-#### fontColor
-- **类型**：string
-- **说明**：节点文本颜色，必须与 borderColor 一致
-- **取值**：
-  - `#FF0000`：核心知识点
-  - `#00B0F0`：核心结构化知识框架
-  - `#00B050`：先决知识点
-  - `#000000`：普通知识点
-
-#### data
-- **类型**：object
-- **说明**：节点自定义属性
-- **结构**：
 ```json
 {
-  "type": 2,  // 按内容选：概念/定义/原理用2，步骤/流程用3，学习方法/策略用5，案例/范例用6
+  "type": 2,
+  "backgroundImage": "",
+  "imageFit": "cover",
   "startPostion": {
-    "x": 0,  // 必须与节点 x 一致
-    "y": 0   // 必须与节点 y 一致
+    "x": 0,
+    "y": 0
   }
 }
 ```
 
-### 固定值字段
+`data` 下固定字段：
+- `backgroundImage`: `""`
+- `imageFit`: `"cover"`
 
-#### type
-- **类型**：string
-- **固定值**："node"
+### `data.type`
 
-#### isShow
-- **类型**：boolean
-- **固定值**：true
+| data.type | 含义 | 真实形状 |
+| --- | --- | --- |
+| 2 | 陈述性知识 | 矩形 |
+| 3 | 程序性知识 | 胶囊 |
+| 5 | 认知策略 | 圆柱 |
+| 6 | 事实范例 | 波浪矩形 |
 
-#### isHide
-- **类型**：boolean
-- **固定值**：false
-
-#### expanded
-- **类型**：boolean
-- **固定值**：true
-
-#### selected
-- **类型**：boolean
-- **固定值**：false
-
-#### dragging
-- **类型**：boolean
-- **固定值**：false
-
-#### styleClass
-- **类型**：string
-- **固定值**：""
-
-#### className
-- **类型**：string
-- **固定值**：""
-
-#### nodeShape
-- **类型**：int
-- **固定值**：1（底层固定值，不代表真实形状）
-
-#### borderWidth
-- **类型**：int
-- **固定值**：1
-
-#### fontSize
-- **类型**：int
-- **固定值**：14
-
-#### fontFamily
-- **类型**：string
-- **固定值**："宋体"
-
-#### fontBold
-- **类型**：boolean
-- **固定值**：false
-
-#### fontItalic
-- **类型**：boolean
-- **固定值**：false
-
-#### fontUnderline
-- **类型**：boolean
-- **固定值**：false
-
-#### textHorizontalAlign
-- **类型**：string
-- **固定值**："center"
-
-#### textVerticalAlign
-- **类型**：string
-- **固定值**："middle"
-
-#### color
-- **类型**：string
-- **固定值**："#ffffff"（节点背景色，不用于语义表达）
-
-#### opacity
-- **类型**：number
-- **固定值**：1
-
-#### fixed
-- **类型**：boolean
-- **固定值**：false
-
-#### Fx
-- **类型**：number
-- **固定值**：0
-
-#### Fy
-- **类型**：number
-- **固定值**：0
-
-#### offset_x
-- **类型**：int
-- **固定值**：0
-
-#### offset_y
-- **类型**：int
-- **固定值**：0
-
-#### disableDrag
-- **类型**：boolean
-- **固定值**：false
-
-#### singleNode
-- **类型**：boolean
-- **固定值**：false
-
-#### invisiable
-- **类型**：boolean
-- **固定值**：false
-
-#### zIndex
-- **类型**：int
-- **固定值**：300
-
-### data.type 字段说明
-
-`data.type` 决定节点的真实形状和知识类型。
-
-| data.type | 类型名称 | 说明 | 真实形状 |
-|:----------|:---------|:-----|:---------|
-| 2 | 陈述性知识 | 概念、定义、原理、是什么、为什么 | 矩形 |
-| 3 | 程序性知识 | 步骤、流程、操作方法、怎么做 | 胶囊 |
-| 5 | 认知策略 | 学习方法、选择策略、分析策略 | 圆柱 |
-| 6 | 事实范例 | 案例、示例、范例 | 波浪矩形 |
-
-**约束**：
-- `data.type` 只能使用以上 4 种取值
+要求：
+- 只能使用以上 4 种取值
 - 必须由节点内容语义决定
-- 根节点的形状也由 `data.type` 决定
-- 课程思政点按其实际内容归入以上 4 类之一
+- 根节点也按 `data.type` 决定其知识类型
+- 课程思政点如出现，也必须归入以上 4 类之一，不能扩展新的 `data.type`
+- 若下级知识点是步骤或流程，优先标记为程序性知识 `3`
+- 若下级知识点不是步骤或流程，优先标记为陈述性知识 `2`
 
-**程序性知识标注规则**：
-- 下级知识点为步骤或流程：标识为程序性知识（3）
-- 下级知识点不是步骤或流程：优先标识为陈述性知识（2）
+说明：
+- 颜色表达语义层次
+- 真实形状表达知识类型
+- 这两套维度不能混用，不要因为是核心节点就擅自修改知识类型，也不要因为是程序性/策略/范例就误改颜色语义
 
----
+### 连线
+连线至少应正确提供：
+- `id`
+- `from`
+- `to`
+- `text`
 
-## 连线对象字段说明
+关键约束：
+- `from/to` 必须引用有效节点 id
+- `fromJunctionPoint/toJunctionPoint` 由脚本更新
+- `lineShape` 默认使用 `1`
 
-#### id
-- **类型**：string
-- **格式**：非空字符串，推荐使用 `line-随机字符串` 格式
-- **说明**：连线标识
-- **约束**：不能重复，在整个 JSON 中必须唯一
+增量/布局场景下：
+- 只应更新 `fromJunctionPoint`
+- 只应更新 `toJunctionPoint`
+- 未明确要求修改时，连线样式字段应沿用原 JSON
 
-#### from
-- **类型**：string
-- **说明**：起始节点的 id
-- **约束**：必须在 `nodes[].id` 中能找到对应的节点
+布局阶段允许改动的连线字段：
+- `fromJunctionPoint`
+- `toJunctionPoint`
 
-#### to
-- **类型**：string
-- **说明**：结束节点的 id
-- **约束**：必须在 `nodes[].id` 中能找到对应的节点
+逐字段说明：
+- `id`：连线标识，类型为 `string`，必须非空且唯一，推荐使用 `line-随机字符串`
+- `from`：起始节点 id，必须引用有效节点
+- `to`：结束节点 id，必须引用有效节点
+- `text`：关系文本，必须反映真实语义关系
+- `text` 不允许换行
+- `fromJunctionPoint`：起始节点上的连接位置，可用 `border`、`left`、`right`、`top`、`bottom`
+- `toJunctionPoint`：结束节点上的连接位置，可用 `border`、`left`、`right`、`top`、`bottom`
+- `lineShape`：连线形状，`1`=直线，`44`=折线，`6`=曲线，默认使用 `1`
 
-#### text
-- **类型**：string
-- **说明**：关系文本，必须反映真实语义关系
-- **常用值**：`支持`、`具有特征`、`包含`、`步骤包含`、`是前提`、`关键点包含`、`并列`、`定义`、`具有属性`、`是一种`、`组成`、`构成`
-- **约束**：若常用值不足以准确表达语义，允许使用更适配的描述文字
+常用固定字段：
+- `showStartArrow`: `false`
+- `showEndArrow`: `true`
+- `lineWidth`: `1`
+- `color`: `"#000000"`
+- `isHide`: `false`
+- `fontBold`: `false`
+- `fontItalic`: `false`
+- `fontUnderline`: `false`
+- `opacity`: `1`
+- `arrow`: `"RGIns-12-arrow-000000-w5"`
+- `animation`: `0`
+- `dashType`: `0`
+- `disableDefaultClickEffect`: `false`
+- `startMarkerId`: `""`
+- `endMarkerId`: `""`
+- `forDisplayOnly`: `false`
+- `fromJuctionPointOffsetX`: `0`
+- `fromJuctionPointOffsetY`: `0`
+- `toJuctionPointOffsetX`: `0`
+- `toJuctionPointOffsetY`: `0`
+- `polyLineRadius`: `0`
+- `hidden`: `false`
 
-#### fromJunctionPoint
-- **类型**：string
-- **说明**：起始节点上的连接位置，根据两节点相对位置选择，使连线更顺畅
-- **取值**：`border`、`left`、`right`、`top`、`bottom`
-- **默认值**：`border`
+关系文本常用值：
+- `支持`
+- `具有特征`
+- `包含`
+- `步骤包含`
+- `是前提`
+- `关键点包含`
+- `并列`
+- `定义`
+- `具有属性`
+- `是一种`
+- `组成`
+- `构成`
 
-#### toJunctionPoint
-- **类型**：string
-- **说明**：结束节点上的连接位置，根据两节点相对位置选择，使连线更顺畅
-- **取值**：`border`、`left`、`right`、`top`、`bottom`
-- **默认值**：`border`
+要求：
+- 若常用值不足以准确表达语义，允许使用更贴切的关系描述
 
-#### lineShape
-- **类型**：int
-- **说明**：连线形状，优先使用直线
-- **取值**：
-  - `1`：直线（优先）
-  - `44`：折线
-  - `6`：曲线
-- **默认值**：1
+## 版式原则
 
-### 固定值字段
+relation-graph 按教材式布局规则生成知识建模图。
 
-#### showStartArrow
-- **类型**：boolean
-- **固定值**：false
+要求：
+- 节点位置由知识角色、分区和阅读路径决定
+- 详细分区与样例规则以 `references/layout-semantic.md` 为准
 
-#### showEndArrow
-- **类型**：boolean
-- **固定值**：true
+最重要的空间规则：
+- 根节点与一级主干节点放中心或中心偏左
+- `data.type=3` 优先形成左侧纵向步骤列
+- 同父枚举项优先成组排列并尾插
+- `data.type=6` 优先放外围区域
+- `data.type=5` 放边缘辅助区域
+- 增量时优先沿用原图既有方向与分组关系
 
-#### lineWidth
-- **类型**：int
-- **固定值**：1
-
-#### color
-- **类型**：string
-- **固定值**："#000000"
-
-#### isHide
-- **类型**：boolean
-- **固定值**：false
-
-#### fontBold
-- **类型**：boolean
-- **固定值**：false
-
-#### fontItalic
-- **类型**：boolean
-- **固定值**：false
-
-#### fontUnderline
-- **类型**：boolean
-- **固定值**：false
-
-#### opacity
-- **类型**：number
-- **固定值**：1
-
-#### arrow
-- **类型**：string
-- **固定值**："RGIns-12-arrow-000000-w5"
-
-#### animation
-- **类型**：int
-- **固定值**：0
-
-#### dashType
-- **类型**：int
-- **固定值**：0
-
-#### disableDefaultClickEffect
-- **类型**：boolean
-- **固定值**：false
-
-#### startMarkerId
-- **类型**：string
-- **固定值**：""
-
-#### endMarkerId
-- **类型**：string
-- **固定值**：""
-
-#### forDisplayOnly
-- **类型**：boolean
-- **固定值**：false
-
-#### fromJuctionPointOffsetX
-- **类型**：int
-- **固定值**：0
-
-#### fromJuctionPointOffsetY
-- **类型**：int
-- **固定值**：0
-
-#### toJuctionPointOffsetX
-- **类型**：int
-- **固定值**：0
-
-#### toJuctionPointOffsetY
-- **类型**：int
-- **固定值**：0
-
-#### polyLineRadius
-- **类型**：int
-- **固定值**：0
-
-#### hidden
-- **类型**：boolean
-- **固定值**：false
-
-### data 字段
-
-连线 `data` 结构：
-
-```json
-{
-  "type": 2
-}
-```
-
----
-
-## 布局与坐标说明
+基础原则：
+- 优先 JSON 结构正确，再考虑坐标布局
+- 严格按照技能中描述的字段名
+- 节点位置由 `x`、`y`、`width`、`height` 共同决定
+- 节点中心点 = `(x + width/2, y + height/2)`
+- 任意两个节点至少保持 `20px` 安全间距
+- 判断重叠或间距不足时，不能只看中心点，必须结合 `x/y/width/height`
+- 节点不能重叠
 
 ### 画布坐标系
 
-- **原点**：`(0, 0)` 为画布中心点
-- **X 方向**：向左为负，向右为正
-- **Y 方向**：向上为负，向下为正
+- 原点：`(0, 0)` 为画布中心点
+- X 方向：向左为负，向右为正
+- Y 方向：向上为负，向下为正
+- 节点位置由 `x`、`y`、`width`、`height` 共同决定
+- 节点中心点 = `(x + width/2, y + height/2)`
 
 ### 节点尺寸
 
-- 节点位置由 `x`、`y`、`width`、`height` 决定
-- 节点中心点 = `(x + width/2, y + height/2)`
-- `width`、`height` 根据节点文字内容自适应生成
+- 节点尺寸由 `width` 和 `height` 决定
+- `width`、`height` 可根据节点文字内容自适应生成
+- 若请求中未提供 `width/height`，可由脚本按文本估算补齐
+- 判断节点重叠、间距和排布时，必须同时考虑 `x`、`y`、`width`、`height`
 
 ### 节点间距要求
 
-- 任意两个节点之间至少保持 `20px` 间距
+- 任意两个节点之间至少保持 `20px` 安全间距
 - 推荐使用更宽松的间距：垂直方向 `50-80px`，水平方向 `80-120px`
-- 计算时必须结合节点的 `x`、`y`、`width`、`height`，不能只看中心点
+- 计算节点间距时，必须结合节点的 `x`、`y`、`width`、`height`
 - 节点不能重叠
 
 ### 连线文本对间距的影响
 
-- **有连线文本的节点对**：需要根据连线文本长度适当增加间距
-- **文本长度估算**：中文按每个字符约 14px 宽度，英文/数字按约 8px 宽度
-- **间距调整规则**：
-  - 文本长度 ≤ 4 字：使用基础间距
-  - 文本长度 5-8 字：在基础间距上增加 `20-40px`
-  - 文本长度 ≥ 9 字：在基础间距上增加 `40-60px`
-- **垂直布局**：连线文本位于节点之间，主要影响垂直间距需求
-- **水平布局**：连线文本位于节点上方或中间，主要影响水平间距需求
+- 有连线文本的节点对，需要根据连线文本长度适当增加间距
+- 文本长度较短时，可使用基础间距
+- 文本长度较长时，应增加节点之间的水平或垂直距离，避免文字拥挤
+- 垂直布局时，连线文本主要影响垂直间距
+- 水平布局时，连线文本主要影响水平间距
 
 ### 子节点位置计算
 
-计算子节点坐标时，从父节点的**边界**开始计算，不是从父节点的 `x/y` 开始。
-
-假设父节点 A 的位置是 `(xA, yA)`，尺寸是 `(wA, hA)`，子节点 B 的尺寸是 `(wB, hB)`：
-
-| 子节点位置 | 计算方式 |
-|:---------|:---------|
-| 在 A 的右侧 | `B.x = xA + wA + 间距` |
-| 在 A 的左侧 | `B.x = xA - wB - 间距` |
-| 在 A 的下方 | `B.y = yA + hA + 间距` |
-| 在 A 的上方 | `B.y = yA - hB - 间距` |
-
-**示例**：
-```
-父节点 A: x=0, y=0, width=200, height=60
-
-右侧第一个子节点: x = 0 + 200 + 100 = 300  // 水平间距 100px
-下方第一个子节点: y = 0 + 60 + 70 = 130   // 垂直间距 70px
-```
+- 子节点坐标不是从父节点 `x/y` 开始计算，而是从父节点边界开始计算
+- 右侧：`B.x = xA + wA + 间距`
+- 左侧：`B.x = xA - wB - 间距`
+- 下方：`B.y = yA + hA + 间距`
+- 上方：`B.y = yA - hB - 间距`
 
 ### 多个子节点布局
 
-**多个子节点在父节点同一侧时**，需要均匀分布：
+- 单个子节点：
+- 上下连接时，可以放在父节点上方或下方
+- 左右连接时，可以放在父节点左侧或右侧
+- 同一父节点的多个子节点应均匀分布
+- 右侧或左侧排布时，优先保持相近 `x` 轴，在 `y` 方向均匀展开
+- 上方或下方排布时，优先保持相近 `y` 轴，在 `x` 方向均匀展开
+- 在此基础上，再叠加步骤列、枚举组、案例区、策略区等语义分区规则
 
-- 子节点在右侧：在 `x` 方向排列，`y` 方向与父节点中心对齐
-- 子节点在下方：在 `y` 方向排列，`x` 方向与父节点中心对齐
+**排列公式：**
 
-**排列公式**：
-```
-父节点中心: centerX = x + width/2
-子节点数量: n
-子节点总宽度: totalWidth = sum(width) + (n - 1) * spacing
-起始位置: startX = centerX - totalWidth/2
-```
+- 父节点中心：`centerX = x + width/2`
+- 父节点中心：`centerY = y + height/2`
+- 子节点数量：`n`
+- 横向排布时：`totalWidth = sum(子节点 width) + (n - 1) * spacing`
+- 纵向排布时：`totalHeight = sum(子节点 height) + (n - 1) * spacing`
+- 横向起始位置：`startX = centerX - totalWidth/2`
+- 纵向起始位置：`startY = centerY - totalHeight/2`
 
 ### 连接点选择
 
-根据两节点的相对位置选择连接点，使连线更顺畅：
-
-| 结束节点相对起始节点的位置 | fromJunctionPoint | toJunctionPoint |
-|:------------------------|:-----------------|:---------------|
-| 在右侧（水平布局） | right | left |
-| 在左侧（水平布局） | left | right |
-| 在下方（垂直布局） | bottom | top |
-| 在上方（垂直布局） | top | bottom |
-
-**最佳实践**：
-- **垂直布局**的父子节点（Y 轴方向排列）：优先使用 `bottom` → `top` 连接
-- **水平布局**的兄弟节点（X 轴方向排列）：优先使用 `right` → `left` 或 `left` → `right` 连接
-- 层级结构中，父节点到子节点主要使用垂直连接（`bottom` → `top`）
-- 同层级节点之间使用水平连接（`right` → `left`）
-
-**布局目标**：
-- 连线尽量不交叉，走直线或简洁路径
-- 同一节点同一侧的多条连线要均匀分布，不能都连在同一点
-
----
-
-## 设计要点
-
-### 知识点挖掘
-- 必须覆盖与后续项目化教学课程紧密关联的知识组块，不要只抽取零散名词
-
-### 陈述性知识点处理
-- 对理论性强、抽象度高、理解门槛高的陈述性知识点，后面应尽量补充对应范例知识点
-- 范例知识点优先使用 `data.type=6`
-
-### 结构布局
-- 整体应以树状结构、放射结构或思维导图式层级展开
-- 清楚呈现知识点之间的逻辑关系
-
-### 范例要求
-- 范例知识点可以是案例、视频、图片、参考书、作品片段或其他具体资源
-- 不要只写空泛的"案例分析"
-
----
+- 目标在右侧：`right -> left`
+- 目标在左侧：`left -> right`
+- 目标在下方：`bottom -> top`
+- 目标在上方：`top -> bottom`
+- 垂直步骤链优先 `bottom -> top`
+- 水平同层关系优先左右连接
+- 在无法简单判断的情况下，可退回使用 `border`
 
 ## 生成步骤
 
-### 步骤 1：判断是新建还是修改
-- 如果用户提供了"当前建模图.json"类型的文件，按增量修改处理
-- 如果用户没有提供建模图 JSON，按新建处理
+### 1. 判断任务类型
+- 有当前建模图 JSON：按增量修改处理
+- 没有当前建模图 JSON：按新建处理
 
-### 步骤 2：确定语义结构
-- 识别根节点、核心知识点、知识框架、先决知识、程序性步骤、案例、策略、思政点
-- 识别关系语义
+增量判断与处理要求：
+- 文件内容若已符合本技能规范，且包含 `rootId`、`nodes`、`lines`，应视为当前建模图 JSON
+- 增量时尽量保持现有节点、连线、坐标、颜色、形状、文本、`data` 等属性不变
+- 先理解原图结构，再做局部修改
 
-### 步骤 3：确定节点与连线属性
-- 节点属性、连线属性、`data.type`、颜色和连线参数按本文档字段说明处理
+### 2. 识别语义结构
+识别：
+- 根节点
+- 核心知识点
+- 程序性步骤
+- 枚举组
+- 案例
+- 策略
+- 关系语义与阅读路径
 
-### 步骤 4：计算布局
-- 坐标、间距、对称分布、连接点和防交叉按本文档布局与坐标说明处理
-- 对高密度区域要预留冗余空间，优先保证节点间距
-- 若节点数较多、层级较深或混合布局容易碰撞，应主动放大 `x/y` 间距
+### 3. 生成节点与连线内容
+根据语义确定：
+- 节点文本
+- 连线文本
+- `data.type`
+- 颜色
+- 分区
 
-### 步骤 5：输出前检查
-使用以下自检清单：
+内容质量要求：
+- 对理论性强、抽象度高、理解门槛高的陈述性知识点，后面应尽量补充对应范例知识点
+- 范例知识点优先使用 `data.type=6`
+- 范例知识点应尽量具体，不要只写空泛的“案例分析”
 
-```text
-1. 所有字段名是否完全符合 references/schema.json 定义？
-2. rootId / 节点 id / 连线 id 是否都是非空且唯一？
-3. 每个节点是否都包含 id、text、x、y、data.type？
-4. 每个节点的 data.startPostion.x / y 是否与节点 x / y 完全一致？
-5. 每条连线是否都包含 id、from、to、text、fromJunctionPoint、toJunctionPoint？
-6. 每条连线的 from / to 是否都能在 nodes[].id 中找到？
-7. 节点颜色、真实形状、data.type 是否由节点语义决定？
-8. 关系 text 是否真实表达语义关系？
+### 4. 直接给出语义坐标
+- 必须先阅读 `references/layout-semantic.md`
+- 给 `x/y` 时优先参考 `graph-data-1774064516149.json` 的版式风格
+- 新建图：先主干，再步骤列，再枚举组，最后外挂案例与策略
+- 增量图：优先冻结旧节点，新增节点沿已有步骤列、枚举组、外围区域方向追加
+- 步骤链连接方向优先 `top -> bottom`
+- 外围挂接优先朝向主干
+
+### 5. 调用布局脚本
+必须执行：
+
+```bash
+python /skills/relation-graph/scripts/layout_graph.py /path/to/request.json --output output/layout-result.json --pretty
 ```
 
-### 步骤 6：执行校验脚本
-- 生成 JSON 后必须运行：`python /skills/relation-graph/scripts/validate_json.py /path/to/result.json`
-- 只有脚本返回 `VALID`，结果才算完成
-- 若校验失败，必须继续修正直到校验通过
-- 若失败原因是节点间距不足、局部重叠或高密度布局拥挤，应回到步骤 4 重新扩张画布与层间距
+路径要求：
+- `python /skills/relation-graph/scripts/layout_graph.py` 中的 `/skills/...` 仅指脚本位置
+- `/path/to/request.json` 应替换为当前工作区 `output/` 中的文件，例如 `output/python_functions_request.json`
+- `--output` 也必须写到当前工作区的 `output/` 目录，例如 `output/layout-result.json`
+- 不要把请求文件或结果文件写到 `/skills/relation-graph/output/...`
+- 布局脚本调用时必须显式传入这两个路径：请求 JSON 路径、`--output` 路径
 
----
+写文件要求：
+- 调用写文件工具生成 JSON 时，必须写入完整 JSON 内容，不能只写节点/连线的局部字段
+- 不能因为字段是固定值就省略
+- 不能写“先最小化生成，后面让脚本补齐”的 JSON
+- 请求 JSON、布局结果 JSON、最终结果 JSON 都必须是完整对象
+
+请求 JSON 至少包含：
+- `mode`: `create` / `incremental`
+- `nodes`: 全量节点，且每个节点都直接带 `x/y`
+- `lines`: 全量连线
+- `preserveNodeIds`: 增量时冻结的旧节点 id 列表
+- `targetNodeIds`: 本轮新增或允许局部调整的节点 id 列表
+- `rootId`: 可选
+
+要求：
+- `layoutOptions` 不使用
+- 必须通过 `layout_graph.py` 进入布局流程
+- `layout_graph.py` 不负责补齐固定字段；若节点、连线缺少技能要求的固定字段，脚本会直接报错
+- `layout_graph.py` 只允许修改布局相关字段，不允许借布局流程重建或简化最终 JSON 结构
+
+### 6. 组装最终 schema JSON
+- 读取 `layout_graph.py` 输出
+- 合并 schema 固定字段、节点语义属性、颜色、关系文本
+- 确保 `data.startPostion` 与 `x/y` 完全一致
+- 最终 JSON 必须输出到 `output/` 目录
+- 不允许把最终 JSON 写到技能目录、根目录或其他非 `output/` 位置
+
+### 7. 执行最终校验
+必须执行：
+
+```bash
+python /skills/relation-graph/scripts/validate_json.py output/result.json --schema /skills/relation-graph/references/schema.json
+```
+
+要求：
+- 只有返回 `VALID` 才算完成
+- 若失败，必须继续修正直到通过
+- 校验时必须显式传入 `--schema /skills/relation-graph/references/schema.json`
+
+修正策略：
+- 先修正结构问题，再修正坐标与布局问题
+- 若失败原因是节点过密、局部重叠、间距不足，应扩大空间、增大层间距或重排局部区域后重新执行布局
+- 不要为了局部美观牺牲 JSON 结构正确性
+
+## 输出前检查
+
+1. 是否严格符合 `references/schema.json`？
+2. `rootId` / 节点 id / 连线 id 是否都非空且唯一？
+3. 是否按当前布局参考执行？
+4. 节点是否都包含 `id/text/x/y/data.type`？
+5. `data.startPostion` 是否与节点坐标完全一致？
+6. 连线的 `from/to` 是否都能在节点中找到？
+7. 是否严格按照技能中描述的字段名，且未误用 `edges`、`source`、`target`、`label`？
+8. 每条连线是否都包含 `fromJunctionPoint`、`toJunctionPoint`？
+9. 节点颜色、真实形状、`data.type` 是否由语义决定，而不是为了美观随意指定？
+10. 关系文本是否真实表达语义关系？
+11. 程序性节点是否形成步骤列？
+12. 枚举节点是否成组排列？
+13. 案例节点是否优先位于外围区域？
+14. 若为增量修改，未改旧节点是否已尽量保持不变？
+15. 是否存在孤立节点、重叠或明显拥挤？
+
+若失败原因是节点间距不足或局部重叠，应回到坐标生成或布局执行阶段继续修正。
 
 ## 输出要求
 
-最终输出应是知识建模图 JSON，不要输出解释性大段说明来替代结果。
+最终输出应是知识建模图 JSON。
 
-若用户要求附带说明，可在 JSON 之后补充极简说明，但不能省略最终 JSON。
+若用户要求附带说明，可在 JSON 后补充极简说明，但不能省略最终 JSON。
+- 输出文件应放在 `output` 目录下。
+
+## 快速参考
+
+### 节点类型
+- `2`：陈述性知识，矩形
+- `3`：程序性知识，胶囊
+- `5`：认知策略，圆柱
+- `6`：事实范例，波浪矩形
+
+### 颜色语义
+- `#FF0000`：核心知识点
+- `#00B0F0`：核心结构化知识框架
+- `#00B050`：先决知识点
+- `#000000`：普通知识点
+
+### 布局阶段允许改动字段
+- 节点：`x`、`y`、`width`、`height`、`data.startPostion`
+- 连线：`fromJunctionPoint`、`toJunctionPoint`
+
+### 结构优先级
+- 优先 JSON 结构正确，再考虑坐标布局
+- 严格按照技能中描述的字段名
+- 若与其他说明冲突，以 `references/schema.json` 为准

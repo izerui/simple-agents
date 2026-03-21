@@ -56,6 +56,8 @@
       "additionalProperties": true,
       "required": [
         "type",
+        "backgroundImage",
+        "imageFit",
         "startPostion"
       ],
       "properties": {
@@ -68,6 +70,20 @@
             6
           ],
           "description": "知识类型：2=陈述性知识（矩形），3=程序性知识（胶囊），5=认知策略（圆柱），6=事实范例（波浪矩形）。按内容选：概念/定义/原理用2，步骤/流程用3，学习方法/策略用5，案例/范例用6"
+        },
+        "backgroundImage": {
+          "type": "string",
+          "enum": [
+            ""
+          ],
+          "default": ""
+        },
+        "imageFit": {
+          "type": "string",
+          "enum": [
+            "cover"
+          ],
+          "default": "cover"
         },
         "startPostion": {
           "type": "object",
@@ -94,8 +110,38 @@
       "required": [
         "id",
         "text",
+        "type",
+        "isShow",
+        "isHide",
+        "expanded",
+        "selected",
+        "dragging",
+        "styleClass",
+        "className",
+        "nodeShape",
+        "borderWidth",
+        "borderColor",
+        "fontColor",
+        "fontFamily",
+        "fontSize",
+        "fontBold",
+        "fontItalic",
+        "fontUnderline",
+        "textHorizontalAlign",
+        "textVerticalAlign",
+        "color",
+        "opacity",
+        "fixed",
         "x",
         "y",
+        "Fx",
+        "Fy",
+        "offset_x",
+        "offset_y",
+        "disableDrag",
+        "singleNode",
+        "invisiable",
+        "zIndex",
         "data"
       ],
       "properties": {
@@ -106,7 +152,9 @@
         },
         "text": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "description": "节点显示文本，不允许换行。"
         },
         "type": {
           "type": "string",
@@ -263,9 +311,9 @@
         "fixed": {
           "type": "boolean",
           "enum": [
-            false
+            true
           ],
-          "default": false
+          "default": true
         },
         "width": {
           "type": "number",
@@ -463,8 +511,31 @@
         "from",
         "to",
         "text",
+        "lineWidth",
+        "color",
+        "isHide",
+        "lineShape",
+        "fontBold",
+        "fontItalic",
+        "fontUnderline",
+        "opacity",
+        "arrow",
+        "animation",
+        "dashType",
+        "disableDefaultClickEffect",
         "showStartArrow",
-        "showEndArrow"
+        "showEndArrow",
+        "startMarkerId",
+        "endMarkerId",
+        "forDisplayOnly",
+        "fromJunctionPoint",
+        "toJunctionPoint",
+        "fromJuctionPointOffsetX",
+        "fromJuctionPointOffsetY",
+        "toJuctionPointOffsetX",
+        "toJuctionPointOffsetY",
+        "polyLineRadius",
+        "hidden"
       ],
       "properties": {
         "id": {
@@ -484,7 +555,8 @@
         },
         "text": {
           "type": "string",
-          "description": "关系文本。优先使用：支持、具有特征、包含、步骤包含、是前提、关键点包含、并列、定义、具有属性、是一种、组成、构成；若语义不适配可自定义。"
+          "pattern": "^[^\\r\\n]+$",
+          "description": "关系文本，不允许换行。优先使用：支持、具有特征、包含、步骤包含、是前提、关键点包含、并列、定义、具有属性、是一种、组成、构成；若语义不适配可自定义。"
         },
         "lineWidth": {
           "type": "integer",

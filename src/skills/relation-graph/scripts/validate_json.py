@@ -17,8 +17,6 @@ from jsonschema.exceptions import ValidationError
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 DEFAULT_SCHEMA_PATH = SKILL_DIR / "references" / "schema.json"
-ALLOWED_LINE_COLOR = "#000000"
-FIXED_NODE_BACKGROUND_COLOR = "#ffffff"
 MIN_NODE_GAP = 20
 
 
@@ -40,8 +38,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("target", help="Path to the JSON file to validate.")
     parser.add_argument(
         "--schema",
-        default=str(DEFAULT_SCHEMA_PATH),
-        help="Path to the JSON Schema file. Defaults to references/schema.json.",
+        required=True,
+        help="Path to the JSON Schema file.",
     )
     return parser
 
@@ -71,6 +69,11 @@ def boxes_too_close(a: dict[str, Any], b: dict[str, Any], gap: float) -> bool:
 
 
 def iter_semantic_errors(instance: Any) -> list[str]:
+    """检查 schema 之外的语义/布局规则。
+
+    注意：固定字段是否存在、固定值是否合法，统一交给 schema 校验。
+    这里只保留 schema 无法完整表达的跨字段与布局约束，避免与 schema 漂移。
+    """
     if not isinstance(instance, dict):
         return []
 
@@ -95,6 +98,10 @@ def iter_semantic_errors(instance: Any) -> list[str]:
             node_ids.append(node_id)
             node_by_id[node_id] = node
 
+        node_text = node.get("text")
+        if isinstance(node_text, str) and any(char in node_text for char in ("\r", "\n")):
+            errors.append(f"节点 `{node_id or index}` 的 text 不允许换行")
+
         data = node.get("data")
         if isinstance(data, dict):
             start_position = data.get("startPostion")
@@ -103,16 +110,6 @@ def iter_semantic_errors(instance: Any) -> list[str]:
                     errors.append(f"节点 `{node_id or index}` 的 data.startPostion.x 必须与 x 一致")
                 if not values_equal(start_position.get("y"), node.get("y")):
                     errors.append(f"节点 `{node_id or index}` 的 data.startPostion.y 必须与 y 一致")
-
-        node_shape = node.get("nodeShape")
-        if node_shape is not None and node_shape != 1:
-            errors.append(f"节点 `{node_id or index}` 的 nodeShape 必须固定为 1；真实形状由 data.type 决定")
-
-        node_color = node.get("color")
-        if node_color is not None and node_color != FIXED_NODE_BACKGROUND_COLOR:
-            errors.append(
-                f"节点 `{node_id or index}` 的 color 必须固定为 {FIXED_NODE_BACKGROUND_COLOR}"
-            )
 
     if len(node_ids) != len(set(node_ids)):
         errors.append("nodes 中存在重复 id")
@@ -125,6 +122,10 @@ def iter_semantic_errors(instance: Any) -> list[str]:
         if isinstance(line_id, str):
             line_ids.append(line_id)
 
+        line_text = line.get("text")
+        if isinstance(line_text, str) and any(char in line_text for char in ("\r", "\n")):
+            errors.append(f"连线 `{line_id or index}` 的 text 不允许换行")
+
         from_id = line.get("from")
         to_id = line.get("to")
 
@@ -134,15 +135,6 @@ def iter_semantic_errors(instance: Any) -> list[str]:
         if isinstance(to_id, str):
             if to_id not in node_by_id:
                 errors.append(f"连线 `{line_id or index}` 的 to 未引用有效节点")
-
-        if "fromJunctionPoint" not in line:
-            errors.append(f"连线 `{line_id or index}` 缺少 fromJunctionPoint")
-        if "toJunctionPoint" not in line:
-            errors.append(f"连线 `{line_id or index}` 缺少 toJunctionPoint")
-
-        line_color = line.get("color")
-        if isinstance(line_color, str) and line_color != ALLOWED_LINE_COLOR:
-            errors.append(f"连线 `{line_id or index}` 的 color 必须为 {ALLOWED_LINE_COLOR}")
 
     if len(line_ids) != len(set(line_ids)):
         errors.append("lines 中存在重复 id")

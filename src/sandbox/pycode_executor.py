@@ -135,9 +135,11 @@ def _execute_in_subprocess(
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(timeout)
 
+        source_name = script_path if script_path else '<sandbox>'
+
         # 编译代码
         try:
-            compiled_code = compile(code, '<sandbox>', 'exec')
+            compiled_code = compile(code, source_name, 'exec')
         except SyntaxError as e:
             result_queue.put(ExecuteResult(
                 output="语法错误: {0}".format(str(e)),
@@ -759,7 +761,7 @@ def _execute_in_subprocess(
         safe_globals = {
             '__builtins__': builtins,
             '__name__': '__main__',
-            '__file__': '<sandbox>',
+            '__file__': source_name,
             'print': print,
             'open': restricted_open,
             'range': range,

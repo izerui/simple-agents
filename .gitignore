@@ -1,4 +1,5 @@
 .env
+.myenv
 .jbeval
 .idea
 .venv

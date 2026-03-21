@@ -1,0 +1,5 @@
+# .codexignore
+.env
+.env.*
+.env.local
+.env.production
