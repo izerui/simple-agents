@@ -39,6 +39,7 @@ heredoc 格式优势：
 """
 import sys
 import io
+import json
 import os
 import re
 import signal
@@ -46,6 +47,7 @@ import shlex
 import shutil
 import traceback
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from multiprocessing import Process, Queue
 from deepagents.backends.protocol import ExecuteResponse
@@ -118,6 +120,13 @@ def _execute_in_subprocess(
     try:
         # 切换工作目录
         os.chdir(root_dir)
+        print("开始执行 Python 任务")
+        print("工作目录: /")
+        if script_path:
+            print("执行方式: script")
+            print("脚本路径: {0}".format(script_path))
+        else:
+            print("执行方式: inline")
 
         # 设置超时信号
         def timeout_handler(signum, frame):
@@ -683,6 +692,8 @@ def _execute_in_subprocess(
             @staticmethod
             def is_zipfile(filename, *args, **kwargs):
                 """检查文件是否是 zip 文件"""
+                if isinstance(filename, (str, os.PathLike)):
+                    filename = redirect_path(filename)
                 return _original_zipfile.is_zipfile(filename, *args, **kwargs)
 
             def __getattr__(self, name):
@@ -949,7 +960,7 @@ class CodeExecutor:
             writable_paths: 额外的可写路径列表
             readable_paths: 只读白名单路径列表（如 .venv）
         """
-        self.root_dir = Path(root_dir)
+        self.root_dir = Path(root_dir).resolve()
         # self.root_dir.mkdir(parents=True, exist_ok=True)
         self.timeout = timeout
         self.max_output_length = max_output_length
@@ -971,14 +982,118 @@ class CodeExecutor:
         # 动态添加当前 Python 环境的 lib 目录到白名单
         import sys
         self.readable_paths.append(Path(sys.prefix))
+        self.python_prefix = Path(sys.prefix).resolve()
 
         # 添加 .venv 到只读白名单，python-pptx 等库需要访问模板文件
         # .venv 在项目根目录下，而不是在沙箱 root_dir 下
         # 注意: 使用 absolute() 而不是 resolve() 以避免阻塞调用
-        project_root = Path(__file__).parent.parent.parent.absolute()
-        venv_path = project_root / '.venv'
+        self.project_root = Path(__file__).parent.parent.parent.resolve()
+        venv_path = self.project_root / '.venv'
+        self.venv_path = venv_path.resolve() if venv_path.exists() else None
         if venv_path.exists():
             self.readable_paths.append(venv_path)
+
+    @staticmethod
+    def _is_within(path_obj: Path, parent: Path) -> bool:
+        try:
+            path_obj.relative_to(parent)
+            return True
+        except ValueError:
+            return False
+
+    def _classify_host_path(self, resolved_path: Path) -> str:
+        if self._is_within(resolved_path, self.root_dir):
+            return 'root'
+        for wp in self.writable_paths:
+            if self._is_within(resolved_path, wp):
+                return 'writable'
+        for rp in self.readable_paths:
+            if self._is_within(resolved_path, rp):
+                return 'readable'
+        return 'other'
+
+    def _resolve_script_source_path(self, script_path: str) -> Path:
+        """解析脚本源码路径，遵循沙箱文件系统语义。"""
+        script_file = Path(script_path).expanduser()
+        if script_file.is_absolute():
+            resolved = script_file.resolve()
+            if self._classify_host_path(resolved) != 'other':
+                return resolved
+            return (self.root_dir / script_file.relative_to(script_file.anchor)).resolve()
+        return (self.root_dir / script_file).resolve()
+
+    def _virtualize_path_text(self, text: str) -> str:
+        """将 root_dir 下的宿主机路径回写为沙箱虚拟路径。"""
+        if not text:
+            return text
+
+        rewritten = text
+        replacement_pairs = [
+            (str(self.root_dir), os.sep),
+            (str(self.project_root), os.sep),
+            (str(self.python_prefix), "/.python"),
+        ]
+        if self.venv_path is not None:
+            replacement_pairs.insert(2, (str(self.venv_path), "/.venv"))
+
+        for source, target in sorted(replacement_pairs, key=lambda item: len(item[0]), reverse=True):
+            normalized_source = source.rstrip(os.sep)
+            if not normalized_source:
+                continue
+            rewritten = rewritten.replace(normalized_source + os.sep, target.rstrip(os.sep) + os.sep)
+            rewritten = rewritten.replace(source, target)
+        return rewritten
+
+    def _debug_print(self, message: str) -> None:
+        print(self._virtualize_path_text(message))
+
+    def _snapshot_root_files(self) -> dict[str, dict[str, object]]:
+        """记录 root_dir 中文件的元信息，用于执行后给出摘要。"""
+        snapshot: dict[str, dict[str, object]] = {}
+        if not self.root_dir.exists():
+            return snapshot
+
+        for path in self.root_dir.rglob("*"):
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            virtual_path = "/" + str(path.relative_to(self.root_dir)).replace(os.sep, "/")
+            snapshot[virtual_path] = {
+                "size": stat.st_size,
+                "mtime_ns": stat.st_mtime_ns,
+            }
+        return snapshot
+
+    @staticmethod
+    def _format_file_changes(
+        before: dict[str, dict[str, object]],
+        after: dict[str, dict[str, object]],
+    ) -> list[str]:
+        lines: list[str] = []
+        created = sorted(path for path in after if path not in before)
+        updated = sorted(
+            path for path in after
+            if path in before and (
+                after[path]["mtime_ns"] != before[path]["mtime_ns"]
+                or after[path]["size"] != before[path]["size"]
+            )
+        )
+
+        if created:
+            lines.append("新建文件:")
+            for path in created:
+                lines.append(
+                    "- {0} ({1} bytes)".format(path, after[path]["size"])
+                )
+
+        if updated:
+            lines.append("更新文件:")
+            for path in updated:
+                lines.append(
+                    "- {0} ({1} bytes)".format(path, after[path]["size"])
+                )
+
+        return lines
 
     def _parse_command(self, command):
         """
@@ -1073,7 +1188,7 @@ class CodeExecutor:
                 parsed_parts = shlex.split(command)
             except ValueError as e:
                 # 如果 shlex 解析失败（如不匹配的引号），回退到简单分割
-                print("shlex 解析失败，回退到简单分割: {0}".format(e))
+                self._debug_print("shlex 解析失败，回退到简单分割: {0}".format(e))
                 parsed_parts = command.split()
 
             if len(parsed_parts) < 2:
@@ -1094,20 +1209,16 @@ class CodeExecutor:
         Returns:
             脚本内容
         """
-        print("→ 读取脚本文件: {0}".format(script_path))
+        self._debug_print("→ 读取脚本文件: {0}".format(script_path))
 
-        script_file = Path(script_path).expanduser()
-        if script_file.is_absolute():
-            full_path = script_file.resolve()
-        else:
-            full_path = (self.root_dir / script_file).resolve()
+        full_path = self._resolve_script_source_path(script_path)
 
         if not full_path.exists():
-            print("✗ 文件不存在: {0}".format(full_path))
+            self._debug_print("✗ 文件不存在: {0}".format(full_path))
             raise FileNotFoundError(str(full_path))
 
         content = full_path.read_text(encoding='utf-8')
-        print("✓ 文件读取成功 ({0} 字节)".format(len(content)))
+        self._debug_print("✓ 文件读取成功 ({0} 字节)".format(len(content)))
         return content
 
     def execute(self, command):
@@ -1137,14 +1248,18 @@ class CodeExecutor:
                     code = self._read_script_file(script_path)
                 except FileNotFoundError as e:
                     return ExecuteResponse(
-                        output="错误: 脚本文件不存在: {0}\n详细信息: {1}".format(script_path, str(e)),
+                        output=self._virtualize_path_text(
+                            "错误: 脚本文件不存在: {0}\n详细信息: {1}".format(script_path, str(e))
+                        ),
                         exit_code=-1,
                         truncated=False
                     )
                 except Exception as e:
-                    print("✗ 读取文件失败")
+                    self._debug_print("✗ 读取文件失败")
                     return ExecuteResponse(
-                        output="错误: 读取脚本文件失败: {0}\n详细信息: {1}".format(script_path, str(e)),
+                        output=self._virtualize_path_text(
+                            "错误: 读取脚本文件失败: {0}\n详细信息: {1}".format(script_path, str(e))
+                        ),
                         exit_code=-1,
                         truncated=False
                     )
@@ -1153,12 +1268,14 @@ class CodeExecutor:
             code = code.strip()
 
             if not code:
-                print("✗ 代码为空")
+                self._debug_print("✗ 代码为空")
                 return ExecuteResponse(
                     output="错误: 没有提供要执行的代码",
                     exit_code=-1,
                     truncated=False
                 )
+
+            before_file_snapshot = self._snapshot_root_files()
 
             # 步骤 3: 创建子进程执行代码
             result_queue = Queue()
@@ -1202,7 +1319,7 @@ class CodeExecutor:
                 result = result_queue.get()
             else:
                 # 子进程异常退出但没有返回结果
-                print("✗ 进程异常退出")
+                self._debug_print("✗ 进程异常退出")
                 return ExecuteResponse(
                     output="错误: 子进程异常退出，没有返回结果",
                     exit_code=-1,
@@ -1210,7 +1327,16 @@ class CodeExecutor:
                 )
 
             # 步骤 4: 检查输出长度并截断
-            output = result.output
+            output = self._virtualize_path_text(result.output)
+            after_file_snapshot = self._snapshot_root_files()
+            summary_lines = [
+                "执行结束: exit_code={0}".format(result.exit_code),
+                "完成时间: {0}".format(datetime.now().isoformat(timespec="seconds")),
+            ]
+            summary_lines.extend(self._format_file_changes(before_file_snapshot, after_file_snapshot))
+            if output and not output.endswith("\n"):
+                output += "\n"
+            output += "\n".join(summary_lines) + "\n"
             truncated = False
 
             if len(output) > self.max_output_length:
@@ -1226,10 +1352,12 @@ class CodeExecutor:
 
         except Exception as e:
             # 捕获任何未预期的异常
-            print("✗ 系统异常")
+            self._debug_print("✗ 系统异常")
             import traceback
             return ExecuteResponse(
-                output="系统异常: {0}\n{1}".format(str(e), traceback.format_exc()),
+                output=self._virtualize_path_text(
+                    "系统异常: {0}\n{1}".format(str(e), traceback.format_exc())
+                ),
                 exit_code=-1,
                 truncated=False
             )
