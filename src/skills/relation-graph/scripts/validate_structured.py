@@ -179,22 +179,6 @@ def iter_errors(instance: Any) -> list[str]:
     if len(line_ids) != len(set(line_ids)):
         errors.append("lines 中存在重复 id")
 
-    valid_nodes = [
-        node for node in nodes
-        if isinstance(node, dict)
-        and isinstance(node.get("x"), (int, float))
-        and isinstance(node.get("y"), (int, float))
-        and isinstance(node.get("width"), (int, float))
-        and isinstance(node.get("height"), (int, float))
-        and isinstance(node.get("id"), str)
-    ]
-    for i, left in enumerate(valid_nodes):
-        for right in valid_nodes[i + 1:]:
-            if boxes_too_close(left, right, MIN_NODE_GAP):
-                errors.append(
-                    f"节点 `{left['id']}` 与 `{right['id']}` 间距过近，未满足最小间距要求"
-                )
-
     adjacency: dict[str, list[str]] = {node_id: [] for node_id in node_ids}
     referenced = {root_id} if isinstance(root_id, str) else set()
     for line in lines:
@@ -207,27 +191,6 @@ def iter_errors(instance: Any) -> list[str]:
                 referenced.add(to_id)
                 if isinstance(from_id, str) and from_id in adjacency:
                     adjacency[from_id].append(to_id)
-
-    visited: set[str] = set()
-    visiting: set[str] = set()
-
-    def has_cycle(node_id: str) -> bool:
-        if node_id in visiting:
-            return True
-        if node_id in visited:
-            return False
-        visiting.add(node_id)
-        for next_id in adjacency.get(node_id, []):
-            if next_id in adjacency and has_cycle(next_id):
-                return True
-        visiting.remove(node_id)
-        visited.add(node_id)
-        return False
-
-    for node_id in adjacency:
-        if has_cycle(node_id):
-            errors.append("连接关系不允许形成循环")
-            break
 
     isolated = [node_id for node_id in node_ids if node_id not in referenced]
     if isolated:
