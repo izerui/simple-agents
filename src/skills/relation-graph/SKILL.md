@@ -9,6 +9,7 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 
 默认交付物：
 - `output/result.json`
+- 若 `output/result.json` 已存在，则按序递增命名，如 `output/result2.json`、`output/result3.json`
 
 默认工作方式：
 - 直接生成最终 JSON
@@ -112,6 +113,12 @@ python /skills/relation-graph/scripts/validate_json.py output/result.json --sche
 output/result.json
 ```
 
+若该文件已存在，则按序递增到下一个可用文件名，例如：
+
+```text
+output/result2.json
+```
+
 不要写到技能目录或其他路径。
 
 ### 6. 校验并修正
@@ -187,7 +194,7 @@ python /skills/relation-graph/scripts/validate_json.py output/result.json --sche
 
 1. 已读取 `references/schema.json`
 2. 坐标生成前已读取 `references/layout.md`
-3. 结果文件写在 `output/result.json`
+3. 结果文件写在 `output/result.json` 或按序递增后的 `output/resultN.json`
 4. 最终 JSON 不是差量字段，而是完整对象
 5. `rootId`、节点 id、连线 id 均非空且唯一
 6. `data.startPostion` 与节点坐标完全一致
@@ -200,7 +207,7 @@ python /skills/relation-graph/scripts/validate_json.py output/result.json --sche
 ## 输出要求
 
 默认交付：
-- 生成 `output/result.json`
+- 生成 `output/result.json`；若已存在则生成下一个可用的 `output/resultN.json`
 
 回复用户时：
 - 以结果完成情况为主
