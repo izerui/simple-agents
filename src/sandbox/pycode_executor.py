@@ -1082,7 +1082,7 @@ class CodeExecutor:
         )
 
         if created:
-            lines.append("新建文件:")
+            lines.append("生成文件:")
             for path in created:
                 lines.append(
                     "- {0} ({1} bytes)".format(path, after[path]["size"])
