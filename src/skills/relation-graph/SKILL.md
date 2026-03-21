@@ -36,7 +36,12 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 什么时候读：
 - 任何需要生成或调整 `x/y/width/height`、阅读路径、分区布局、连线拓扑时
 
-3. `scripts/validate_json.py`
+3. `references/templete.json`
+什么时候读：
+- 需要参考现有图谱的整体风格、分区方式、节点密度、案例外挂方式时
+- 只把它当风格参考，不要拿它覆盖 schema 或用户当前要求
+
+4. `scripts/validate_json.py`
 什么时候用：
 - 写出最终 JSON 后必须运行
 
@@ -82,6 +87,8 @@ python /skills/relation-graph/scripts/validate_json.py output/result.json --sche
 - 先定骨架，再定分区，再定节点坐标
 - 坐标要服务可读性，而不是只满足不重叠
 - 连线拓扑、阅读顺序、节点分区要一起考虑
+- 根节点优先按语义中心判断，不要只按入度/出度机械判断
+- 优先形成“中心主干 + 左侧步骤 + 右侧展开 + 外围挂接”的稳定阅读结构
 
 这句话要严格按这个意思理解：
 - `x/y` 必须出现在最终 JSON 中
@@ -152,7 +159,7 @@ python /skills/relation-graph/scripts/validate_json.py output/result.json --sche
 - 形状表达知识类型
 - 不要把颜色和形状的语义混用
 - 节点边框颜色 `borderColor` 和节点文字颜色 `fontColor` 必须按 `references/schema.json` 要求填写并保持一致
-- 颜色只能从 schema 允许的四种颜色中选择，并按这四种颜色各自对应的语义选择合适值
+- 颜色只能从 schema 允许的四种颜色中选择，并根据 schema 中定义的颜色语义选择合适值
 
 连线关键要求：
 - `text` 不允许换行
