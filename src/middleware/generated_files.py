@@ -70,15 +70,10 @@ class GeneratedFilesMiddleware(AgentMiddleware):
             })
             return None
 
-        # 获取最后一条 AI 消息
+        # 获取最后一条 AI 消息，只接受 ai 类型，避免误拿到 tool/human 消息
         last_message = None
         for msg in reversed(messages):
             if hasattr(msg, 'type') and msg.type == 'ai':
-                last_message = msg
-                break
-            elif hasattr(msg, 'type') and msg.type == 'system':
-                continue
-            else:
                 last_message = msg
                 break
 
@@ -87,6 +82,9 @@ class GeneratedFilesMiddleware(AgentMiddleware):
 
         raw_content = last_message.content if hasattr(last_message, 'content') else str(last_message)
         content = self._normalize_content(raw_content)
+
+        # print("[GeneratedFilesMiddleware] last ai message content:")
+        # print(content)
 
         # 调用 webapp 接口获取文件列表
         file_paths = await self._extract_file_paths(content)
