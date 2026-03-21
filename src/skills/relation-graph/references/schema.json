@@ -319,11 +319,11 @@
         },
         "width": {
           "type": "number",
-          "description": "节点宽度。应根据节点文字宽度自适应生成。"
+          "description": "节点宽度。应以刚好包住节点文字内容为原则自适应生成，并预留少量内边距。"
         },
         "height": {
           "type": "number",
-          "description": "节点高度。应根据节点文字高度自适应生成。"
+          "description": "节点高度。应以刚好包住节点文字内容为原则自适应生成，并预留少量内边距。"
         },
         "x": {
           "type": "number",
