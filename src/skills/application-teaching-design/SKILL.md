@@ -528,8 +528,17 @@ description: 生成可直接解析、可校验、可适配前端导入写入接�
 - `python3 src/skills/application-teaching-design/scripts/validate_json.py path/to/result.json`
 - 生成后的 JSON 必须经过该脚本校验并通过，才可视为最终结果
 
+## 输出文件路径约束
+
+默认交付物：
+- `output/result.json`
+- 若 `output/result.json` 已存在，则按序递增命名，如 `output/result2.json`、`output/result3.json`
+- 新结果必须写入当前可用的下一个结果文件，避免覆盖已有结果
+- 最终交付时应明确本次实际写入的结果文件路径
+
 ## 最终输出方式
 
 - 只输出 JSON
 - 不附加 Markdown 解释
+- 生成完成后应将最终 JSON 写入约定的结果文件路径，而不是只在对话中输出
 - 输出内容必须可直接通过 `scripts/validate_json.py` 校验
