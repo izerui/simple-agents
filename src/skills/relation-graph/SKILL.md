@@ -8,12 +8,14 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 生成最终可用的知识建模图 JSON，不输出“草稿结构”或“待补字段”。
 
 默认交付物：
-- `output/result.json`
-- 若 `output/result.json` 已存在，则按序递增命名，如 `output/result2.json`、`output/result3.json`
+- 结构化产物：`output/structured.json`
+- 最终产物：`output/result.json`
+- 若同名文件已存在，则按序递增命名，如 `output/result2.json`、`output/result3.json`
 
 默认工作方式：
-- 直接生成最终 JSON
-- 坐标直接写入最终结果
+- 先生成结构化产物
+- 再编译为最终完整 JSON
+- 坐标直接写在结构化产物中
 - 最终必须通过校验脚本
 
 ## 什么时候用
@@ -37,14 +39,25 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 什么时候读：
 - 任何需要生成或调整 `x/y/width/height`、阅读路径、分区布局、连线拓扑时
 
-3. `references/templete.json`
-什么时候读：
-- 需要参考现有图谱的整体风格、分区方式、节点密度、案例外挂方式时
-- 只把它当风格参考，不要拿它覆盖 schema 或用户当前要求
-
-4. `scripts/validate_json.py`
+3. `scripts/compose_json.py`
 什么时候用：
-- 写出最终 JSON 后必须运行
+- 生成完结构化产物后，必须用它编译出最终完整 JSON
+- 这个脚本负责补全固定字段、固定值、`fontColor`、`data.startPostion` 等内容
+
+用法：
+
+```bash
+python /skills/relation-graph/scripts/compose_json.py output/structured.json --output output/result.json --pretty
+```
+
+4. `references/structured-reference.json`
+什么时候读：
+- 需要参考现有图谱的结构化组织方式、分区方式、节点密度、案例外挂方式时
+- 只把它当结构化参考，不要拿它覆盖 schema 或用户当前要求
+
+5. `scripts/validate_json.py`
+什么时候用：
+- 编译出最终 JSON 后必须运行
 
 用法：
 
@@ -95,17 +108,57 @@ python /skills/relation-graph/scripts/validate_json.py output/result.json --sche
 - `x/y` 必须出现在最终 JSON 中
 - `x/y` 的值必须依据 `references/layout.md` 生成
 
-### 4. 直接生成最终 JSON
+### 4. 先生成结构化产物
 
-输出的是最终对象，不是中间态。
+结构化产物只保留真正需要模型决定的字段。
+
+节点至少保留：
+- `id`
+- `text`
+- `x`
+- `y`
+- `width`
+- `height`
+- `borderColor`
+- `data.type`
+
+连线至少保留：
+- `id`
+- `from`
+- `to`
+- `text`
+
+按需保留：
+- `fromJunctionPoint`
+- `toJunctionPoint`
+- `lineShape`
 
 不要：
-- 先写半成品 JSON
-- 省略 schema 要求的固定字段
+- 先输出超长最终 JSON 再赌模型一次写完
+- 把固定字段和固定值也交给模型重复生成几十上百次
+- 把中间产物拆成多段文件补写
 - 使用 `edges`、`source`、`target`、`label` 之类的错误字段名
-- 依赖额外脚本补固定字段、修结构、补坐标
 
-### 5. 写到固定输出位置
+### 5. 编译最终 JSON
+
+先写出结构化产物，例如：
+
+```text
+output/structured.json
+```
+
+再执行：
+
+```bash
+python /skills/relation-graph/scripts/compose_json.py output/structured.json --output output/result.json --pretty
+```
+
+要求：
+- 编译脚本只负责补全固定字段和固定值
+- 不要手动在最终 JSON 上分段补字段
+- 如果怀疑输出被截断，不要在原文件上续补，应重新生成新的完整文件
+
+### 6. 写到固定输出位置
 
 结果文件必须写到：
 
@@ -121,7 +174,7 @@ output/result2.json
 
 不要写到技能目录或其他路径。
 
-### 6. 校验并修正
+### 7. 校验并修正
 
 最终 JSON 写出后，必须运行：
 
@@ -151,7 +204,7 @@ python /skills/relation-graph/scripts/validate_json.py output/result.json --sche
 - `fromJunctionPoint/toJunctionPoint` 必须按节点相对位置与关系方向正确填写
 - 节点文本和关系文本都不允许换行
 - `borderColor` 与 `fontColor` 必须一致
-- 固定字段及其固定值必须以 `references/schema.json` 为准，不要凭记忆补写
+- 固定字段及其固定值必须以 `references/schema.json` 为准，由编译脚本统一补全，不要凭记忆补写
 
 ## 节点与关系的语义要求
 
@@ -194,20 +247,23 @@ python /skills/relation-graph/scripts/validate_json.py output/result.json --sche
 
 1. 已读取 `references/schema.json`
 2. 坐标生成前已读取 `references/layout.md`
-3. 结果文件写在 `output/result.json` 或按序递增后的 `output/resultN.json`
-4. 最终 JSON 不是差量字段，而是完整对象
-5. `rootId`、节点 id、连线 id 均非空且唯一
-6. `data.startPostion` 与节点坐标完全一致
-7. 连线 `from/to` 都能在节点中找到
-8. `fromJunctionPoint/toJunctionPoint` 已正确填写
-9. 图中没有明显重叠、拥挤或跨区穿插
-10. 若为增量修改，未改动部分已尽量保持稳定
-11. 已运行校验脚本且返回 `VALID`
+3. 已生成结构化产物，而不是直接拼超长最终 JSON
+4. 已用 `scripts/compose_json.py` 编译出最终完整 JSON
+5. 结果文件写在 `output/result.json` 或按序递增后的 `output/resultN.json`
+6. 最终 JSON 不是差量字段，而是完整对象
+7. `rootId`、节点 id、连线 id 均非空且唯一
+8. `data.startPostion` 与节点坐标完全一致
+9. 连线 `from/to` 都能在节点中找到
+10. `fromJunctionPoint/toJunctionPoint` 已正确填写
+11. 图中没有明显重叠、拥挤或跨区穿插
+12. 若为增量修改，未改动部分已尽量保持稳定
+13. 已运行校验脚本且返回 `VALID`
 
 ## 输出要求
 
 默认交付：
-- 生成 `output/result.json`；若已存在则生成下一个可用的 `output/resultN.json`
+- 生成 `output/structured.json`
+- 再生成 `output/result.json`；若已存在则生成下一个可用的 `output/resultN.json`
 
 回复用户时：
 - 以结果完成情况为主

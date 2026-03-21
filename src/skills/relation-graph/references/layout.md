@@ -418,20 +418,20 @@
 - 主阅读路径被长跨线切断
 - 画布四周很空，但中心过度拥挤
 
-## 模板参考
+## 结构化参考
 
-`references/templete.json` 可作为现有图谱风格示例，用于观察：
+`references/structured-reference.json` 可作为现有图谱的结构化参考，用于观察：
 - 主干、步骤列、枚举组、案例外挂的大致分区方式
 - 常见节点尺寸、纵列间距、外围案例放置方式
 - 不同语义类型在画布中的相对位置
 
-它是风格参考，不是结构权威。
+它主要用于参考结构组织与布局风格，不是结构权威。
 
 冲突处理优先级：
 1. `references/schema.json`
 2. 用户当前任务的内容与增量约束
 3. 本文档
-4. `references/templete.json`
+4. `references/structured-reference.json`
 
 ## 生成前自检
 
