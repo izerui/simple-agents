@@ -20,7 +20,7 @@ COLOR_ALIASES = {
     "#0070c0": "#00B0F0",
 }
 ALLOWED_NODE_TYPES = {2, 3, 5, 6}
-OUTPUT_DIRNAME = "output"
+OUTPUT_DIRNAME = "relation-graph"
 
 
 class ComposeError(ValueError):

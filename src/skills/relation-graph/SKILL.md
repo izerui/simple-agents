@@ -10,13 +10,13 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 默认交付物：
 - 结构化产物：`/relation-graph/structured.json`
 - 最终产物：`/relation-graph/result.json`
-- 若同名文件已存在，则按序递增命名，如 `/relation-graph/result2.json`、`/relation-graph/result3.json`
+- 优先在已有文件基础上修改；只有无法稳定修改时，才递增命名，如 `/relation-graph/result2.json`、`/relation-graph/result3.json`
 
 默认工作方式：
 - 先生成结构化产物
 - 再编译为最终完整 JSON
 - 坐标直接写在结构化产物中
-- 最终必须通过校验脚本
+- 结构化产物必须先通过校验
 
 ## 什么时候用
 
@@ -39,31 +39,32 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 什么时候读：
 - 任何需要生成或调整 `x/y/width/height`、阅读路径、分区布局、连线拓扑时
 
-3. `scripts/compose_json.py`
+3. `scripts/validate_structured.py`
 什么时候用：
-- 生成完结构化产物后，必须用它编译出最终完整 JSON
+- 生成完结构化产物后，必须先校验结构化产物
+- 只有结构化产物通过校验后，才继续补全生成最终 JSON
+
+用法：
+
+```bash
+python /skills/relation-graph/scripts/validate_structured.py /relation-graph/structured.json
+```
+
+4. `scripts/compose_json.py`
+什么时候用：
+- 结构化产物校验通过后，必须用它编译出最终完整 JSON
 - 这个脚本负责补全固定字段、固定值、`fontColor`、`data.startPostion` 等内容
 
 用法：
 
 ```bash
-python src/skills/relation-graph/scripts/compose_json.py /relation-graph/structured.json --output /relation-graph/result.json --pretty
+python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured.json --output /relation-graph/result.json --pretty
 ```
 
-4. `references/structured-reference.json`
+5. `references/structured-reference.json`
 什么时候读：
 - 需要参考现有图谱的结构化组织方式、分区方式、节点密度、案例外挂方式时
 - 只把它当结构化参考，不要拿它覆盖 schema 或用户当前要求
-
-5. `scripts/validate_json.py`
-什么时候用：
-- 编译出最终 JSON 后必须运行
-
-用法：
-
-```bash
-python src/skills/relation-graph/scripts/validate_json.py /relation-graph/result.json --schema src/skills/relation-graph/references/schema.json
-```
 
 ## 工作流
 
@@ -147,13 +148,23 @@ python src/skills/relation-graph/scripts/validate_json.py /relation-graph/result
 /relation-graph/structured.json
 ```
 
-再执行：
+先执行结构化产物校验：
 
 ```bash
-python src/skills/relation-graph/scripts/compose_json.py /relation-graph/structured.json --output /relation-graph/result.json --pretty
+python /skills/relation-graph/scripts/validate_structured.py /relation-graph/structured.json
+```
+
+只有结构化产物通过后，再执行：
+
+```bash
+python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured.json --output /relation-graph/result.json --pretty
 ```
 
 要求：
+- 结构化产物不通过时，不要继续补全生成最终 JSON
+- 结构化产物校验不通过时，优先直接修改现有 `/relation-graph/structured.json`
+- 即使需要重新布局，也应优先通过修改已有节点的 `x/y`、`width/height`、连接点和分区来完成，这仍属于修改已有文件
+- 只有当前文件无法稳定修改、已损坏、被截断，或用户明确要求保留历史版本时，才重新写入新的结构化文件
 - 编译脚本只负责补全固定字段和固定值
 - 不要手动在最终 JSON 上分段补字段
 - 如果怀疑输出被截断，不要在原文件上续补，应重新生成新的完整文件
@@ -176,20 +187,9 @@ python src/skills/relation-graph/scripts/compose_json.py /relation-graph/structu
 
 不要写到技能目录或其他路径。
 
-### 7. 校验并修正
+### 7. 生成最终文件
 
-最终 JSON 写出后，必须运行：
-
-```bash
-python src/skills/relation-graph/scripts/validate_json.py /relation-graph/result.json --schema src/skills/relation-graph/references/schema.json
-```
-
-只有返回 `VALID` 才算完成。
-
-如果失败：
-- 继续修正
-- 重新校验
-- 不要把未通过校验的结果当最终交付
+结构化产物校验通过后，由编译脚本生成最终 JSON 文件。
 
 ## 关键约束
 
@@ -226,14 +226,20 @@ python src/skills/relation-graph/scripts/validate_json.py /relation-graph/result
 连线关键要求：
 - `text` 不允许换行
 - `from/to` 必须引用有效节点
+- `from` 表示父节点，`to` 表示子节点
 - `fromJunctionPoint/toJunctionPoint` 必须按节点相对位置与关系方向正确填写
 - 关系文本必须真实表达语义
+- 连接关系默认必须按树状拓扑建立，避免网状结构、分支互连和多分支交叉
+- 连接关系必须满足有向无环图（DAG）约束
+- 同一节点最多只能作为一条连线的 `to` 节点，也就是最多只能有一个父节点
+- 整个连接关系不允许形成循环
 
 关系：
 - 关系文本必须真实表达语义
 - 优先使用清晰、稳定、可读的关系词
 - 优先使用 `references/schema.json` 中约定的常用连线关系文本
 - 如果常见关系不足以表达语义，允许使用更贴切的描述
+- 若出现跨分支语义，优先通过调整层级、重新归类或外围挂接表达，不要直接增加第二父边
 
 ## 增量修改要求
 
@@ -250,22 +256,17 @@ python src/skills/relation-graph/scripts/validate_json.py /relation-graph/result
 1. 已读取 `references/schema.json`
 2. 坐标生成前已读取 `references/layout.md`
 3. 已生成结构化产物，而不是直接拼超长最终 JSON
-4. 已用 `scripts/compose_json.py` 编译出最终完整 JSON
-5. 结果文件写在 `/relation-graph/result.json` 或按序递增后的 `/relation-graph/resultN.json`
-6. 最终 JSON 不是差量字段，而是完整对象
-7. `rootId`、节点 id、连线 id 均非空且唯一
-8. `data.startPostion` 与节点坐标完全一致
-9. 连线 `from/to` 都能在节点中找到
-10. `fromJunctionPoint/toJunctionPoint` 已正确填写
-11. 图中没有明显重叠、拥挤或跨区穿插
-12. 若为增量修改，未改动部分已尽量保持稳定
-13. 已运行校验脚本且返回 `VALID`
+4. 已用 `scripts/validate_structured.py` 校验结构化产物并通过
+5. 已用 `scripts/compose_json.py` 编译出最终完整 JSON
+6. 结果文件写在 `/relation-graph/result.json` 或按序递增后的 `/relation-graph/resultN.json`
+7. 若为增量修改，未改动部分已尽量保持稳定
 
 ## 输出要求
 
 默认交付：
 - 生成 `/relation-graph/structured.json`
-- 再生成 `/relation-graph/result.json`；若已存在则生成下一个可用的 `/relation-graph/resultN.json`
+- 再生成 `/relation-graph/result.json`
+- 若已有同名文件，优先在原文件基础上修改；只有无法稳定修改时，才生成下一个可用的 `/relation-graph/resultN.json`
 
 回复用户时：
 - 以结果完成情况为主
