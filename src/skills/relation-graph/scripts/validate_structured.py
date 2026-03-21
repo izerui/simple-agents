@@ -195,7 +195,6 @@ def iter_errors(instance: Any) -> list[str]:
                     f"节点 `{left['id']}` 与 `{right['id']}` 间距过近，未满足最小间距要求"
                 )
 
-    incoming_count: dict[str, int] = {node_id: 0 for node_id in node_ids}
     adjacency: dict[str, list[str]] = {node_id: [] for node_id in node_ids}
     referenced = {root_id} if isinstance(root_id, str) else set()
     for line in lines:
@@ -206,14 +205,8 @@ def iter_errors(instance: Any) -> list[str]:
                 referenced.add(from_id)
             if isinstance(to_id, str):
                 referenced.add(to_id)
-                if to_id in incoming_count:
-                    incoming_count[to_id] += 1
                 if isinstance(from_id, str) and from_id in adjacency:
                     adjacency[from_id].append(to_id)
-
-    for node_id, count in incoming_count.items():
-        if count > 1:
-            errors.append(f"节点 `{node_id}` 存在多个父节点")
 
     visited: set[str] = set()
     visiting: set[str] = set()
