@@ -46,6 +46,11 @@ class ModelListResponse(BaseModel):
     data: list[ModelInfo] | None = None
 
 
+class ResetThreadRequest(BaseModel):
+    """重置线程请求"""
+    metadata: dict[str, Any] | None = None
+
+
 def _get_thread_dir(thread_id: str) -> Path:
     """基于 thread_id 计算线程沙箱目录，并阻止路径逃逸。"""
     sandbox_root_dir = Path(os.getenv('SANDBOX_ROOT_DIR', './data/sandbox_sessions')).resolve()
@@ -148,7 +153,10 @@ async def download_file(
 
 
 @router.post("/reset/{thread_id}", tags=["Webapp"], response_model=ApiResponse)
-async def reset_thread_with_sandbox(thread_id: str) -> ApiResponse:
+async def reset_thread_with_sandbox(
+    thread_id: str,
+    request: ResetThreadRequest | None = None,
+) -> ApiResponse:
     """
     清空 thread 对应的沙箱目录和线程状态，并用同一个 thread_id 重建线程。
     """
@@ -156,27 +164,42 @@ async def reset_thread_with_sandbox(thread_id: str) -> ApiResponse:
 
     try:
         thread_dir = _get_thread_dir(thread_id)
-        sandbox_deleted = False
 
         if thread_dir.exists():
             await asyncio.to_thread(shutil.rmtree, thread_dir)
-            sandbox_deleted = True
 
         api_base_url = os.getenv("LANGGRAPH_API_URL", os.getenv("EXTRACT_API_URL", "http://localhost:2024")).rstrip("/")
         client = get_client(url=api_base_url, api_key="")
-        await client.threads.delete(thread_id=thread_id)
-        rebuilt_thread = await client.threads.create(thread_id=thread_id)
+        metadata: dict[str, Any] = {}
+
+        try:
+            existing_thread = await client.threads.get(thread_id=thread_id)
+            existing_metadata = existing_thread.get("metadata")
+            if isinstance(existing_metadata, dict):
+                metadata.update(existing_metadata)
+        except Exception as e:
+            if "not found" not in str(e).lower():
+                raise
+
+        if request and request.metadata:
+            metadata.update(request.metadata)
+
+        try:
+            await client.threads.delete(thread_id=thread_id)
+        except Exception as e:
+            if "not found" not in str(e).lower():
+                raise
+
+        await client.threads.create(
+            thread_id=thread_id,
+            metadata=metadata or None,
+        )
 
         return ApiResponse(
             success=True,
             err_message=None,
             data={
                 "thread_id": thread_id,
-                "sandbox_dir": str(thread_dir),
-                "sandbox_deleted": sandbox_deleted,
-                "thread_deleted": True,
-                "thread_rebuilt": True,
-                "rebuilt_thread": rebuilt_thread,
             },
         )
     except HTTPException:
