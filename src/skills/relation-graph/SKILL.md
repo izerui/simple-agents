@@ -8,13 +8,15 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 生成最终可用的知识建模图 JSON，不输出“草稿结构”或“待补字段”。
 
 默认交付物：
-- 结构化产物：`/relation-graph/structured.json`
+- 递增结构化产物：`/relation-graph/structured.jsonl`
+- 物化后的结构化产物：`/relation-graph/structured.json`
 - 最终产物：`/relation-graph/result.json`
 - 优先在已有文件基础上修改；只有无法稳定修改时，才递增命名，如 `/relation-graph/result2.json`、`/relation-graph/result3.json`
 
 默认工作方式：
-- 先生成结构化产物
-- 再编译为最终完整 JSON
+- 先递增追加 `structured.jsonl`
+- 再物化为 `structured.json`
+- 结构化产物通过校验后，再编译为最终完整 JSON
 - 坐标直接写在结构化产物中
 - 结构化产物必须先通过校验
 
@@ -39,7 +41,19 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 什么时候读：
 - 任何需要生成或调整 `x/y/width/height`、阅读路径、分区布局、连线拓扑时
 
-3. `scripts/validate_structured.py`
+3. `scripts/materialize_structured.py`
+什么时候用：
+- 先把递增写入的 `/relation-graph/structured.jsonl` 物化成 `/relation-graph/structured.json`
+- 物化脚本按行读取 JSONL，`meta`/`node`/`line` 记录都允许重复追加；同 id 后出现的记录覆盖前面的记录
+- 只有物化成功后，才进入结构化校验
+
+用法：
+
+```bash
+python /skills/relation-graph/scripts/materialize_structured.py /relation-graph/structured.jsonl --output /relation-graph/structured.json --pretty
+```
+
+4. `scripts/validate_structured.py`
 什么时候用：
 - 生成完结构化产物后，必须先校验结构化产物
 - 只有结构化产物通过校验后，才继续补全生成最终 JSON
@@ -50,7 +64,7 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 python /skills/relation-graph/scripts/validate_structured.py /relation-graph/structured.json
 ```
 
-4. `scripts/compose_json.py`
+5. `scripts/compose_json.py`
 什么时候用：
 - 结构化产物校验通过后，必须用它编译出最终完整 JSON
 - 这个脚本负责补全固定字段、固定值、`fontColor`、`data.startPostion` 等内容
@@ -61,7 +75,7 @@ python /skills/relation-graph/scripts/validate_structured.py /relation-graph/str
 python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured.json --output /relation-graph/result.json --pretty
 ```
 
-5. `references/structured-reference.json`
+6. `references/structured-reference.json`
 什么时候读：
 - 需要参考现有图谱的结构化组织方式、分区方式、节点密度、案例外挂方式时
 - 只把它当结构化参考，不要拿它覆盖 schema 或用户当前要求
@@ -109,9 +123,22 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 - `x/y` 必须出现在最终 JSON 中
 - `x/y` 的值必须依据 `references/layout.md` 生成
 
-### 4. 先生成结构化产物
+### 4. 先递增生成 `structured.jsonl`
 
-结构化产物只保留真正需要模型决定的字段。
+先生成 append-only 的 `structured.jsonl`，每行一个 JSON 对象，不要反复重写整份结构化 JSON。
+
+记录类型只用三种：
+- `{"kind":"meta","rootId":"...","datetime":...}`
+- `{"kind":"node", ...节点字段...}`
+- `{"kind":"line", ...连线字段...}`
+
+规则：
+- 首次创建 `structured.jsonl` 时写入一条 `meta`
+- 后续新增或修正节点、连线时，只追加新的 `node`/`line` 记录，不重写整个文件
+- 如果要修正已有节点或连线，追加同 id 的新记录；物化脚本会以后出现的记录为准
+- 只有 `structured.jsonl` 已损坏、被截断或无法稳定追加时，才改写到新的 `structured2.jsonl`
+
+结构化记录只保留真正需要模型决定的字段。
 
 节点至少保留：
 - `id`
@@ -137,12 +164,24 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 不要：
 - 先输出超长最终 JSON 再赌模型一次写完
 - 把固定字段和固定值也交给模型重复生成几十上百次
-- 把中间产物拆成多段文件补写
+- 重写整个 `structured.jsonl` 或手动拼超长 `structured.json`
 - 使用 `edges`、`source`、`target`、`label` 之类的错误字段名
 
-### 5. 编译最终 JSON
+### 5. 物化、校验并编译最终 JSON
 
-先写出结构化产物，例如：
+先递增写出结构化记录，例如：
+
+```text
+/relation-graph/structured.jsonl
+```
+
+再物化为结构化 JSON：
+
+```bash
+python /skills/relation-graph/scripts/materialize_structured.py /relation-graph/structured.jsonl --output /relation-graph/structured.json --pretty
+```
+
+物化成功后会得到：
 
 ```text
 /relation-graph/structured.json
@@ -161,13 +200,15 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 ```
 
 要求：
+- `structured.jsonl` 必须采用递增追加，不要整文件重写
+- 结构化校验前，必须先从 `structured.jsonl` 物化出 `structured.json`
 - 结构化产物不通过时，不要继续补全生成最终 JSON
-- 结构化产物校验不通过时，优先直接修改现有 `/relation-graph/structured.json`
-- 即使需要重新布局，也应优先通过修改已有节点的 `x/y`、`width/height`、连接点和分区来完成，这仍属于修改已有文件
-- 只有当前文件无法稳定修改、已损坏、被截断，或用户明确要求保留历史版本时，才重新写入新的结构化文件
+- 结构化产物校验不通过时，优先继续向 `/relation-graph/structured.jsonl` 追加修正记录，然后重新物化并重新校验
+- 即使需要重新布局，也应优先通过追加修正后的节点 `x/y`、`width/height`、连接点和分区来完成，而不是重写整份中间产物
+- 只有当前 `structured.jsonl` 无法稳定追加、已损坏、被截断，或用户明确要求保留历史版本时，才重新写入新的结构化文件
 - 编译脚本只负责补全固定字段和固定值
 - 不要手动在最终 JSON 上分段补字段
-- 如果怀疑输出被截断，不要在原文件上续补，应重新生成新的完整文件
+- 如果怀疑输出被截断，优先检查并修复 `structured.jsonl`；必要时新建下一个可用的 `structuredN.jsonl`
 
 ### 6. 写到固定输出位置
 
@@ -266,18 +307,20 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 
 1. 已读取 `references/schema.json`
 2. 坐标生成前已读取 `references/layout.md`
-3. 已生成结构化产物，而不是直接拼超长最终 JSON
-4. 已用 `scripts/validate_structured.py` 校验结构化产物并通过
-5. 已用 `scripts/compose_json.py` 编译出最终完整 JSON
-6. 结果文件写在 `/relation-graph/result.json` 或按序递增后的 `/relation-graph/resultN.json`
-7. 若为增量修改，未改动部分已尽量保持稳定
+3. 已递增生成 `/relation-graph/structured.jsonl`，而不是直接拼超长最终 JSON
+4. 已用 `scripts/materialize_structured.py` 物化出 `/relation-graph/structured.json`
+5. 已用 `scripts/validate_structured.py` 校验结构化产物并通过
+6. 已用 `scripts/compose_json.py` 编译出最终完整 JSON
+7. 结果文件写在 `/relation-graph/result.json` 或按序递增后的 `/relation-graph/resultN.json`
+8. 若为增量修改，未改动部分已尽量保持稳定
 
 ## 输出要求
 
 默认交付：
+- 先生成 `/relation-graph/structured.jsonl`
 - 生成 `/relation-graph/structured.json`
 - 再生成 `/relation-graph/result.json`
-- 若已有同名文件，优先在原文件基础上修改；只有无法稳定修改时，才生成下一个可用的 `/relation-graph/resultN.json`
+- 若已有同名文件，优先在原文件基础上追加或修改；只有无法稳定修改时，才生成下一个可用的 `/relation-graph/structuredN.jsonl` 或 `/relation-graph/resultN.json`
 
 回复用户时：
 - 以结果完成情况为主
