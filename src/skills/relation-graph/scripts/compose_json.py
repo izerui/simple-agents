@@ -165,7 +165,7 @@ def compose_node(node: dict[str, Any]) -> dict[str, Any]:
         "textVerticalAlign": "middle",
         "color": "#ffffff",
         "opacity": 1,
-        "fixed": True,
+        "fixed": False,
         "x": x,
         "y": y,
         "width": width,

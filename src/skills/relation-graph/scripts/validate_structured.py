@@ -12,6 +12,7 @@ from typing import Any
 
 
 MIN_NODE_GAP = 20
+MIN_SIBLING_Y_GAP = 36
 ALLOWED_NODE_TYPES = {2, 3, 5, 6}
 ALLOWED_COLORS = {"#FF0000", "#00B0F0", "#00B050", "#000000"}
 COLOR_ALIASES = {
@@ -66,6 +67,59 @@ def normalize_color(value: Any) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
     return COLOR_ALIASES.get(value.strip(), COLOR_ALIASES.get(value.strip().lower()))
+
+
+def center(node: dict[str, Any]) -> tuple[float, float]:
+    return (
+        float(node["x"]) + float(node["width"]) / 2,
+        float(node["y"]) + float(node["height"]) / 2,
+    )
+
+
+def orientation(
+    a: tuple[float, float],
+    b: tuple[float, float],
+    c: tuple[float, float],
+) -> int:
+    value = (b[1] - a[1]) * (c[0] - b[0]) - (b[0] - a[0]) * (c[1] - b[1])
+    if math.isclose(value, 0.0, abs_tol=1e-9):
+        return 0
+    return 1 if value > 0 else 2
+
+
+def on_segment(
+    a: tuple[float, float],
+    b: tuple[float, float],
+    c: tuple[float, float],
+) -> bool:
+    return (
+        min(a[0], c[0]) - 1e-9 <= b[0] <= max(a[0], c[0]) + 1e-9
+        and min(a[1], c[1]) - 1e-9 <= b[1] <= max(a[1], c[1]) + 1e-9
+    )
+
+
+def segments_intersect(
+    p1: tuple[float, float],
+    q1: tuple[float, float],
+    p2: tuple[float, float],
+    q2: tuple[float, float],
+) -> bool:
+    o1 = orientation(p1, q1, p2)
+    o2 = orientation(p1, q1, q2)
+    o3 = orientation(p2, q2, p1)
+    o4 = orientation(p2, q2, q1)
+
+    if o1 != o2 and o3 != o4:
+        return True
+    if o1 == 0 and on_segment(p1, p2, q1):
+        return True
+    if o2 == 0 and on_segment(p1, q2, q1):
+        return True
+    if o3 == 0 and on_segment(p2, p1, q2):
+        return True
+    if o4 == 0 and on_segment(p2, q1, q2):
+        return True
+    return False
 
 
 def iter_errors(instance: Any) -> list[str]:
@@ -137,6 +191,13 @@ def iter_errors(instance: Any) -> list[str]:
     if isinstance(root_id, str) and root_id and root_id not in node_by_id:
         errors.append(f"`rootId` 未引用有效节点: {root_id}")
 
+    for index, left_id in enumerate(node_ids):
+        left = node_by_id[left_id]
+        for right_id in node_ids[index + 1:]:
+            right = node_by_id[right_id]
+            if boxes_too_close(left, right, MIN_NODE_GAP):
+                errors.append(f"节点 `{left_id}` 与 `{right_id}` 过近或重叠")
+
     for index, line in enumerate(lines):
         if not isinstance(line, dict):
             errors.append(f"`lines[{index}]` 必须是对象")
@@ -195,6 +256,56 @@ def iter_errors(instance: Any) -> list[str]:
     isolated = [node_id for node_id in node_ids if node_id not in referenced]
     if isolated:
         errors.append("存在孤立节点: " + ", ".join(sorted(isolated)))
+
+    parent_to_children: dict[str, list[dict[str, Any]]] = {}
+    for line in lines:
+        if isinstance(line, dict):
+            from_id = line.get("from")
+            to_id = line.get("to")
+            if isinstance(from_id, str) and isinstance(to_id, str) and from_id in node_by_id and to_id in node_by_id:
+                parent_to_children.setdefault(from_id, []).append(node_by_id[to_id])
+
+    for parent_id, children in parent_to_children.items():
+        if len(children) < 4:
+            continue
+        children_sorted = sorted(children, key=lambda node: (float(node["x"]), float(node["y"])))
+        x_values = [float(node["x"]) for node in children_sorted]
+        y_values = [float(node["y"]) for node in children_sorted]
+        if max(x_values) - min(x_values) <= 100:
+            gaps = [
+                y_values[i + 1] - y_values[i]
+                for i in range(len(y_values) - 1)
+            ]
+            if gaps and min(gaps) < MIN_SIBLING_Y_GAP:
+                errors.append(
+                    f"父节点 `{parent_id}` 的子节点过度挤在同一竖列，需拆分分区或增加中间分组节点"
+                )
+
+    line_segments: list[tuple[str, str, str, tuple[float, float], tuple[float, float]]] = []
+    for line in lines:
+        if not isinstance(line, dict):
+            continue
+        line_id = line.get("id")
+        from_id = line.get("from")
+        to_id = line.get("to")
+        if (
+            isinstance(line_id, str)
+            and isinstance(from_id, str)
+            and isinstance(to_id, str)
+            and from_id in node_by_id
+            and to_id in node_by_id
+        ):
+            line_segments.append(
+                (line_id, from_id, to_id, center(node_by_id[from_id]), center(node_by_id[to_id]))
+            )
+
+    for index, (left_line_id, left_from, left_to, left_start, left_end) in enumerate(line_segments):
+        left_nodes = {left_from, left_to}
+        for right_line_id, right_from, right_to, right_start, right_end in line_segments[index + 1:]:
+            if left_nodes & {right_from, right_to}:
+                continue
+            if segments_intersect(left_start, left_end, right_start, right_end):
+                errors.append(f"连线 `{left_line_id}` 与 `{right_line_id}` 存在明显交叉")
 
     return errors
 
