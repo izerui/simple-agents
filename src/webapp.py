@@ -230,6 +230,7 @@ def _get_extract_model():
             api_key=os.getenv('MODEL_API_KEY'),
             temperature=0.0,
             streaming=False,
+            extra_body={"enable_thinking": False},
         )
     return _extract_model
 
