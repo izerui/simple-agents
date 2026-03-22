@@ -313,9 +313,9 @@
         "fixed": {
           "type": "boolean",
           "enum": [
-            true
+            false
           ],
-          "default": true
+          "default": false
         },
         "width": {
           "type": "number",
