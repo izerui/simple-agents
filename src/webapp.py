@@ -2,10 +2,13 @@ from fastapi import FastAPI, HTTPException, APIRouter, Query
 from fastapi.responses import StreamingResponse
 import logging
 import os
+from pathlib import Path
+import shutil
 import traceback
 from typing import Any
 from urllib.parse import quote
 
+from langgraph_sdk import get_client
 from langsmith import tracing_context
 
 from deepagents.backends import FilesystemBackend
@@ -43,6 +46,17 @@ class ModelListResponse(BaseModel):
     data: list[ModelInfo] | None = None
 
 
+def _get_thread_dir(thread_id: str) -> Path:
+    """基于 thread_id 计算线程沙箱目录，并阻止路径逃逸。"""
+    sandbox_root_dir = Path(os.getenv('SANDBOX_ROOT_DIR', './data/sandbox_sessions')).resolve()
+    thread_dir = (sandbox_root_dir / thread_id).resolve()
+
+    if sandbox_root_dir not in thread_dir.parents and thread_dir != sandbox_root_dir:
+        raise HTTPException(status_code=400, detail="非法的 thread_id")
+
+    return thread_dir
+
+
 # 文件下载端点
 @router.get("/download/{thread_id}", tags=["Webapp"])
 async def download_file(
@@ -61,11 +75,7 @@ async def download_file(
     """
     import io
 
-    sandbox_root_dir = os.getenv('SANDBOX_ROOT_DIR', './data/sandbox_sessions')
-    
-    # 动态构造该用户专属的目录
-    # 结果示例：./data/sandbox_sessions/thread_abc/
-    thread_dir = os.path.join(sandbox_root_dir, thread_id)
+    thread_dir = str(_get_thread_dir(thread_id))
 
     # 创建新的 Backend 实例
     backend = FilesystemBackend(
@@ -135,6 +145,50 @@ async def download_file(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"下载文件时发生错误: {str(e)}")
+
+
+@router.post("/reset/{thread_id}", tags=["Webapp"], response_model=ApiResponse)
+async def reset_thread_with_sandbox(thread_id: str) -> ApiResponse:
+    """
+    清空 thread 对应的沙箱目录和线程状态，并用同一个 thread_id 重建线程。
+    """
+    import asyncio
+
+    try:
+        thread_dir = _get_thread_dir(thread_id)
+        sandbox_deleted = False
+
+        if thread_dir.exists():
+            await asyncio.to_thread(shutil.rmtree, thread_dir)
+            sandbox_deleted = True
+
+        api_base_url = os.getenv("LANGGRAPH_API_URL", os.getenv("EXTRACT_API_URL", "http://localhost:2024")).rstrip("/")
+        client = get_client(url=api_base_url, api_key="")
+        await client.threads.delete(thread_id=thread_id)
+        rebuilt_thread = await client.threads.create(thread_id=thread_id)
+
+        return ApiResponse(
+            success=True,
+            err_message=None,
+            data={
+                "thread_id": thread_id,
+                "sandbox_dir": str(thread_dir),
+                "sandbox_deleted": sandbox_deleted,
+                "thread_deleted": True,
+                "thread_rebuilt": True,
+                "rebuilt_thread": rebuilt_thread,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_detail = f"清空线程和沙箱失败: {str(e)}\n{traceback.format_exc()}"
+        logging.getLogger(__name__).error(error_detail)
+        return ApiResponse(
+            success=False,
+            err_message=str(e),
+            data=None,
+        )
 
 
 
