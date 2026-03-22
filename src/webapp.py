@@ -13,7 +13,7 @@ from langsmith import tracing_context
 
 from deepagents.backends import FilesystemBackend
 from langchain.chat_models import init_chat_model
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.prompts import load_prompt_from_file
 
@@ -235,13 +235,37 @@ def _get_extract_model():
 
 
 class FilePaths(BaseModel):
-    """提取的文件路径列表"""
-    files: list[str]
+    """提取文件路径。
+
+    用法:
+    - 从输入文本中返回实际写出的真实文件路径列表
+    - 未找到时返回空数组
+    """
+
+    files: list[str] = Field(
+        default_factory=list,
+        description=(
+            "参数: 文件路径数组。"
+            "返回输入文本中实际写出的真实文件路径；未找到时传空数组。"
+        ),
+    )
 
 
 class SuggestedQuestions(BaseModel):
-    """建议问题列表"""
-    questions: list[str]
+    """生成建议问题。
+
+    用法:
+    - 返回用户下一步可能输入的内容列表
+    - 至少返回 3 条
+    """
+
+    questions: list[str] = Field(
+        default_factory=list,
+        description=(
+            "参数: 建议内容数组。"
+            "每项是一条用户下一步可能输入的简短内容，至少传 3 条。"
+        ),
+    )
 
 
 # 请求模型
