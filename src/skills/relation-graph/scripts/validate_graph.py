@@ -265,12 +265,9 @@ def compose_line(
     }
 
 
-def build_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
-    nodes: list[dict[str, Any]] = []
-    pending_lines: list[tuple[str, str, str]] = []
+def validate_rows(rows: list[dict[str, str]]) -> dict[str, int]:
     node_ids: set[str] = set()
-    root_node_id: str | None = None
-
+    root_count = 0
     for row in rows:
         is_root = parse_bool(row["IsRoot"], "IsRoot")
         node_id = require_text(row["NodeID"], "NodeID")
@@ -282,9 +279,9 @@ def build_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
         relation = row["RelationText"].strip()
 
         if is_root:
-            if root_node_id is not None:
+            root_count += 1
+            if root_count > 1:
                 raise GraphError("只能有一个根节点；请回去修改 graph.md")
-            root_node_id = node_id
             if parent_id or relation:
                 raise GraphError("根节点行的 `ParentID` 和 `RelationText` 必须为空；请回去修改 graph.md")
         else:
@@ -292,97 +289,27 @@ def build_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
                 raise GraphError(f"非根节点 `{node_id}` 必须填写 `ParentID`；请回去修改 graph.md")
             if not relation:
                 raise GraphError(f"非根节点 `{node_id}` 必须填写 `RelationText`；请回去修改 graph.md")
-            pending_lines.append((parent_id, node_id, normalize_relation_text(relation, "RelationText")))
+            normalize_relation_text(relation, "RelationText")
 
-        node = compose_node(
-            node_id=node_id,
-            text=require_text(row["NodeText"], "NodeText"),
-            x=parse_number(row["NodeX"], "NodeX"),
-            y=parse_number(row["NodeY"], "NodeY"),
-            width=parse_number(row["NodeWidth"], "NodeWidth"),
-            height=parse_number(row["NodeHeight"], "NodeHeight"),
-            border_color=normalize_color(require_text(row["NodeColor"], "NodeColor"), "NodeColor"),
-            data_type=parse_node_type(row["NodeType"]),
-        )
-        nodes.append(node)
+        require_text(row["NodeText"], "NodeText")
+        parse_number(row["NodeX"], "NodeX")
+        parse_number(row["NodeY"], "NodeY")
+        parse_number(row["NodeWidth"], "NodeWidth")
+        parse_number(row["NodeHeight"], "NodeHeight")
+        normalize_color(require_text(row["NodeColor"], "NodeColor"), "NodeColor")
+        parse_node_type(row["NodeType"])
 
-    if root_node_id is None:
+    if root_count == 0:
         raise GraphError("必须有且仅有一个根节点；请回去修改 graph.md")
 
-    node_map = {node["id"]: node for node in nodes}
-    lines: list[dict[str, Any]] = []
-    for parent_id, node_id, relation in pending_lines:
-        if parent_id not in node_map:
+    for row in rows:
+        if parse_bool(row["IsRoot"], "IsRoot"):
+            continue
+        parent_id = row["ParentID"].strip()
+        if parent_id not in node_ids:
             raise GraphError(f"父节点 `{parent_id}` 未定义；请回去修改 graph.md")
-        lines.append(compose_line(parent_id, node_id, relation, node_map))
 
-    return {"rootId": f"root-{root_node_id}", "nodes": nodes, "lines": lines}
-
-
-def validate_payload(payload: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    root_id = payload.get("rootId")
-    nodes = payload.get("nodes")
-    lines = payload.get("lines")
-
-    if not isinstance(root_id, str) or not root_id.strip():
-        errors.append("`rootId` 必须是非空字符串")
-
-    if not isinstance(nodes, list) or not nodes:
-        errors.append("`nodes` 必须是非空数组")
-        return errors
-    if not isinstance(lines, list):
-        errors.append("`lines` 必须是数组")
-        return errors
-
-    node_ids: list[str] = []
-    node_by_id: dict[str, dict[str, Any]] = {}
-    for node in nodes:
-        node_id = node["id"]
-        node_ids.append(node_id)
-        node_by_id[node_id] = node
-        if node["fontColor"] != node["borderColor"]:
-            errors.append(f"节点 `{node_id}` 的 fontColor 必须与 borderColor 一致")
-        if node["data"]["startPostion"]["x"] != node["x"] or node["data"]["startPostion"]["y"] != node["y"]:
-            errors.append(f"节点 `{node_id}` 的 data.startPostion 必须与 x/y 一致")
-        if node["data"]["type"] not in ALLOWED_NODE_TYPES:
-            errors.append(f"节点 `{node_id}` 的 data.type 仅支持 {sorted(ALLOWED_NODE_TYPES)}")
-        if node["borderColor"] not in CANONICAL_COLORS:
-            errors.append(f"节点 `{node_id}` 的 borderColor 仅支持 {sorted(CANONICAL_COLORS)}")
-        if any(char in node["text"] for char in ("\r", "\n")):
-            errors.append(f"节点 `{node_id}` 的 text 不允许换行")
-
-    if len(node_ids) != len(set(node_ids)):
-        errors.append("nodes 中存在重复 id")
-
-    line_ids: list[str] = []
-    for line in lines:
-        line_id = line["id"]
-        line_ids.append(line_id)
-        from_id = line["from"]
-        to_id = line["to"]
-
-        if from_id not in node_by_id:
-            errors.append(f"连线 `{line_id}` 的 from 未引用有效节点")
-            continue
-        if to_id not in node_by_id:
-            errors.append(f"连线 `{line_id}` 的 to 未引用有效节点")
-            continue
-        if any(char in line["text"] for char in ("\r", "\n")):
-            errors.append(f"连线 `{line_id}` 的 text 不允许换行")
-        if line["fromJunctionPoint"] not in ALLOWED_JUNCTION_POINTS:
-            errors.append(
-                f"连线 `{line_id}` 的 fromJunctionPoint 仅支持 {sorted(ALLOWED_JUNCTION_POINTS)}"
-            )
-        if line["toJunctionPoint"] not in ALLOWED_JUNCTION_POINTS:
-            errors.append(
-                f"连线 `{line_id}` 的 toJunctionPoint 仅支持 {sorted(ALLOWED_JUNCTION_POINTS)}"
-            )
-
-    if len(line_ids) != len(set(line_ids)):
-        errors.append("lines 中存在重复 id")
-
-    return errors
+    return {"nodeCount": len(rows), "lineCount": len(rows) - root_count, "rootCount": root_count}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -400,22 +327,16 @@ def main() -> int:
 
     try:
         rows = parse_table(graph_path)
-        payload = build_payload(rows)
-        errors = validate_payload(payload)
-        if errors:
-            print(f"INVALID: {graph_path}")
-            for index, error in enumerate(errors, start=1):
-                print(f"{index}. {error}")
-            return 1
+        summary = validate_rows(rows)
 
         print(
             json.dumps(
                 {
                     "status": "ok",
                     "graph": str(graph_path),
-                    "rootId": payload["rootId"],
-                    "nodeCount": len(payload["nodes"]),
-                    "lineCount": len(payload["lines"]),
+                    "nodeCount": summary["nodeCount"],
+                    "lineCount": summary["lineCount"],
+                    "rootCount": summary["rootCount"],
                 },
                 ensure_ascii=False,
             )

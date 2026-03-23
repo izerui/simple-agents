@@ -8,15 +8,16 @@ import json
 import os
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Any
 
-from validate_graph import GraphError, build_payload, parse_table
+from validate_graph import GraphError, split_row
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Build a relation graph result JSON from graph.md after validation."
+        description="Build a relation graph result JSON from graph.md."
     )
     parser.add_argument("graph", help="Path to the markdown graph table file.")
     parser.add_argument(
@@ -57,6 +58,194 @@ def dump_json_atomic(path: Path, payload: Any, pretty: bool) -> None:
             temp_path.unlink()
 
 
+REQUIRED_HEADERS = [
+    "IsRoot",
+    "NodeID",
+    "NodeText",
+    "NodeType",
+    "ParentID",
+    "RelationText",
+    "NodeX",
+    "NodeY",
+    "NodeWidth",
+    "NodeHeight",
+    "NodeColor",
+]
+COLOR_ALIASES = {
+    "#ff0000": "#FF0000",
+    "#00b0f0": "#00B0F0",
+    "#00b050": "#00B050",
+    "#000000": "#000000",
+    "#548bd4": "#00B0F0",
+    "#0070c0": "#00B0F0",
+}
+
+
+def parse_number(value: str) -> int | float:
+    text = value.strip()
+    return float(text) if "." in text else int(text)
+
+
+def normalize_color(value: str) -> str:
+    return COLOR_ALIASES.get(value.strip(), COLOR_ALIASES.get(value.strip().lower(), value.strip()))
+
+
+def parse_table_for_build(path: Path) -> list[dict[str, str]]:
+    if not path.is_file():
+        raise GraphError(f"Markdown 表格不存在: {path}")
+    lines = [line.rstrip("\n") for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if len(lines) < 3:
+        raise GraphError("Markdown 表格内容不足，无法生成 result.json")
+    headers = split_row(lines[0])
+    if headers != REQUIRED_HEADERS:
+        raise GraphError("Markdown 表头不符合预期，无法生成 result.json")
+
+    rows: list[dict[str, str]] = []
+    for raw_line in lines[2:]:
+        if not raw_line.lstrip().startswith("|"):
+            continue
+        cells = split_row(raw_line)
+        if len(cells) != len(headers):
+            raise GraphError("Markdown 数据行列数与表头不一致，无法生成 result.json")
+        rows.append(dict(zip(headers, cells)))
+    return rows
+
+
+def center_x(node: dict[str, Any]) -> float:
+    return float(node["x"]) + float(node["width"]) / 2
+
+
+def center_y(node: dict[str, Any]) -> float:
+    return float(node["y"]) + float(node["height"]) / 2
+
+
+def choose_junction_points(source: dict[str, Any], target: dict[str, Any]) -> tuple[str, str]:
+    dx = center_x(target) - center_x(source)
+    dy = center_y(target) - center_y(source)
+    if abs(dy) < abs(dx):
+        return ("right", "left") if dx >= 0 else ("left", "right")
+    return ("bottom", "top") if dy >= 0 else ("top", "bottom")
+
+
+def compose_node(row: dict[str, str]) -> dict[str, Any]:
+    node_id = row["NodeID"].strip()
+    text = row["NodeText"].strip()
+    x = parse_number(row["NodeX"])
+    y = parse_number(row["NodeY"])
+    width = parse_number(row["NodeWidth"])
+    height = parse_number(row["NodeHeight"])
+    border_color = normalize_color(row["NodeColor"])
+    data_type = int(row["NodeType"].strip())
+    return {
+        "id": node_id,
+        "text": text,
+        "type": "node",
+        "isShow": True,
+        "isHide": False,
+        "expanded": True,
+        "selected": False,
+        "dragging": False,
+        "styleClass": "",
+        "className": "",
+        "nodeShape": 1,
+        "borderWidth": 1,
+        "borderColor": border_color,
+        "fontColor": border_color,
+        "fontFamily": "宋体",
+        "fontSize": 14,
+        "fontBold": False,
+        "fontItalic": False,
+        "fontUnderline": False,
+        "textHorizontalAlign": "center",
+        "textVerticalAlign": "middle",
+        "color": "#ffffff",
+        "opacity": 1,
+        "fixed": False,
+        "x": x,
+        "y": y,
+        "width": width,
+        "height": height,
+        "Fx": 0,
+        "Fy": 0,
+        "offset_x": 0,
+        "offset_y": 0,
+        "disableDrag": False,
+        "singleNode": False,
+        "invisiable": False,
+        "zIndex": 300,
+        "data": {
+            "type": data_type,
+            "backgroundImage": "",
+            "backgroundImageDisplay": 0,
+            "backgroundImageOpacity": 1,
+            "backgroundImageLeft": 0,
+            "backgroundImageTop": 0,
+            "backgroundImageWidth": 0,
+            "backgroundImageHeight": 0,
+            "backgroundImageRotate": 0,
+            "backgroundImageFlipH": False,
+            "backgroundImageFlipV": False,
+            "startPostion": {"x": x, "y": y},
+            "disableDefaultClickEffect": False,
+            "isHide": False,
+            "isLock": False,
+            "isLockPosition": False,
+            "customText": "",
+            "customDataType": "",
+            "customDataTypeData": "",
+        },
+    }
+
+
+def compose_line(parent_id: str, node_id: str, relation: str, node_map: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    source = node_map[parent_id]
+    target = node_map[node_id]
+    from_junction, to_junction = choose_junction_points(source, target)
+    return {
+        "id": f"line-{uuid.uuid4().hex[:12]}",
+        "type": "line",
+        "text": relation.strip(),
+        "from": parent_id,
+        "to": node_id,
+        "lineWidth": 1,
+        "color": "#000000",
+        "isHide": False,
+        "lineShape": 1,
+        "fontBold": False,
+        "fontItalic": False,
+        "fontUnderline": False,
+        "opacity": 1,
+        "arrow": "RGIns-12-arrow-000000-w5",
+        "animation": 0,
+        "dashType": 0,
+        "disableDefaultClickEffect": False,
+        "showStartArrow": False,
+        "showEndArrow": True,
+        "startMarkerId": "",
+        "endMarkerId": "",
+        "forDisplayOnly": False,
+        "fromJunctionPoint": from_junction,
+        "toJunctionPoint": to_junction,
+        "fromJuctionPointOffsetX": 0,
+        "fromJuctionPointOffsetY": 0,
+        "toJuctionPointOffsetX": 0,
+        "toJuctionPointOffsetY": 0,
+        "polyLineRadius": 0,
+        "hidden": False,
+    }
+
+
+def build_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
+    nodes = [compose_node(row) for row in rows]
+    node_map = {node["id"]: node for node in nodes}
+    lines = [
+        compose_line(row["ParentID"].strip(), row["NodeID"].strip(), row["RelationText"], node_map)
+        for row in rows
+        if row["IsRoot"].strip() != "是"
+    ]
+    return {"rootId": f"root-{uuid.uuid4().hex}", "nodes": nodes, "lines": lines}
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -65,7 +254,7 @@ def main() -> int:
 
     try:
         output_path = resolve_output_path(args.output)
-        rows = parse_table(graph_path)
+        rows = parse_table_for_build(graph_path)
         payload = build_payload(rows)
         dump_json_atomic(output_path, payload, pretty=args.pretty)
         print(

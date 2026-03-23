@@ -1,6 +1,6 @@
 ---
 name: relation-graph
-description: 生成或增量修改可直接导入前端的知识建模图 JSON。适用于把课程知识点、层级、关系、步骤链、案例、策略等内容转成符合 schema 的最终图数据，并在需要时稳定调整布局。
+description: 生成或增量修改可直接导入前端的知识建模图 JSON。适用于把课程知识点、层级、关系、步骤链、案例、策略等内容转成最终图数据，并在需要时稳定调整布局。
 ---
 
 # Relation Graph
@@ -24,29 +24,23 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 - 从知识点文本、课程内容、结构提纲生成知识建模图
 - 修改已有知识建模图 JSON
 - 追加节点、关系、步骤链、案例、策略节点
-- 调整图结构但仍需输出符合既有 schema 的最终 JSON
+- 调整图结构但仍需输出最终 JSON
 
 ## 先读什么
 
 按这个顺序加载资源：
 
-1. `references/schema.json`
-作用：
-- 供单脚本在生成阶段校验最终 `result.json`
-- 用于约束最终 JSON 的结构、固定字段和合法值
-- 不用于定义 `graph.md` 的 Markdown 格式
-
-2. `references/layout.md`
+1. `references/layout.md`
 什么时候读：
 - 任何需要生成或调整 `x/y/width/height`、阅读路径、分区布局、连线拓扑时
 
-3. `references/layout-example.json`
+2. `references/layout-example.md`
 什么时候读：
 - 需要参考现有图谱的节点密度、分区方式、外围挂接和坐标尺度时
-- 只把它当布局参考样例，不参与生成流程
-- 不要拿它覆盖 schema、layout 规则或用户已确认的 `graph.md`
+- 它同时是可直接试跑的 `graph.md` 样本
+- 只把它当文件样本和布局参考，不参与正式生成流程
 
-4. `scripts/validate_graph.py`
+3. `scripts/validate_graph.py`
 什么时候用：
 - 单独校验 `graph.md`
 - 校验脚本只负责检查 `graph.md` 是否可用于生成最终 JSON
@@ -58,7 +52,7 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 python /skills/relation-graph/scripts/validate_graph.py /output/graph.md
 ```
 
-5. `scripts/build_graph.py`
+4. `scripts/build_graph.py`
 什么时候用：
 - 在 `graph.md` 已通过校验后，传入 `graph.md` 路径生成最终 `result.json`
 - 脚本只接受文件路径参数，不接受内联内容、stdin 或临时脚本替代
@@ -101,8 +95,8 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
   - `PK -> 3`
   - `CS -> 5`
   - `FC -> 6`
-- `ParentID` 根节点必须为空；非根节点必须非空，且必须引用表内有效节点
-- `RelationText` 根节点必须为空；非根节点必须非空，不允许换行
+- `ParentID` 如果填写，必须引用表内有效节点
+- `RelationText` 如果填写，不允许换行
 - `RelationText` 只能使用以下 10 个关系名之一：
   - `包含`
   - `组成`
@@ -124,12 +118,8 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
   - `#000000`：普通知识点
 
 完整性要求：
-- 全表必须有且仅有一个根节点
-- 每个节点最多只有一个父节点
-- 不允许多父节点结构
 - 先确定语义结构，再填写布局字段
-- `rootId` 由脚本独立生成唯一值，不要求等于任何节点 `id`
-- `graph.md` 必须能完整映射出最终 JSON 的 `nodes`、`lines` 和布局字段
+- `graph.md` 的内容必须足以直接生成最终 JSON
 
 最小合法样本：
 
@@ -239,7 +229,6 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - 脚本只接受 `graph.md` 文件路径作为输入
 - 默认输出当前任务工作目录下的 `/output/result.json`
 - 允许通过 `--output` 指定结果文件，但必须仍位于当前任务工作目录下的 `/output` 目录
-- `references/schema.json` 只由校验脚本使用
 - 失败时直接提示回去修改 `graph.md`
 
 ### 7. 输出位置
@@ -261,19 +250,8 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 
 这些约束要始终满足：
 
-- 最外层字段名必须是 `rootId`、`nodes`、`lines`
-- `rootId` 非空且唯一
-- `rootId` 不要求引用任何节点 `id`
-- 节点 `id` 非空且唯一
-- 连线 `id` 非空且唯一
-- `from/to` 必须引用有效节点
-- `data.startPostion.x/y` 必须与节点 `x/y` 完全一致
 - `x/y` 必须按 `references/layout.md` 生成后直接写入最终 JSON
 - `width/height` 必须直接写入最终 JSON，不能省略
-- `fromJunctionPoint/toJunctionPoint` 必须按节点相对位置与关系方向正确填写
-- 节点文本和关系文本都不允许换行
-- `borderColor` 与 `fontColor` 必须一致
-- 固定字段及其固定值必须以 `references/schema.json` 为准，由单脚本统一补全，不要凭记忆补写
 - `graph.md` 保持固定表头，不要改格式
 - 脚本只能接受 `graph.md` 文件路径作为输入
 
@@ -281,7 +259,6 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 
 节点关键要求：
 - `text` 不允许换行
-- `data.startPostion.x/y` 必须与节点 `x/y` 完全一致
 - `x/y` 必须按 `references/layout.md` 生成后直接写入最终 JSON
 - `width/height` 必须直接写入最终 JSON，不能省略
 
@@ -289,14 +266,11 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - 颜色表达语义层次
 - 形状表达知识类型
 - 不要把颜色和形状的语义混用
-- 节点边框颜色 `borderColor` 和节点文字颜色 `fontColor` 必须按 `references/schema.json` 要求填写并保持一致
-- 颜色只能从 schema 允许的四种颜色中选择，并根据 schema 中定义的颜色语义选择合适值
+- 颜色只能从四种允许颜色中选择，并根据既定颜色语义选择合适值
 
 连线关键要求：
 - `text` 不允许换行
-- `from/to` 必须引用有效节点
 - `from` 表示父节点，`to` 表示子节点
-- `fromJunctionPoint/toJunctionPoint` 必须按节点相对位置与关系方向正确填写
 - 关系文本必须真实表达语义
 - 关系文本只能使用这 10 个标准关系名：`包含`、`组成`、`构成`、`是一种`、`具有属性`、`具有特征`、`定义`、`并列`、`是前提`、`支持`
 - 连接关系必须优先组织成主知识树，再在树外做少量外围挂接
@@ -306,7 +280,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 
 关系：
 - 关系文本必须真实表达语义
-- 必须且只能使用 `references/schema.json` 中约定的 10 个标准关系名
+- 必须且只能使用当前技能约定的 10 个标准关系名
 - 若出现跨分支语义，优先通过调整层级、重新归类或外围挂接表达，不要直接把多个分支重新连成网
 
 关系生成顺序：
@@ -359,14 +333,13 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 
 交付前至少确认：
 
-1. 已读取 `references/schema.json`
-2. 坐标生成前已读取 `references/layout.md`
-3. 已先生成 `/output/graph.md` 单表，而不是直接拼超长最终 JSON
-4. 已使用 `scripts/validate_graph.py` 单独校验 `graph.md`
-5. 已使用 `scripts/build_graph.py` 传入 `graph.md` 路径生成最终 JSON
-6. 结果文件写在 `/output/result.json` 或用户通过 `--output` 显式指定的目标路径
-7. 若为增量修改，未改动部分已尽量保持稳定
-8. 若 `graph.md` 已成功生成过一次 `result.json`，后续只修改布局字段
+1. 坐标生成前已读取 `references/layout.md`
+2. 已先生成 `/output/graph.md` 单表，而不是直接拼超长最终 JSON
+3. 已使用 `scripts/validate_graph.py` 单独校验 `graph.md`
+4. 已使用 `scripts/build_graph.py` 传入 `graph.md` 路径生成最终 JSON
+5. 结果文件写在 `/output/result.json` 或用户通过 `--output` 显式指定的目标路径
+6. 若为增量修改，未改动部分已尽量保持稳定
+7. 若 `graph.md` 已成功生成过一次 `result.json`，后续只修改布局字段
 
 ## 输出要求
 
