@@ -475,7 +475,7 @@
 
 ## 布局参考样例
 
-`references/layout-example.md` 可作为现有图谱的布局参考样例，用于观察：
+`references/example.md` 可作为现有图谱的布局参考样例，用于观察：
 - 主干、步骤列、枚举组、案例外挂的大致分区方式
 - 常见节点尺寸、纵列间距、外围案例放置方式
 - 不同语义类型在画布中的相对位置
@@ -485,7 +485,7 @@
 冲突处理优先级：
 1. 用户当前任务的内容与增量约束
 2. 本文档
-3. `references/layout-example.md`
+3. `references/example.md`
 
 ## 生成前自检
 

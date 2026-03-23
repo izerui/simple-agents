@@ -34,7 +34,7 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 什么时候读：
 - 任何需要生成或调整 `x/y/width/height`、阅读路径、分区布局、连线拓扑时
 
-2. `references/layout-example.md`
+2. `references/example.md`
 什么时候读：
 - 需要参考现有图谱的节点密度、分区方式、外围挂接和坐标尺度时
 - 它同时是可直接试跑的 `graph.md` 样本
