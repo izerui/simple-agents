@@ -17,6 +17,7 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 - 先用独立校验脚本校验 `graph.md`
 - 再用生成脚本传入 `graph.md` 路径，生成最终 JSON
 - 生成失败时回到 `graph.md` 继续修改；成功后覆盖 `/output/result.json`
+- 如果当前已经存在可编辑的 `graph.md`，优先在该文件基础上继续修改
 - 如果用户提供了现有建模图 JSON，先反向转换成 `graph.md`，再在该文件基础上做增量修改
 
 ## 什么时候用
@@ -156,9 +157,11 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 
 新建：
 - 用户没有提供现有图 JSON
+- 当前也没有现成可复用的 `graph.md`
 - 从头生成完整图
 
 增量：
+- 如果当前已经存在可编辑的 `graph.md`，直接在该文件基础上修改
 - 用户提供了现有图 JSON
 - 先使用 `scripts/reverse_json_to_md.py` 把现有图 JSON 转成 `graph.md`
 - 再以该 `graph.md` 为基准修改
@@ -202,6 +205,11 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 ### 4. 先生成知识单表 Markdown
 
 先按上面的 `graph.md` 生成规范，一次性生成完整单表，不要一上来直接写 JSON。
+
+如果当前已经存在可编辑的 `graph.md`：
+- 直接在该文件基础上继续编辑
+- 不要重新生成整张表
+- 未被要求改动的部分尽量保持不变，只做局部修改和增量补充
 
 如果用户已经提供现有建模图 JSON：
 - 先执行 `scripts/reverse_json_to_md.py` 转成 `graph.md`
@@ -345,6 +353,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 ## 增量修改要求
 
 如果是增量修改：
+- 如果当前已经存在可编辑的 `graph.md`，优先直接在该文件基础上修改
 - 如果用户提供了现有建模图 JSON，必须先用 `scripts/reverse_json_to_md.py` 转成 `graph.md`
 - 后续所有修改都在该 `graph.md` 上进行
 - 仍需遵循 `graph.md` 的固定表头、字段规则和整体格式约束
@@ -362,11 +371,12 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 1. 坐标生成前已读取 `references/layout.md`
 2. 已先生成 `/output/graph.md` 单表，而不是直接拼超长最终 JSON
 3. 已使用 `scripts/validate_graph.py` 单独校验 `graph.md`
-4. 若用户提供了现有建模图 JSON，已先使用 `scripts/reverse_json_to_md.py` 转成 `graph.md`
-5. 已使用 `scripts/build_graph.py` 传入 `graph.md` 路径生成最终 JSON
-6. 结果文件写在 `/output/result.json` 或用户通过 `--output` 显式指定的目标路径
-7. 若为增量修改，未改动部分已尽量保持稳定
-8. 若 `graph.md` 已成功生成过一次 `result.json`，后续只修改布局字段
+4. 若当前已存在可编辑的 `graph.md`，已优先在该文件基础上修改
+5. 若用户提供了现有建模图 JSON，已先使用 `scripts/reverse_json_to_md.py` 转成 `graph.md`
+6. 已使用 `scripts/build_graph.py` 传入 `graph.md` 路径生成最终 JSON
+7. 结果文件写在 `/output/result.json` 或用户通过 `--output` 显式指定的目标路径
+8. 若为增量修改，未改动部分已尽量保持稳定
+9. 若 `graph.md` 已成功生成过一次 `result.json`，后续只修改布局字段
 
 ## 输出要求
 
