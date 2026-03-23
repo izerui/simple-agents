@@ -54,6 +54,7 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 ## 5. 总体执行原则
 
 执行本 skill 时，必须遵守以下原则：
+- 在首次生成 `graph.md` 之前，必须完整阅读本 skill 文档以及本 skill 明确要求的相关参考文件；不得未读完规则就开始生成
 - 唯一主流程必须是：生成或修改 `graph.md` -> 校验 `graph.md` -> 生成 `result.json`
 - 不允许绕过 `graph.md` 直接手写最终 `result.json`
 - 不允许直接修改 `result.json` 作为修正手段
