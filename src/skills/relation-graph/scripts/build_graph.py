@@ -12,7 +12,16 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from validate_graph import GraphError, split_row
+
+class GraphError(ValueError):
+    """Raised when graph.md cannot be converted into result.json."""
+
+
+def split_row(line: str) -> list[str]:
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        raise GraphError("Markdown 表格行必须以 `|` 开始并以 `|` 结束")
+    return [cell.strip() for cell in stripped[1:-1].split("|")]
 
 
 def build_parser() -> argparse.ArgumentParser:
