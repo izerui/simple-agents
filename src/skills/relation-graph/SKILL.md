@@ -8,11 +8,11 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 生成最终可用的知识建模图 JSON，不输出草稿结构或待补字段。
 
 默认交付物：
-- 有根知识树单表：`/output/graph.md`
+- 知识单表：`/output/graph.md`
 - 最终产物：`/output/result.json`
 
 默认工作方式：
-- 先生成有根知识树单表 Markdown
+- 先生成知识单表 Markdown
 - 后续所有问题都只通过编辑 `graph.md` 解决
 - 先用独立校验脚本校验 `graph.md`
 - 再用生成脚本传入 `graph.md` 路径，生成最终 JSON
@@ -71,14 +71,14 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 固定表头：
 
 ```text
-| IsRoot | NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
+| NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
 ```
 
 固定规则：
 - `graph.md` 必须是一张单一 Markdown 表
 - 第一行必须是固定表头，不能改列名、列顺序、列数量
 - 第二行必须是 Markdown 分隔行
-- 第三行起每行只定义一个节点
+- 第三行起每行表示一个节点定义加一条父关系记录
 - 不允许生成第二张表
 - 不允许把节点写成列表、段落、JSON 片段或半结构化草稿
 - 节点文本和关系名称中不要出现 `|`
@@ -86,8 +86,9 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - 必须一次性生成完整可校验版本，不能故意留待后续补字段
 
 每列要求：
-- `IsRoot` 只能填 `是` 或 `否`
-- `NodeID` 非空且全表唯一
+- `NodeID` 非空
+- 同一个 `NodeID` 可以重复出现，用于表达多个父节点
+- 同一个 `NodeID` 重复出现时，这些节点定义字段必须完全一致：`NodeText`、`NodeType`、`NodeX`、`NodeY`、`NodeWidth`、`NodeHeight`、`NodeColor`
 - `NodeText` 非空，不允许换行
 - `NodeType` 只能填 `2`、`3`、`5`、`6`
 - 知识建模方法论中的类型映射为：
@@ -95,6 +96,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
   - `PK -> 3`
   - `CS -> 5`
   - `FC -> 6`
+- `ParentID` 和 `RelationText` 必须同时为空，或同时非空
 - `ParentID` 如果填写，必须引用表内有效节点
 - `RelationText` 如果填写，不允许换行
 - `RelationText` 只能使用以下 10 个关系名之一：
@@ -124,16 +126,16 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 最小合法样本：
 
 ```md
-| IsRoot | NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 是 | root-1 | 函数 | 2 |  |  | 0 | 0 | 88 | 36 | #00B0F0 |
-| 否 | node-1 | 概念定义 | 2 | root-1 | 包含 | -180 | 120 | 72 | 36 | #000000 |
-| 否 | node-2 | 分类 | 2 | root-1 | 包含 | 140 | 120 | 72 | 36 | #000000 |
-| 否 | node-3 | 示例 | 6 | root-1 | 支持 | 220 | 240 | 88 | 40 | #000000 |
-| 否 | node-4 | 使用步骤 | 3 | root-1 | 包含 | -40 | 220 | 96 | 40 | #00B0F0 |
-| 否 | node-5 | 明确参数 | 3 | node-4 | 包含 | -40 | 300 | 96 | 40 | #000000 |
-| 否 | node-6 | 调用函数 | 3 | node-4 | 包含 | -40 | 360 | 96 | 40 | #000000 |
-| 否 | node-7 | 复盘检查 | 5 | root-1 | 支持 | 320 | 320 | 96 | 40 | #000000 |
+| NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| root-1 | 函数 | 2 |  |  | 0 | 0 | 88 | 36 | #00B0F0 |
+| node-1 | 概念定义 | 2 | root-1 | 包含 | -180 | 120 | 72 | 36 | #000000 |
+| node-2 | 分类 | 2 | root-1 | 包含 | 140 | 120 | 72 | 36 | #000000 |
+| node-3 | 示例 | 6 | root-1 | 支持 | 220 | 240 | 88 | 40 | #000000 |
+| node-4 | 使用步骤 | 3 | root-1 | 包含 | -40 | 220 | 96 | 40 | #00B0F0 |
+| node-5 | 明确参数 | 3 | node-4 | 包含 | -40 | 300 | 96 | 40 | #000000 |
+| node-6 | 调用函数 | 3 | node-4 | 包含 | -40 | 360 | 96 | 40 | #000000 |
+| node-7 | 复盘检查 | 5 | root-1 | 支持 | 320 | 320 | 96 | 40 | #000000 |
 ```
 
 ## 工作流
@@ -153,7 +155,6 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 ### 2. 先识别语义骨架
 
 先判断这些结构，再落图：
-- 根节点
 - 一级主干
 - 主要阅读路径
 - 步骤链
@@ -184,7 +185,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - `x/y` 必须出现在最终 JSON 中
 - `x/y` 的值必须依据 `references/layout.md` 生成
 
-### 4. 先生成有根知识树单表 Markdown
+### 4. 先生成知识单表 Markdown
 
 先按上面的 `graph.md` 生成规范，一次性生成完整单表，不要一上来直接写 JSON。
 
@@ -309,7 +310,6 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - `NodeHeight`
 
 用户确认后，默认冻结这些字段：
-- `IsRoot`
 - `NodeID`
 - `NodeText`
 - `NodeType`

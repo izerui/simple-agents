@@ -59,7 +59,6 @@ def dump_json_atomic(path: Path, payload: Any, pretty: bool) -> None:
 
 
 REQUIRED_HEADERS = [
-    "IsRoot",
     "NodeID",
     "NodeText",
     "NodeType",
@@ -127,15 +126,16 @@ def choose_junction_points(source: dict[str, Any], target: dict[str, Any]) -> tu
     return ("bottom", "top") if dy >= 0 else ("top", "bottom")
 
 
-def compose_node(row: dict[str, str]) -> dict[str, Any]:
-    node_id = row["NodeID"].strip()
-    text = row["NodeText"].strip()
-    x = parse_number(row["NodeX"])
-    y = parse_number(row["NodeY"])
-    width = parse_number(row["NodeWidth"])
-    height = parse_number(row["NodeHeight"])
-    border_color = normalize_color(row["NodeColor"])
-    data_type = int(row["NodeType"].strip())
+def compose_node(
+    node_id: str,
+    text: str,
+    data_type: int,
+    x: int | float,
+    y: int | float,
+    width: int | float,
+    height: int | float,
+    border_color: str,
+) -> dict[str, Any]:
     return {
         "id": node_id,
         "text": text,
@@ -236,12 +236,29 @@ def compose_line(parent_id: str, node_id: str, relation: str, node_map: dict[str
 
 
 def build_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
-    nodes = [compose_node(row) for row in rows]
+    node_defs: dict[str, tuple[str, int, int | float, int | float, int | float, int | float, str]] = {}
+    for row in rows:
+        node_id = row["NodeID"].strip()
+        node_signature = (
+            row["NodeText"].strip(),
+            int(row["NodeType"].strip()),
+            parse_number(row["NodeX"]),
+            parse_number(row["NodeY"]),
+            parse_number(row["NodeWidth"]),
+            parse_number(row["NodeHeight"]),
+            normalize_color(row["NodeColor"]),
+        )
+        node_defs.setdefault(node_id, node_signature)
+
+    nodes = [
+        compose_node(node_id, text, data_type, x, y, width, height, border_color)
+        for node_id, (text, data_type, x, y, width, height, border_color) in node_defs.items()
+    ]
     node_map = {node["id"]: node for node in nodes}
     lines = [
         compose_line(row["ParentID"].strip(), row["NodeID"].strip(), row["RelationText"], node_map)
         for row in rows
-        if row["IsRoot"].strip() != "是"
+        if row["ParentID"].strip() and row["RelationText"].strip()
     ]
     return {"rootId": f"root-{uuid.uuid4().hex}", "nodes": nodes, "lines": lines}
 

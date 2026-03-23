@@ -12,7 +12,6 @@ from typing import Any
 
 
 REQUIRED_HEADERS = [
-    "IsRoot",
     "NodeID",
     "NodeText",
     "NodeType",
@@ -67,15 +66,6 @@ def require_text(value: str, field_name: str) -> str:
     if any(char in text for char in ("\r", "\n")):
         raise GraphError(f"`{field_name}` 不允许换行；请回去修改 graph.md")
     return text
-
-
-def parse_bool(value: str, field_name: str) -> bool:
-    normalized = value.strip()
-    if normalized == "是":
-        return True
-    if normalized == "否":
-        return False
-    raise GraphError(f"`{field_name}` 只允许填写 `是` 或 `否`；请回去修改 graph.md")
 
 
 def parse_number(value: str, field_name: str) -> int | float:
@@ -266,50 +256,39 @@ def compose_line(
 
 
 def validate_rows(rows: list[dict[str, str]]) -> dict[str, int]:
-    node_ids: set[str] = set()
-    root_count = 0
+    node_defs: dict[str, tuple[str, int, int | float, int | float, int | float, int | float, str]] = {}
+    line_count = 0
     for row in rows:
-        is_root = parse_bool(row["IsRoot"], "IsRoot")
         node_id = require_text(row["NodeID"], "NodeID")
-        if node_id in node_ids:
-            raise GraphError(f"当前节点重复出现: {node_id}；请回去修改 graph.md")
-        node_ids.add(node_id)
-
+        node_text = require_text(row["NodeText"], "NodeText")
+        node_type = parse_node_type(row["NodeType"])
+        node_x = parse_number(row["NodeX"], "NodeX")
+        node_y = parse_number(row["NodeY"], "NodeY")
+        node_width = parse_number(row["NodeWidth"], "NodeWidth")
+        node_height = parse_number(row["NodeHeight"], "NodeHeight")
+        node_color = normalize_color(require_text(row["NodeColor"], "NodeColor"), "NodeColor")
+        node_signature = (node_text, node_type, node_x, node_y, node_width, node_height, node_color)
+        if node_id in node_defs and node_defs[node_id] != node_signature:
+            raise GraphError(
+                f"`NodeID` `{node_id}` 重复出现时，节点定义字段必须完全一致；请回去修改 graph.md"
+            )
+        node_defs[node_id] = node_signature
         parent_id = row["ParentID"].strip()
         relation = row["RelationText"].strip()
-
-        if is_root:
-            root_count += 1
-            if root_count > 1:
-                raise GraphError("只能有一个根节点；请回去修改 graph.md")
-            if parent_id or relation:
-                raise GraphError("根节点行的 `ParentID` 和 `RelationText` 必须为空；请回去修改 graph.md")
-        else:
-            if not parent_id:
-                raise GraphError(f"非根节点 `{node_id}` 必须填写 `ParentID`；请回去修改 graph.md")
-            if not relation:
-                raise GraphError(f"非根节点 `{node_id}` 必须填写 `RelationText`；请回去修改 graph.md")
+        if bool(parent_id) != bool(relation):
+            raise GraphError(
+                "`ParentID` 和 `RelationText` 必须同时为空，或同时非空；请回去修改 graph.md"
+            )
+        if relation:
             normalize_relation_text(relation, "RelationText")
-
-        require_text(row["NodeText"], "NodeText")
-        parse_number(row["NodeX"], "NodeX")
-        parse_number(row["NodeY"], "NodeY")
-        parse_number(row["NodeWidth"], "NodeWidth")
-        parse_number(row["NodeHeight"], "NodeHeight")
-        normalize_color(require_text(row["NodeColor"], "NodeColor"), "NodeColor")
-        parse_node_type(row["NodeType"])
-
-    if root_count == 0:
-        raise GraphError("必须有且仅有一个根节点；请回去修改 graph.md")
+            line_count += 1
 
     for row in rows:
-        if parse_bool(row["IsRoot"], "IsRoot"):
-            continue
         parent_id = row["ParentID"].strip()
-        if parent_id not in node_ids:
+        if parent_id and parent_id not in node_defs:
             raise GraphError(f"父节点 `{parent_id}` 未定义；请回去修改 graph.md")
 
-    return {"nodeCount": len(rows), "lineCount": len(rows) - root_count, "rootCount": root_count}
+    return {"nodeCount": len(node_defs), "lineCount": line_count}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -336,7 +315,6 @@ def main() -> int:
                     "graph": str(graph_path),
                     "nodeCount": summary["nodeCount"],
                     "lineCount": summary["lineCount"],
-                    "rootCount": summary["rootCount"],
                 },
                 ensure_ascii=False,
             )
