@@ -148,11 +148,6 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 - 同一个 `NodeID` 重复出现时，这些节点定义字段必须完全一致：`NodeText`、`NodeType`、`NodeX`、`NodeY`、`NodeWidth`、`NodeHeight`、`NodeSemantic`
 - `NodeText` 非空，不允许换行
 - `NodeType` 只能填 `DK`、`PK`、`CS`、`FC`
-- 生成脚本内部固定映射为：
-  - `DK -> 2`
-  - `PK -> 3`
-  - `CS -> 5`
-  - `FC -> 6`
 - `ParentID` 和 `RelationText` 必须同时为空，或同时非空
 - `ParentID` 如果填写，必须引用表内有效节点
 - `RelationText` 如果填写，不允许换行
@@ -314,12 +309,6 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - `build_graph.py` 生成失败时，不得手工拼接或修补最终 JSON；必须回到 `graph.md` 修正后重新生成
 - `graph.md` 始终是唯一可编辑事实来源，`result.json` 只是由其生成的最终产物
 
-输出要求：
-- 脚本只接受 `graph.md` 文件路径作为输入
-- 默认输出当前任务工作目录下的 `/output/result.json`
-- 允许通过 `--output` 指定结果文件，但必须仍位于当前任务工作目录下的 `/output` 目录
-- 失败时直接提示回去修改 `graph.md`
-
 ### 7. 输出位置
 
 结果文件必须写到当前任务工作目录下的 `/output` 目录。
@@ -335,67 +324,22 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - `graph.md` 默认也应放在 `/output/graph.md`
 - 不要写到技能目录或其他路径
 
-## 关键约束
-
-这些约束要始终满足：
-
-- `x/y` 必须按 `references/layout.md` 生成后直接写入最终 JSON
-- `width/height` 必须直接写入最终 JSON，不能省略
-- `graph.md` 保持固定表头，不要改格式
-- 脚本只能接受 `graph.md` 文件路径作为输入
-
-## 节点与关系的语义要求
-
-节点关键要求：
-- `text` 不允许换行
-- `x/y` 必须按 `references/layout.md` 生成后直接写入最终 JSON
-- `width/height` 必须直接写入最终 JSON，不能省略
-
-节点：
-- 形状表达知识类型
-- 语义字段只能从四种允许值中选择
-
-连线关键要求：
-- `text` 不允许换行
-- `from` 表示父节点，`to` 表示子节点
-- 关系文本必须真实表达语义
-- 关系文本只能使用这 10 个标准关系名：`包含`、`组成`、`构成`、`是一种`、`具有属性`、`具有特征`、`定义`、`并列`、`是前提`、`支持`
-- 连接关系必须优先组织成主知识树，再在树外做少量外围挂接
-- 避免网状结构、分支互连和多分支交叉
-- 案例节点、策略节点、练习节点默认只作为叶子外挂节点，不要反向连回主知识节点
-- 若某条关系会把图拉成织网结构，优先调整层级或改为外围挂接，不要直接补边
-
-关系：
-- 关系文本必须真实表达语义
-- 必须且只能使用当前技能约定的 10 个标准关系名
-- 若出现跨分支语义，优先通过调整层级、重新归类或外围挂接表达，不要直接把多个分支重新连成网
-
-关系生成顺序：
-1. 先确定主知识树，只保留最主要、最稳定的父子关系
-2. 再补步骤链、枚举组、组成关系等树内展开
-3. 最后再补案例、策略、练习等外围挂接
-4. 只有在不破坏主知识树阅读的前提下，才允许保留极少量跨层语义连接
-
-结构优先级：
-- 优先保持主知识树清楚，再追求语义补充完整
-- 宁可少一条容易引起交叉的补充关系，也不要把图做成网状结构
-- 当一个节点一级子节点过多时，先拆成二级分组节点，再继续展开
-
 ## graph.md 固定规则
 
-- 一旦生成出 `graph.md`，后续所有问题都只能通过修改这个文件来尝试生成 `result.json`
 - 不允许重新生成整张 `graph.md`
 - 只允许在现有表上做定点 edit
-- 用户确认知识点和语义关系后，`graph.md` 表内容视为固定基线
-- `graph.md` 成功生成过一次 `result.json` 后，建模图内容即固定下来，后续调整都视为布局调整
 
-用户确认后，默认只允许修改这些布局字段：
+### 仅布局调整模式
+
+仅当用户明确表示“知识点和语义关系已确认，只需要调整布局”时，才进入仅布局调整模式。
+
+进入该模式后，默认只修改这些布局字段：
 - `NodeX`
 - `NodeY`
 - `NodeWidth`
 - `NodeHeight`
 
-用户确认后，默认冻结这些字段：
+进入该模式后，默认不修改这些内容字段：
 - `NodeID`
 - `NodeText`
 - `NodeType`
@@ -403,9 +347,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - `RelationText`
 - `NodeSemantic`
 
-例外：
-- 只有节点 `id`、关系 `id`、引用合法性这类基础标识问题会导致结果无法生成时，才允许做必要纠错
-- 这类纠错不能改变知识点内容、语义关系或整体结构
+若用户后续明确要求修改知识点内容、关系语义或结构层级，应退出仅布局调整模式，恢复正常增量修改流程。
 
 ## 增量修改要求
 
@@ -433,7 +375,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 6. 已使用 `scripts/build_graph.py` 传入 `graph.md` 路径生成最终 JSON
 7. 结果文件写在 `/output/result.json` 或用户通过 `--output` 显式指定的目标路径
 8. 若为增量修改，未改动部分已尽量保持稳定
-9. 若 `graph.md` 已成功生成过一次 `result.json`，后续只修改布局字段
+9. 若用户明确要求仅调整布局，已切换到仅布局调整模式
 
 ## 输出要求
 
