@@ -4,11 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
 
 
 REQUIRED_HEADERS = [
@@ -35,7 +33,6 @@ ALLOWED_NODE_SEMANTICS = {
     "先决知识点",
     "普通知识点",
 }
-ALLOWED_JUNCTION_POINTS = {"border", "left", "right", "top", "bottom"}
 ALLOWED_RELATION_TEXTS = {
     "包含",
     "组成",
@@ -136,122 +133,6 @@ def parse_table(path: Path) -> list[dict[str, str]]:
     if not rows:
         raise GraphError("Markdown 表格没有数据行；请回去修改 graph.md")
     return rows
-
-
-def center_x(node: dict[str, Any]) -> float:
-    return float(node["x"]) + float(node["width"]) / 2
-
-
-def center_y(node: dict[str, Any]) -> float:
-    return float(node["y"]) + float(node["height"]) / 2
-
-
-def center(node: dict[str, Any]) -> tuple[float, float]:
-    return (center_x(node), center_y(node))
-
-
-def choose_junction_points(source: dict[str, Any], target: dict[str, Any]) -> tuple[str, str]:
-    dx = center_x(target) - center_x(source)
-    dy = center_y(target) - center_y(source)
-    if abs(dy) < abs(dx):
-        return ("right", "left") if dx >= 0 else ("left", "right")
-    return ("bottom", "top") if dy >= 0 else ("top", "bottom")
-
-
-def compose_node(
-    node_id: str,
-    text: str,
-    x: int | float,
-    y: int | float,
-    width: int | float,
-    height: int | float,
-    border_color: str,
-    data_type: int,
-) -> dict[str, Any]:
-    return {
-        "id": node_id,
-        "text": text,
-        "type": "node",
-        "isShow": True,
-        "isHide": False,
-        "expanded": True,
-        "selected": False,
-        "dragging": False,
-        "styleClass": "",
-        "className": "",
-        "nodeShape": 1,
-        "borderWidth": 1,
-        "borderColor": border_color,
-        "fontColor": border_color,
-        "fontFamily": "宋体",
-        "fontSize": 14,
-        "fontBold": False,
-        "fontItalic": False,
-        "fontUnderline": False,
-        "textHorizontalAlign": "center",
-        "textVerticalAlign": "middle",
-        "color": "#ffffff",
-        "opacity": 1,
-        "fixed": False,
-        "x": x,
-        "y": y,
-        "width": width,
-        "height": height,
-        "Fx": 0,
-        "Fy": 0,
-        "offset_x": 0,
-        "offset_y": 0,
-        "disableDrag": False,
-        "singleNode": False,
-        "invisiable": False,
-        "zIndex": 300,
-        "data": {
-            "type": data_type,
-            "backgroundImage": "",
-            "imageFit": "cover",
-            "startPostion": {"x": x, "y": y},
-        },
-    }
-
-
-def compose_line(
-    parent_id: str,
-    node_id: str,
-    relation: str,
-    node_map: dict[str, dict[str, Any]],
-) -> dict[str, Any]:
-    from_junction, to_junction = choose_junction_points(node_map[parent_id], node_map[node_id])
-    return {
-        "id": f"{parent_id}->{node_id}",
-        "from": parent_id,
-        "to": node_id,
-        "text": relation,
-        "lineWidth": 1,
-        "color": "#000000",
-        "isHide": False,
-        "lineShape": 1,
-        "fontBold": False,
-        "fontItalic": False,
-        "fontUnderline": False,
-        "opacity": 1,
-        "arrow": "RGIns-12-arrow-000000-w5",
-        "animation": 0,
-        "dashType": 0,
-        "disableDefaultClickEffect": False,
-        "showStartArrow": False,
-        "showEndArrow": True,
-        "startMarkerId": "",
-        "endMarkerId": "",
-        "forDisplayOnly": False,
-        "fromJunctionPoint": from_junction,
-        "toJunctionPoint": to_junction,
-        "fromJuctionPointOffsetX": 0,
-        "fromJuctionPointOffsetY": 0,
-        "toJuctionPointOffsetX": 0,
-        "toJuctionPointOffsetY": 0,
-        "polyLineRadius": 0,
-        "hidden": False,
-    }
 
 
 def validate_rows(rows: list[dict[str, str]]) -> dict[str, int]:

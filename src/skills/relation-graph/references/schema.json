@@ -257,9 +257,9 @@
         "fontSize": {
           "type": "integer",
           "enum": [
-            14
+            12
           ],
-          "default": 14
+          "default": 12
         },
         "fontBold": {
           "type": "boolean",
@@ -517,6 +517,7 @@
         "color",
         "isHide",
         "lineShape",
+        "fontSize",
         "fontBold",
         "fontItalic",
         "fontUnderline",
@@ -602,6 +603,14 @@
           ],
           "default": 1,
           "description": "连线形状/类型：1=直线（优先），44=折线，6=曲线。"
+        },
+        "fontSize": {
+          "type": "integer",
+          "enum": [
+            10
+          ],
+          "default": 10,
+          "description": "连线关系文字字号，固定为 10。"
         },
         "fontBold": {
           "type": "boolean",
