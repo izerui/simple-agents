@@ -25,7 +25,7 @@
 
 可用和禁用的 os 函数：
 ✅ 可用：os.remove, os.rmdir, os.mkdir, os.listdir, os.path.exists 等
-⚠️ 受限：os.open 仅支持受控路径；os.write、os.fdopen 未开放
+⚠️ 受限：os.open 仅支持受控路径；os.write、os.fdopen 已放开并告警
 
 支持三种标准执行格式：
 1. python -c "单行pyscript" - 直接执行代码字符串
@@ -40,6 +40,7 @@ heredoc 格式优势：
 import sys
 import io
 import json
+import logging
 import os
 import re
 import signal
@@ -51,6 +52,10 @@ from datetime import datetime
 from pathlib import Path
 from multiprocessing import Process, Queue
 from deepagents.backends.protocol import ExecuteResponse
+
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 
 class ExecuteResult:
@@ -153,6 +158,9 @@ def _execute_in_subprocess(
 
         # 预先导入 os.path（避免在 RestrictedOS.__getattr__ 中导入导致递归）
         import os.path as _original_os_path
+
+        fdopen_warning_emitted = False
+        write_warning_emitted = False
 
         # 创建受限制的 open 函数
         original_open = open
@@ -620,8 +628,33 @@ def _execute_in_subprocess(
 
                     return RestrictedOsPath()
 
-                if name in ['write', 'fdopen']:
-                    raise AttributeError(f"os.{name} 未开放")
+                if name == 'write':
+                    original_write = getattr(os, name)
+
+                    def warned_write(*args, **kwargs):
+                        nonlocal write_warning_emitted
+                        if not write_warning_emitted:
+                            logger.warning(
+                                "os.write 已放开，当前调用不会经过路径级沙箱校验，请谨慎使用。"
+                            )
+                            write_warning_emitted = True
+                        return original_write(*args, **kwargs)
+
+                    return warned_write
+
+                if name == 'fdopen':
+                    original_fdopen = getattr(os, name)
+
+                    def warned_fdopen(*args, **kwargs):
+                        nonlocal fdopen_warning_emitted
+                        if not fdopen_warning_emitted:
+                            logger.warning(
+                                "os.fdopen 已放开，当前调用不会经过路径级沙箱校验，请谨慎使用。"
+                            )
+                            fdopen_warning_emitted = True
+                        return original_fdopen(*args, **kwargs)
+
+                    return warned_fdopen
 
                 # 返回原始 os 模块的属性
                 return getattr(os, name)
@@ -709,10 +742,15 @@ def _execute_in_subprocess(
         class RestrictedIo:
             """受限的 io 模块，确保 open() 使用路径重定向"""
 
-            open = restricted_open  # 使用受限的 open 函数
             StringIO = _original_io.StringIO
             BytesIO = _original_io.BytesIO
             BufferedIOBase = _original_io.BufferedIOBase
+
+            def open(self, file, mode='r', *args, **kwargs):
+                # os.fdopen 内部会走 io.open(fd, ...)，对 fd 直接放行到原始实现。
+                if isinstance(file, int):
+                    return _original_io.open(file, mode, *args, **kwargs)
+                return restricted_open(file, mode, *args, **kwargs)
 
             def __getattr__(self, name):
                 """其他属性和方法直接返回原始值"""

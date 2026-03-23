@@ -46,22 +46,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("json_file", help="Path to the result JSON file.")
     parser.add_argument(
         "--output",
-        help="Path to the output markdown file. Defaults to <cwd>/output/graph.md.",
+        help="Path to the output markdown file. Defaults to /output/graph.md.",
     )
     return parser
 
 
 def resolve_output_path(raw_output: str | None) -> Path:
-    output_root = (Path.cwd() / "output").resolve()
     if raw_output is None:
-        return output_root / "graph.md"
-
-    output_path = Path(raw_output).resolve()
-    if output_path.parent != output_root:
-        raise ReverseError(
-            f"输出文件必须写到当前任务工作目录下的 /output 目录: {output_root}"
-        )
-    return output_path
+        return Path("/output/graph.md")
+    return Path(raw_output).resolve()
 
 
 def dump_text_atomic(path: Path, content: str) -> None:
