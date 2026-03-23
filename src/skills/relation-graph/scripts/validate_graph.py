@@ -308,17 +308,10 @@ def main() -> int:
         rows = parse_table(graph_path)
         summary = validate_rows(rows)
 
-        print(
-            json.dumps(
-                {
-                    "status": "ok",
-                    "graph": str(graph_path),
-                    "nodeCount": summary["nodeCount"],
-                    "lineCount": summary["lineCount"],
-                },
-                ensure_ascii=False,
-            )
-        )
+        print("校验通过")
+        print(f"输入文件: {graph_path}")
+        print(f"节点数量: {summary['nodeCount']}")
+        print(f"连线数量: {summary['lineCount']}")
         return 0
     except GraphError as exc:
         print(str(exc), file=sys.stderr)

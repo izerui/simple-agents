@@ -263,19 +263,12 @@ def main() -> int:
         rows = parse_table_for_build(graph_path)
         payload = build_payload(rows)
         dump_json_atomic(output_path, payload, pretty=args.pretty)
-        print(
-            json.dumps(
-                {
-                    "status": "ok",
-                    "graph": str(graph_path),
-                    "output": str(output_path),
-                    "rootId": payload["rootId"],
-                    "nodeCount": len(payload["nodes"]),
-                    "lineCount": len(payload["lines"]),
-                },
-                ensure_ascii=False,
-            )
-        )
+        print("生成完成")
+        print(f"输入文件: {graph_path}")
+        print(f"输出文件: {output_path}")
+        print(f"rootId: {payload['rootId']}")
+        print(f"节点数量: {len(payload['nodes'])}")
+        print(f"连线数量: {len(payload['lines'])}")
         return 0
     except GraphError as exc:
         print(str(exc), file=sys.stderr)

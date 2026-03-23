@@ -173,18 +173,11 @@ def main() -> int:
         payload = read_payload(json_path)
         markdown, node_count, row_count = build_markdown(payload)
         dump_text_atomic(output_path, markdown)
-        print(
-            json.dumps(
-                {
-                    "status": "ok",
-                    "json": str(json_path),
-                    "output": str(output_path),
-                    "nodeCount": node_count,
-                    "rowCount": row_count,
-                },
-                ensure_ascii=False,
-            )
-        )
+        print("反向生成完成")
+        print(f"输入文件: {json_path}")
+        print(f"输出文件: {output_path}")
+        print(f"节点数量: {node_count}")
+        print(f"表格行数: {row_count}")
         return 0
     except ReverseError as exc:
         print(str(exc), file=sys.stderr)
