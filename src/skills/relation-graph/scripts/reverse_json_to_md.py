@@ -22,6 +22,12 @@ REQUIRED_HEADERS = [
     "NodeHeight",
     "NodeColor",
 ]
+INT_TO_NODE_TYPE = {
+    2: "DK",
+    3: "PK",
+    5: "CS",
+    6: "FC",
+}
 
 COLOR_ALIASES = {
     "#ff0000": "#FF0000",
@@ -86,6 +92,16 @@ def sanitize_cell(value: object) -> str:
     return str(value).strip().replace("|", "/")
 
 
+def restore_node_type(value: object) -> str:
+    try:
+        type_int = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ReverseError(f"无法识别节点类型: {value}") from exc
+    if type_int not in INT_TO_NODE_TYPE:
+        raise ReverseError(f"不支持的节点类型: {value}")
+    return INT_TO_NODE_TYPE[type_int]
+
+
 def build_markdown(payload: dict) -> tuple[str, int, int]:
     nodes = payload["nodes"]
     lines = payload["lines"]
@@ -109,7 +125,7 @@ def build_markdown(payload: dict) -> tuple[str, int, int]:
     for node_id in node_order:
         node = node_map[node_id]
         node_text = sanitize_cell(node.get("text", ""))
-        node_type = sanitize_cell(node.get("data", {}).get("type", ""))
+        node_type = restore_node_type(node.get("data", {}).get("type", ""))
         node_x = sanitize_cell(node.get("x", ""))
         node_y = sanitize_cell(node.get("y", ""))
         node_width = sanitize_cell(node.get("width", ""))

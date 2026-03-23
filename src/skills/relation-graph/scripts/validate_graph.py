@@ -23,7 +23,12 @@ REQUIRED_HEADERS = [
     "NodeHeight",
     "NodeColor",
 ]
-ALLOWED_NODE_TYPES = {2, 3, 5, 6}
+NODE_TYPE_TO_INT = {
+    "DK": 2,
+    "PK": 3,
+    "CS": 5,
+    "FC": 6,
+}
 CANONICAL_COLORS = {"#FF0000", "#00B0F0", "#00B050", "#000000"}
 COLOR_ALIASES = {
     "#ff0000": "#FF0000",
@@ -80,15 +85,12 @@ def parse_number(value: str, field_name: str) -> int | float:
 
 
 def parse_node_type(value: str) -> int:
-    text = value.strip()
-    if not re.fullmatch(r"\d+", text):
-        raise GraphError("`NodeType` 必须是整数；请回去修改 graph.md")
-    node_type = int(text)
-    if node_type not in ALLOWED_NODE_TYPES:
+    text = value.strip().upper()
+    if text not in NODE_TYPE_TO_INT:
         raise GraphError(
-            f"`NodeType` 仅支持 {sorted(ALLOWED_NODE_TYPES)}；请回去修改 graph.md"
+            f"`NodeType` 仅支持 {sorted(NODE_TYPE_TO_INT)}；请回去修改 graph.md"
         )
-    return node_type
+    return NODE_TYPE_TO_INT[text]
 
 
 def normalize_color(value: str, field_name: str) -> str:

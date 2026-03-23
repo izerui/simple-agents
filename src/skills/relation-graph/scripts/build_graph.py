@@ -64,6 +64,12 @@ REQUIRED_HEADERS = [
     "NodeHeight",
     "NodeColor",
 ]
+NODE_TYPE_TO_INT = {
+    "DK": 2,
+    "PK": 3,
+    "CS": 5,
+    "FC": 6,
+}
 COLOR_ALIASES = {
     "#ff0000": "#FF0000",
     "#00b0f0": "#00B0F0",
@@ -81,6 +87,13 @@ def parse_number(value: str) -> int | float:
 
 def normalize_color(value: str) -> str:
     return COLOR_ALIASES.get(value.strip(), COLOR_ALIASES.get(value.strip().lower(), value.strip()))
+
+
+def parse_node_type(value: str) -> int:
+    text = value.strip().upper()
+    if text not in NODE_TYPE_TO_INT:
+        raise GraphError(f"`NodeType` 仅支持 {sorted(NODE_TYPE_TO_INT)}")
+    return NODE_TYPE_TO_INT[text]
 
 
 def parse_table_for_build(path: Path) -> list[dict[str, str]]:
@@ -220,7 +233,7 @@ def build_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
         node_id = row["NodeID"].strip()
         node_signature = (
             row["NodeText"].strip(),
-            int(row["NodeType"].strip()),
+            parse_node_type(row["NodeType"]),
             parse_number(row["NodeX"]),
             parse_number(row["NodeY"]),
             parse_number(row["NodeWidth"]),

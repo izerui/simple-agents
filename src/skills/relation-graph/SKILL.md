@@ -104,8 +104,8 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 - 只有在确有必要且无法通过重构语义层级解决时，才允许同一个 `NodeID` 重复出现，用于表达多个父节点
 - 同一个 `NodeID` 重复出现时，这些节点定义字段必须完全一致：`NodeText`、`NodeType`、`NodeX`、`NodeY`、`NodeWidth`、`NodeHeight`、`NodeColor`
 - `NodeText` 非空，不允许换行
-- `NodeType` 只能填 `2`、`3`、`5`、`6`
-- 知识建模方法论中的类型映射为：
+- `NodeType` 只能填 `DK`、`PK`、`CS`、`FC`
+- 生成脚本内部固定映射为：
   - `DK -> 2`
   - `PK -> 3`
   - `CS -> 5`
@@ -142,14 +142,14 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 ```md
 | NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| root-1 | 函数 | 2 |  |  | 0 | 0 | 88 | 36 | #00B0F0 |
-| node-1 | 概念定义 | 2 | root-1 | 包含 | -180 | 120 | 72 | 36 | #000000 |
-| node-2 | 分类 | 2 | root-1 | 包含 | 140 | 120 | 72 | 36 | #000000 |
-| node-3 | 示例 | 6 | root-1 | 支持 | 220 | 240 | 88 | 40 | #000000 |
-| node-4 | 使用步骤 | 3 | root-1 | 包含 | -40 | 220 | 96 | 40 | #00B0F0 |
-| node-5 | 明确参数 | 3 | node-4 | 包含 | -40 | 300 | 96 | 40 | #000000 |
-| node-6 | 调用函数 | 3 | node-4 | 包含 | -40 | 360 | 96 | 40 | #000000 |
-| node-7 | 复盘检查 | 5 | root-1 | 支持 | 320 | 320 | 96 | 40 | #000000 |
+| root-1 | 函数 | DK |  |  | 0 | 0 | 88 | 36 | #00B0F0 |
+| node-1 | 概念定义 | DK | root-1 | 包含 | -180 | 120 | 72 | 36 | #000000 |
+| node-2 | 分类 | DK | root-1 | 包含 | 140 | 120 | 72 | 36 | #000000 |
+| node-3 | 示例 | FC | root-1 | 支持 | 220 | 240 | 88 | 40 | #000000 |
+| node-4 | 使用步骤 | PK | root-1 | 包含 | -40 | 220 | 96 | 40 | #00B0F0 |
+| node-5 | 明确参数 | PK | node-4 | 包含 | -40 | 300 | 96 | 40 | #000000 |
+| node-6 | 调用函数 | PK | node-4 | 包含 | -40 | 360 | 96 | 40 | #000000 |
+| node-7 | 复盘检查 | CS | root-1 | 支持 | 320 | 320 | 96 | 40 | #000000 |
 ```
 
 ## 工作流
