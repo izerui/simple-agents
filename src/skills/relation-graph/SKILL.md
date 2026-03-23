@@ -17,6 +17,7 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 - 先用独立校验脚本校验 `graph.md`
 - 再用生成脚本传入 `graph.md` 路径，生成最终 JSON
 - 生成失败时回到 `graph.md` 继续修改；成功后覆盖 `/output/result.json`
+- 如果用户提供了现有建模图 JSON，先反向转换成 `graph.md`，再在该文件基础上做增量修改
 
 ## 什么时候用
 
@@ -62,6 +63,17 @@ python /skills/relation-graph/scripts/validate_graph.py /output/graph.md
 
 ```bash
 python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /output/result.json --pretty
+```
+
+5. `scripts/reverse_json_to_md.py`
+什么时候用：
+- 用户提供了现有建模图 JSON，需要先转成可编辑的 `graph.md`
+- 转换完成后，后续仍然只允许通过编辑 `graph.md` 做增量修改
+
+用法：
+
+```bash
+python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json --output /output/graph.md
 ```
 
 ## graph.md 生成规范
@@ -148,8 +160,10 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 
 增量：
 - 用户提供了现有图 JSON
-- 以现有图为基准修改
+- 先使用 `scripts/reverse_json_to_md.py` 把现有图 JSON 转成 `graph.md`
+- 再以该 `graph.md` 为基准修改
 - 未明确要求改动的旧节点、旧连线尽量保持不变
+- 未改动的节点、关系、坐标、尺寸尽量保持不变，只做局部变更和增量补充
 - 不要为了新增少量内容重排整张图
 
 ### 2. 先识别语义骨架
@@ -189,6 +203,12 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 
 先按上面的 `graph.md` 生成规范，一次性生成完整单表，不要一上来直接写 JSON。
 
+如果用户已经提供现有建模图 JSON：
+- 先执行 `scripts/reverse_json_to_md.py` 转成 `graph.md`
+- 必须继续遵循当前 `graph.md` 的格式规范和字段约束
+- 后续编辑都基于该文件进行，不要脱离该文件另起一版
+- 未被要求改动的部分尽量保持不变，只在现有文件上做局部修改和增量补充
+
 ### 4.1 graph.md 生成规则
 
 这部分以上面的 `## graph.md 生成规范` 为准。生成出 `graph.md` 后，后续所有问题都只能通过编辑这个文件解决。
@@ -219,6 +239,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - `graph.md` 是后续唯一工作面
 - 所有修改只能通过 `edit` 修改现有 `graph.md`
 - 一旦生成出 `graph.md`，后续所有问题都只能通过修改 `graph.md` 再尝试生成 `result.json`
+- 如果 `graph.md` 来自已有 JSON 的反向转换，也只能在该文件基础上继续修改
 - 不允许直接修改 `result.json`
 - 不允许通过 AI 临时生成整段脚本、heredoc、内联代码或一次性脚本替代既有脚本执行
 - 脚本必须只接受文件路径参数执行
@@ -324,10 +345,15 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 ## 增量修改要求
 
 如果是增量修改：
+- 如果用户提供了现有建模图 JSON，必须先用 `scripts/reverse_json_to_md.py` 转成 `graph.md`
+- 后续所有修改都在该 `graph.md` 上进行
+- 仍需遵循 `graph.md` 的固定表头、字段规则和整体格式约束
 - 优先保留已有节点位置
 - 优先保留已有连线与 id
 - 新增内容应在原图基础上自然追加
 - 不要因为局部新增导致全图阅读路径被打散
+- 没有被明确要求修改的节点、关系、坐标、尺寸，尽量保持不变
+- 优先做局部变更和增量补充，不要整表重写
 
 ## 交付前检查
 
@@ -336,10 +362,11 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 1. 坐标生成前已读取 `references/layout.md`
 2. 已先生成 `/output/graph.md` 单表，而不是直接拼超长最终 JSON
 3. 已使用 `scripts/validate_graph.py` 单独校验 `graph.md`
-4. 已使用 `scripts/build_graph.py` 传入 `graph.md` 路径生成最终 JSON
-5. 结果文件写在 `/output/result.json` 或用户通过 `--output` 显式指定的目标路径
-6. 若为增量修改，未改动部分已尽量保持稳定
-7. 若 `graph.md` 已成功生成过一次 `result.json`，后续只修改布局字段
+4. 若用户提供了现有建模图 JSON，已先使用 `scripts/reverse_json_to_md.py` 转成 `graph.md`
+5. 已使用 `scripts/build_graph.py` 传入 `graph.md` 路径生成最终 JSON
+6. 结果文件写在 `/output/result.json` 或用户通过 `--output` 显式指定的目标路径
+7. 若为增量修改，未改动部分已尽量保持稳定
+8. 若 `graph.md` 已成功生成过一次 `result.json`，后续只修改布局字段
 
 ## 输出要求
 
