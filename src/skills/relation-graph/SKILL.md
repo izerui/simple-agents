@@ -103,9 +103,10 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
   - `FC -> 6`
 - `ParentID` 根节点必须为空；非根节点必须非空，且必须引用表内有效节点
 - `RelationText` 根节点必须为空；非根节点必须非空，不允许换行
-- `RelationText` 只能使用以下 9 个关系名之一：
-  - `各类包含`
-  - `组成/构成`
+- `RelationText` 只能使用以下 10 个关系名之一：
+  - `包含`
+  - `组成`
+  - `构成`
   - `是一种`
   - `具有属性`
   - `具有特征`
@@ -136,13 +137,12 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 | IsRoot | NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 是 | root-1 | 函数 | 2 |  |  | 0 | 0 | 88 | 36 | #00B0F0 |
-| 否 | node-1 | 概念定义 | 2 | root-1 | 各类包含 | -180 | 120 | 72 | 36 | #000000 |
-| 否 | node-2 | 分类 | 2 | root-1 | 各类包含 | 140 | 120 | 72 | 36 | #000000 |
+| 否 | node-1 | 概念定义 | 2 | root-1 | 包含 | -180 | 120 | 72 | 36 | #000000 |
+| 否 | node-2 | 分类 | 2 | root-1 | 包含 | 140 | 120 | 72 | 36 | #000000 |
 | 否 | node-3 | 示例 | 6 | root-1 | 支持 | 220 | 240 | 88 | 40 | #000000 |
-| 否 | node-4 | 使用步骤 | 3 | root-1 | 各类包含 | -40 | 220 | 96 | 40 | #00B0F0 |
-| 否 | node-5 | 明确参数 | 3 | node-4 | 各类包含 | -40 | 300 | 96 | 40 | #000000 |
-| 否 | node-6 | 调用函数 | 3 | node-4 | 各类包含 | -40 | 360 | 96 | 40 | #000000 |
-| 否 | node-7 | 复盘检查 | 5 | root-1 | 支持 | 320 | 320 | 96 | 40 | #000000 |
+| 否 | node-4 | 使用步骤 | 3 | root-1 | 包含 | -40 | 220 | 96 | 40 | #00B0F0 |
+| 否 | node-5 | 明确参数 | 3 | node-4 | 包含 | -40 | 300 | 96 | 40 | #000000 |
+| 否 | node-6 | 调用函数 | 3 | node-4 | 包含 | -40 | 360 | 96 | 40 | #000000 |
 | 否 | node-7 | 复盘检查 | 5 | root-1 | 支持 | 320 | 320 | 96 | 40 | #000000 |
 ```
 
@@ -298,7 +298,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - `from` 表示父节点，`to` 表示子节点
 - `fromJunctionPoint/toJunctionPoint` 必须按节点相对位置与关系方向正确填写
 - 关系文本必须真实表达语义
-- 关系文本只能使用这 9 个标准关系名：`各类包含`、`组成/构成`、`是一种`、`具有属性`、`具有特征`、`定义`、`并列`、`是前提`、`支持`
+- 关系文本只能使用这 10 个标准关系名：`包含`、`组成`、`构成`、`是一种`、`具有属性`、`具有特征`、`定义`、`并列`、`是前提`、`支持`
 - 连接关系必须优先组织成主知识树，再在树外做少量外围挂接
 - 避免网状结构、分支互连和多分支交叉
 - 案例节点、策略节点、练习节点默认只作为叶子外挂节点，不要反向连回主知识节点
@@ -306,7 +306,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 
 关系：
 - 关系文本必须真实表达语义
-- 必须且只能使用 `references/schema.json` 中约定的 9 个标准关系名
+- 必须且只能使用 `references/schema.json` 中约定的 10 个标准关系名
 - 若出现跨分支语义，优先通过调整层级、重新归类或外围挂接表达，不要直接把多个分支重新连成网
 
 关系生成顺序：

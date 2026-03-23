@@ -36,8 +36,9 @@ COLOR_ALIASES = {
 }
 ALLOWED_JUNCTION_POINTS = {"border", "left", "right", "top", "bottom"}
 ALLOWED_RELATION_TEXTS = {
-    "各类包含",
-    "组成/构成",
+    "包含",
+    "组成",
+    "构成",
     "是一种",
     "具有属性",
     "具有特征",
