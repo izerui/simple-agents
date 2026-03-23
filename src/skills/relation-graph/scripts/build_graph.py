@@ -126,12 +126,29 @@ def center_y(node: dict[str, Any]) -> float:
     return float(node["y"]) + float(node["height"]) / 2
 
 
-def choose_junction_points(source: dict[str, Any], target: dict[str, Any]) -> tuple[str, str]:
+def choose_single_junction(source: dict[str, Any], target: dict[str, Any]) -> str:
     dx = center_x(target) - center_x(source)
     dy = center_y(target) - center_y(source)
-    if abs(dy) < abs(dx):
-        return ("right", "left") if dx >= 0 else ("left", "right")
-    return ("bottom", "top") if dy >= 0 else ("top", "bottom")
+
+    if dx == 0 and dy == 0:
+        return "right"
+
+    half_width = float(source["width"]) / 2
+    half_height = float(source["height"]) / 2
+
+    tx = float("inf") if dx == 0 else half_width / abs(dx)
+    ty = float("inf") if dy == 0 else half_height / abs(dy)
+
+    if tx < ty:
+        return "right" if dx > 0 else "left"
+    return "bottom" if dy > 0 else "top"
+
+
+def choose_junction_points(source: dict[str, Any], target: dict[str, Any]) -> tuple[str, str]:
+    return (
+        choose_single_junction(source, target),
+        choose_single_junction(target, source),
+    )
 
 
 def compose_node(
