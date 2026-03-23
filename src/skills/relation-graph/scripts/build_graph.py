@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -185,23 +186,8 @@ def compose_node(
         "data": {
             "type": data_type,
             "backgroundImage": "",
-            "backgroundImageDisplay": 0,
-            "backgroundImageOpacity": 1,
-            "backgroundImageLeft": 0,
-            "backgroundImageTop": 0,
-            "backgroundImageWidth": 0,
-            "backgroundImageHeight": 0,
-            "backgroundImageRotate": 0,
-            "backgroundImageFlipH": False,
-            "backgroundImageFlipV": False,
+            "imageFit": "cover",
             "startPostion": {"x": x, "y": y},
-            "disableDefaultClickEffect": False,
-            "isHide": False,
-            "isLock": False,
-            "isLockPosition": False,
-            "customText": "",
-            "customDataType": "",
-            "customDataTypeData": "",
         },
     }
 
@@ -265,11 +251,21 @@ def build_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
     ]
     node_map = {node["id"]: node for node in nodes}
     lines = [
-        compose_line(row["ParentID"].strip(), row["NodeID"].strip(), row["RelationText"], node_map)
+        compose_line(
+            row["ParentID"].strip(),
+            row["NodeID"].strip(),
+            row["RelationText"].strip(),
+            node_map,
+        )
         for row in rows
         if row["ParentID"].strip() and row["RelationText"].strip()
     ]
-    return {"rootId": f"root-{uuid.uuid4().hex}", "nodes": nodes, "lines": lines}
+    return {
+        "rootId": f"root-{uuid.uuid4().hex}",
+        "datetime": int(time.time() * 1000),
+        "nodes": nodes,
+        "lines": lines,
+    }
 
 
 def main() -> int:

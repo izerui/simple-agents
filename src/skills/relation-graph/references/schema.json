@@ -1,0 +1,753 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/relation-graph/schema.json",
+  "title": "Relation Graph Schema",
+  "description": "知识建模图最终 JSON 结构。面向导入、显示、解析和在已有图谱上的增量修改。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rootId",
+    "nodes",
+    "lines"
+  ],
+  "properties": {
+    "rootId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "根对象标识。技能约定推荐使用 root-随机字符串 格式。"
+    },
+    "datetime": {
+      "type": "number",
+      "description": "时间戳，可选。"
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/node"
+      },
+      "description": "节点数组。"
+    },
+    "lines": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/line"
+      },
+      "description": "连线数组。数组名固定为 lines，不能使用 edges。"
+    }
+  },
+  "$defs": {
+    "colorHex": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "junctionPoint": {
+      "type": "string",
+      "enum": [
+        "border",
+        "left",
+        "right",
+        "top",
+        "bottom"
+      ]
+    },
+    "nodeData": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "backgroundImage",
+        "imageFit",
+        "startPostion"
+      ],
+      "properties": {
+        "type": {
+          "type": "integer",
+          "enum": [
+            2,
+            3,
+            5,
+            6
+          ],
+          "description": "知识类型：2=陈述性知识（矩形），3=程序性知识（胶囊），5=认知策略（圆柱），6=事实范例（波浪矩形）。按内容选：概念/定义/原理用2，步骤/流程用3，学习方法/策略用5，案例/范例用6"
+        },
+        "backgroundImage": {
+          "type": "string",
+          "enum": [
+            ""
+          ],
+          "default": ""
+        },
+        "imageFit": {
+          "type": "string",
+          "enum": [
+            "cover"
+          ],
+          "default": "cover"
+        },
+        "startPostion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "description": "必须与节点 x、y 坐标保持一致。"
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "text",
+        "type",
+        "isShow",
+        "isHide",
+        "expanded",
+        "selected",
+        "dragging",
+        "styleClass",
+        "className",
+        "nodeShape",
+        "borderWidth",
+        "borderColor",
+        "fontColor",
+        "fontFamily",
+        "fontSize",
+        "fontBold",
+        "fontItalic",
+        "fontUnderline",
+        "textHorizontalAlign",
+        "textVerticalAlign",
+        "color",
+        "opacity",
+        "fixed",
+        "x",
+        "y",
+        "Fx",
+        "Fy",
+        "offset_x",
+        "offset_y",
+        "disableDrag",
+        "singleNode",
+        "invisiable",
+        "zIndex",
+        "data"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "节点 id，必须非空且唯一。"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "description": "节点显示文本，不允许换行。"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "node"
+          ],
+          "default": "node"
+        },
+        "isShow": {
+          "type": "boolean",
+          "enum": [
+            true
+          ],
+          "default": true
+        },
+        "isHide": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "expanded": {
+          "type": "boolean",
+          "enum": [
+            true
+          ],
+          "default": true
+        },
+        "selected": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "dragging": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "styleClass": {
+          "type": "string",
+          "enum": [
+            ""
+          ],
+          "default": ""
+        },
+        "className": {
+          "type": "string",
+          "enum": [
+            ""
+          ],
+          "default": ""
+        },
+        "nodeShape": {
+          "type": "integer",
+          "enum": [
+            1
+          ],
+          "default": 1,
+          "description": "底层固定值，不代表真实形状。真正形状由 data.type 决定。"
+        },
+        "borderWidth": {
+          "type": "integer",
+          "enum": [
+            1
+          ],
+          "default": 1
+        },
+        "borderColor": {
+          "type": "string",
+          "enum": [
+            "#FF0000",
+            "#00B0F0",
+            "#00B050",
+            "#000000"
+          ],
+          "description": "节点边框颜色。颜色语义：#FF0000=核心知识点，#00B0F0=核心结构化知识框架，#00B050=先决知识点，#000000=普通知识点。必须与 fontColor 保持一致。"
+        },
+        "fontColor": {
+          "type": "string",
+          "enum": [
+            "#FF0000",
+            "#00B0F0",
+            "#00B050",
+            "#000000"
+          ],
+          "description": "节点文字颜色。颜色语义：#FF0000=核心知识点，#00B0F0=核心结构化知识框架，#00B050=先决知识点，#000000=普通知识点。必须与 borderColor 保持一致。"
+        },
+        "fontFamily": {
+          "type": "string",
+          "enum": [
+            "宋体"
+          ],
+          "default": "宋体"
+        },
+        "fontSize": {
+          "type": "integer",
+          "enum": [
+            14
+          ],
+          "default": 14
+        },
+        "fontBold": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "fontItalic": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "fontUnderline": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "textHorizontalAlign": {
+          "type": "string",
+          "enum": [
+            "center"
+          ],
+          "default": "center"
+        },
+        "textVerticalAlign": {
+          "type": "string",
+          "enum": [
+            "middle"
+          ],
+          "default": "middle"
+        },
+        "color": {
+          "type": "string",
+          "enum": [
+            "#ffffff"
+          ],
+          "default": "#ffffff"
+        },
+        "opacity": {
+          "type": "number",
+          "enum": [
+            1
+          ],
+          "default": 1
+        },
+        "fixed": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "width": {
+          "type": "number",
+          "description": "节点宽度。应以刚好包住节点文字内容为原则自适应生成，并预留少量内边距。"
+        },
+        "height": {
+          "type": "number",
+          "description": "节点高度。应以刚好包住节点文字内容为原则自适应生成，并预留少量内边距。"
+        },
+        "x": {
+          "type": "number",
+          "description": "节点水平坐标。画布中心点为原点 (0,0)，左侧为负，右侧为正。"
+        },
+        "y": {
+          "type": "number",
+          "description": "节点垂直坐标。画布中心点为原点 (0,0)，上方为负，下方为正。"
+        },
+        "Fx": {
+          "type": "number",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "Fy": {
+          "type": "number",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "offset_x": {
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "offset_y": {
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "disableDrag": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "singleNode": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "invisiable": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "zIndex": {
+          "type": "integer",
+          "enum": [
+            300
+          ],
+          "default": 300
+        },
+        "data": {
+          "$ref": "#/$defs/nodeData"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ]
+          },
+          "then": {
+            "required": [
+              "fontColor"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "fontColor"
+            ]
+          },
+          "then": {
+            "required": [
+              "borderColor"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ],
+            "properties": {
+              "borderColor": {
+                "const": "#FF0000"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fontColor": {
+                "const": "#FF0000"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ],
+            "properties": {
+              "borderColor": {
+                "const": "#00B0F0"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fontColor": {
+                "const": "#00B0F0"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ],
+            "properties": {
+              "borderColor": {
+                "const": "#00B050"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fontColor": {
+                "const": "#00B050"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "borderColor"
+            ],
+            "properties": {
+              "borderColor": {
+                "const": "#000000"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fontColor": {
+                "const": "#000000"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "lineData": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "integer"
+        }
+      }
+    },
+    "line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "from",
+        "to",
+        "text",
+        "lineWidth",
+        "color",
+        "isHide",
+        "lineShape",
+        "fontBold",
+        "fontItalic",
+        "fontUnderline",
+        "opacity",
+        "arrow",
+        "animation",
+        "dashType",
+        "disableDefaultClickEffect",
+        "showStartArrow",
+        "showEndArrow",
+        "startMarkerId",
+        "endMarkerId",
+        "forDisplayOnly",
+        "fromJunctionPoint",
+        "toJunctionPoint",
+        "fromJuctionPointOffsetX",
+        "fromJuctionPointOffsetY",
+        "toJuctionPointOffsetX",
+        "toJuctionPointOffsetY",
+        "polyLineRadius",
+        "hidden"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "连线 id，必须非空且唯一。"
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "description": "起始节点的 id。"
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "结束节点的 id。"
+        },
+        "text": {
+          "type": "string",
+          "pattern": "^[^\\r\\n]+$",
+          "enum": [
+            "包含",
+            "组成",
+            "构成",
+            "是一种",
+            "具有属性",
+            "具有特征",
+            "定义",
+            "并列",
+            "是前提",
+            "支持"
+          ],
+          "description": "连线关系文本，不允许换行。只能使用 10 个标准关系名：包含、组成、构成、是一种、具有属性、具有特征、定义、并列、是前提、支持。"
+        },
+        "lineWidth": {
+          "type": "integer",
+          "enum": [
+            1
+          ],
+          "default": 1
+        },
+        "color": {
+          "type": "string",
+          "enum": [
+            "#000000"
+          ],
+          "default": "#000000"
+        },
+        "isHide": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "lineShape": {
+          "type": "integer",
+          "enum": [
+            1,
+            44,
+            6
+          ],
+          "default": 1,
+          "description": "连线形状/类型：1=直线（优先），44=折线，6=曲线。"
+        },
+        "fontBold": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "fontItalic": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "fontUnderline": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "opacity": {
+          "type": "number",
+          "enum": [
+            1
+          ],
+          "default": 1
+        },
+        "arrow": {
+          "type": "string",
+          "enum": [
+            "RGIns-12-arrow-000000-w5"
+          ],
+          "default": "RGIns-12-arrow-000000-w5"
+        },
+        "animation": {
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "dashType": {
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "disableDefaultClickEffect": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "showStartArrow": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "showEndArrow": {
+          "type": "boolean",
+          "enum": [
+            true
+          ],
+          "default": true
+        },
+        "startMarkerId": {
+          "type": "string",
+          "enum": [
+            ""
+          ],
+          "default": ""
+        },
+        "endMarkerId": {
+          "type": "string",
+          "enum": [
+            ""
+          ],
+          "default": ""
+        },
+        "forDisplayOnly": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "fromJunctionPoint": {
+          "$ref": "#/$defs/junctionPoint",
+          "description": "起始节点上的连接位置，根据两节点相对位置选择，使连线更顺畅"
+        },
+        "toJunctionPoint": {
+          "$ref": "#/$defs/junctionPoint",
+          "description": "结束节点上的连接位置，根据两节点相对位置选择，使连线更顺畅"
+        },
+        "fromJuctionPointOffsetX": {
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "fromJuctionPointOffsetY": {
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "toJuctionPointOffsetX": {
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "toJuctionPointOffsetY": {
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "polyLineRadius": {
+          "type": "integer",
+          "enum": [
+            0
+          ],
+          "default": 0
+        },
+        "hidden": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "default": false
+        },
+        "data": {
+          "$ref": "#/$defs/lineData"
+        }
+      }
+    }
+  }
+}
