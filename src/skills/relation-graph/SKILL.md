@@ -100,7 +100,8 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 
 每列要求：
 - `NodeID` 非空
-- 同一个 `NodeID` 可以重复出现，用于表达多个父节点
+- 默认优先使用单父节点结构，尽量避免一个节点同时挂多个父节点
+- 只有在确有必要且无法通过重构语义层级解决时，才允许同一个 `NodeID` 重复出现，用于表达多个父节点
 - 同一个 `NodeID` 重复出现时，这些节点定义字段必须完全一致：`NodeText`、`NodeType`、`NodeX`、`NodeY`、`NodeWidth`、`NodeHeight`、`NodeColor`
 - `NodeText` 非空，不允许换行
 - `NodeType` 只能填 `2`、`3`、`5`、`6`
