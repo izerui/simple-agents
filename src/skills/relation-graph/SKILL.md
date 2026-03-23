@@ -155,6 +155,7 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 禁止以下做法：
 - 使用 `python <<EOF`、heredoc、内联 Python 或临时 `.py` 脚本解析 `graph.md`
 - 自行编写 JSON 拼装逻辑替代 `build_graph.py`
+- 自行从 Markdown 表格解析节点与关系，再手工拼装 `nodes` / `relations` 结构替代正式结果
 - 绕过 `validate_graph.py` 直接生成最终结果
 - 绕过 `build_graph.py` 手写或拼接 `result.json`
 - 使用与本 skill 无关的其他脚本、工具或自定义命令替代上述脚本
@@ -169,6 +170,13 @@ EOF
 
 # 错误：自己编写脚本拼接 result.json
 python custom_build_result.py /output/graph.md
+
+# 错误：自己解析 Markdown 表格并手工拼 nodes/relations
+python <<'EOF'
+with open('/output/graph.md', 'r', encoding='utf-8') as f:
+    content = f.read()
+print('parse markdown and build custom json')
+EOF
 
 # 错误：直接手写或覆盖最终结果
 echo '{}' > /output/result.json
