@@ -67,7 +67,7 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
             # 无法获取配置，使用环境变量默认值
             return {
                 "model_name": None,
-                "max_input_tokens": int(os.getenv('MODEL_MAX_INPUT_TOKENS', '80000')),
+                "max_input_tokens": int(os.getenv('L_MODEL_MAX_INPUT_TOKENS', '80000')),
                 "thread_id": None,
                 "tags": [],
                 "user_id": None,
@@ -77,7 +77,7 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
         configurable = cfg.get("configurable", {})
 
         # model_name: configurable -> 环境变量
-        model_name = configurable.get("model") or os.getenv('MODEL_MODEL_ID')
+        model_name = configurable.get("model") or os.getenv('L_MODEL_MODEL_ID')
 
         # max_input_tokens 优先级判断
         max_input_tokens = configurable.get("max_input_tokens")
@@ -86,7 +86,7 @@ class DeepAgentsLCSummarizationMiddleware(LCSummarizationMiddleware):
             max_input_tokens = self._get_max_input_tokens_from_model(model_name)
         if max_input_tokens is None:
             # 使用环境变量默认
-            max_input_tokens = int(os.getenv('MODEL_MAX_INPUT_TOKENS', '80000'))
+            max_input_tokens = int(os.getenv('L_MODEL_MAX_INPUT_TOKENS', '80000'))
 
         # thread_id: configurable
         thread_id = configurable.get("thread_id")

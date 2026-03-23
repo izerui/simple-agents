@@ -9,9 +9,6 @@ curl -X POST http://localhost:2024/runs/stream \
       ]
     },
     "config": {
-      "configurable": {
-        "model": "MiniMax/MiniMax-M2.5"
-      }
     },
     "metadata": {
       "user_id": "user001",

@@ -13,10 +13,10 @@ from langchain.chat_models import init_chat_model
 
 # 使用环境变量作为默认值
 chat_model = init_chat_model(
-    model=os.getenv('MODEL_MODEL_ID'),
-    model_provider=os.getenv('MODEL_PROVIDER'),
-    base_url=os.getenv('MODEL_BASE_URL'),
-    api_key=os.getenv('MODEL_API_KEY'),
+    model=os.getenv('L_MODEL_MODEL_ID'),
+    model_provider=os.getenv('L_MODEL_PROVIDER'),
+    base_url=os.getenv('L_MODEL_BASE_URL'),
+    api_key=os.getenv('L_MODEL_API_KEY'),
     temperature=0.0,
     streaming=True,
     configurable_fields=("model", "model_provider", "base_url", "api_key"),
@@ -64,10 +64,10 @@ params = {**self._default_config, **self._model_params(config)}
 
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
-| MODEL_PROVIDER | 模型 provider | `openai`, `anthropic`, `deepseek` |
-| MODEL_BASE_URL | API 基础地址 | `https://api.openai.com/v1` |
-| MODEL_API_KEY | API 密钥 | `sk-xxx` |
-| MODEL_MODEL_ID | 模型名称 | `gpt-4o`, `claude-sonnet-4-5` |
+| L_MODEL_PROVIDER | 模型 provider | `openai`, `anthropic`, `deepseek` |
+| L_MODEL_BASE_URL | API 基础地址 | `https://api.openai.com/v1` |
+| L_MODEL_API_KEY | API 密钥 | `sk-xxx` |
+| L_MODEL_MODEL_ID | 模型名称 | `gpt-4o`, `claude-sonnet-4-5` |
 
 ### LangChain 各 Provider 的默认环境变量
 

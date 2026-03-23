@@ -286,14 +286,8 @@ class StreamingToolCallFixMiddleware(AgentMiddleware):
         if fixed_tool_calls == last_msg.tool_calls:
             return None
 
-        # 创建新的消息，替换 tool_calls
-        new_msg = AIMessage(
-            content=last_msg.content,
-            tool_calls=fixed_tool_calls,
-            additional_kwargs=last_msg.additional_kwargs,
-            response_metadata=last_msg.response_metadata,
-            id=last_msg.id,
-        )
+        # 基于原消息复制更新，尽量保留供应商私有字段（如 reasoning 相关元数据）
+        new_msg = last_msg.model_copy(update={"tool_calls": fixed_tool_calls})
 
         # 使用 Overwrite 替换整个消息列表
         # 这样可以保持消息历史的连续性，避免 API 报错

@@ -1,24 +1,22 @@
 ---
 name: relation-graph
-description: 生成或增量修改可直接导入前端的知识建模图 JSON。适用于把课程知识点、层级、关系、步骤链、案例、策略等内容转成符合 schema 的最终图数据，并在需要时保持旧图稳定地追加修改。
+description: 生成或增量修改可直接导入前端的知识建模图 JSON。适用于把课程知识点、层级、关系、步骤链、案例、策略等内容转成符合 schema 的最终图数据，并在需要时稳定调整布局。
 ---
 
 # Relation Graph
 
-生成最终可用的知识建模图 JSON，不输出“草稿结构”或“待补字段”。
+生成最终可用的知识建模图 JSON，不输出草稿结构或待补字段。
 
 默认交付物：
-- 有根知识树单表草稿：`/relation-graph/graph.md`
-- 结构化产物：`/relation-graph/structured.json`
-- 最终产物：`/relation-graph/result.json`
-- 优先在已有文件基础上修改；只有无法稳定修改时，才递增命名，如 `/relation-graph/result2.json`、`/relation-graph/result3.json`
+- 有根知识树单表：`/output/graph.md`
+- 最终产物：`/output/result.json`
 
 默认工作方式：
 - 先生成有根知识树单表 Markdown
-- 再把单表直接转换成 `structured.json`
-- 结构化产物通过校验后，再编译为最终完整 JSON
-- 坐标直接写在结构化产物中
-- 结构化产物必须先通过校验
+- 后续所有问题都只通过编辑 `graph.md` 解决
+- 先用独立校验脚本校验 `graph.md`
+- 再用生成脚本传入 `graph.md` 路径，生成最终 JSON
+- 生成失败时回到 `graph.md` 继续修改；成功后覆盖 `/output/result.json`
 
 ## 什么时候用
 
@@ -34,51 +32,119 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 
 1. `references/schema.json`
 作用：
-- 最终结构与固定字段/固定值的唯一基准
-- 如果和其他说明冲突，以它为准
+- 供单脚本在生成阶段校验最终 `result.json`
+- 用于约束最终 JSON 的结构、固定字段和合法值
+- 不用于定义 `graph.md` 的 Markdown 格式
 
 2. `references/layout.md`
 什么时候读：
 - 任何需要生成或调整 `x/y/width/height`、阅读路径、分区布局、连线拓扑时
 
-3. `scripts/markdown_to_structured.py`
-什么时候用：
-- 先把单表 Markdown 直接转成 `/relation-graph/structured.json`
-- 单表使用“当前节点”视角，每行只定义一个当前节点，当前节点 ID 全表唯一
-- 根节点行不允许填写父节点；非根节点必须且只能填写一个 `父节点ID`
-
-用法：
-
-```bash
-python /skills/relation-graph/scripts/markdown_to_structured.py /relation-graph/graph.md --output /relation-graph/structured.json --pretty
-```
-
-4. `scripts/validate_structured.py`
-什么时候用：
-- 生成完结构化产物后，必须先校验结构化产物
-- 只有结构化产物通过校验后，才继续补全生成最终 JSON
-
-用法：
-
-```bash
-python /skills/relation-graph/scripts/validate_structured.py /relation-graph/structured.json
-```
-
-5. `scripts/compose_json.py`
-什么时候用：
-- 结构化产物校验通过后，必须用它编译出最终完整 JSON
-- 这个脚本负责补全固定字段、固定值、`fontColor`、`data.startPostion` 等内容
-
-用法：
-
-```bash
-python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured.json --output /relation-graph/result.json --pretty
-```
-
-6. `references/structured-reference.json`
+3. `references/layout-example.json`
 什么时候读：
-- 需要参考现有图谱的结构化组织方式、分区方式、节点密度、案例外挂方式时
-- 只把它当结构化参考，不要拿它覆盖 schema 或用户当前要求
+- 需要参考现有图谱的节点密度、分区方式、外围挂接和坐标尺度时
+- 只把它当布局参考样例，不参与生成流程
+- 不要拿它覆盖 schema、layout 规则或用户已确认的 `graph.md`
+
+4. `scripts/validate_graph.py`
+什么时候用：
+- 单独校验 `graph.md`
+- 校验脚本只负责检查 `graph.md` 是否可用于生成最终 JSON
+- 校验不通过时，只能回去修改 `graph.md`
+
+用法：
+
+```bash
+python /skills/relation-graph/scripts/validate_graph.py /output/graph.md
+```
+
+5. `scripts/build_graph.py`
+什么时候用：
+- 在 `graph.md` 已通过校验后，传入 `graph.md` 路径生成最终 `result.json`
+- 脚本只接受文件路径参数，不接受内联内容、stdin 或临时脚本替代
+- 生成脚本本身不承担校验职责
+
+用法：
+
+```bash
+python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /output/result.json --pretty
+```
+
+## graph.md 生成规范
+
+在进入工作流之前，先一次性完整生成可用的 `graph.md`。不要先写半成品，再指望后续步骤补齐。
+
+固定表头：
+
+```text
+| IsRoot | NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
+```
+
+固定规则：
+- `graph.md` 必须是一张单一 Markdown 表
+- 第一行必须是固定表头，不能改列名、列顺序、列数量
+- 第二行必须是 Markdown 分隔行
+- 第三行起每行只定义一个节点
+- 不允许生成第二张表
+- 不允许把节点写成列表、段落、JSON 片段或半结构化草稿
+- 节点文本和关系名称中不要出现 `|`
+- 数值字段只能写数字，不能带单位、注释或额外文本
+- 必须一次性生成完整可校验版本，不能故意留待后续补字段
+
+每列要求：
+- `IsRoot` 只能填 `是` 或 `否`
+- `NodeID` 非空且全表唯一
+- `NodeText` 非空，不允许换行
+- `NodeType` 只能填 `2`、`3`、`5`、`6`
+- 知识建模方法论中的类型映射为：
+  - `DK -> 2`
+  - `PK -> 3`
+  - `CS -> 5`
+  - `FC -> 6`
+- `ParentID` 根节点必须为空；非根节点必须非空，且必须引用表内有效节点
+- `RelationText` 根节点必须为空；非根节点必须非空，不允许换行
+- `RelationText` 只能使用以下 9 个关系名之一：
+  - `各类包含`
+  - `组成/构成`
+  - `是一种`
+  - `具有属性`
+  - `具有特征`
+  - `定义`
+  - `并列`
+  - `是前提`
+  - `支持`
+- `NodeX/NodeY/NodeWidth/NodeHeight` 都必须是数字
+- `NodeColor` 只能是以下 4 个值之一：`#FF0000`、`#00B0F0`、`#00B050`、`#000000`
+- `NodeColor` 必须根据节点文本表达的语义来选取，不能随意填写
+- 颜色语义：
+  - `#FF0000`：核心知识点
+  - `#00B0F0`：核心结构化知识框架
+  - `#00B050`：先决知识点
+  - `#000000`：普通知识点
+
+完整性要求：
+- 全表必须有且仅有一个根节点
+- 每个节点最多只有一个父节点
+- 不允许多父节点结构
+- 先确定语义结构，再填写布局字段
+- `rootId` 由脚本独立生成唯一值，不要求等于任何节点 `id`
+- `graph.md` 必须能完整映射出最终 JSON 的 `nodes`、`lines` 和布局字段
+
+最小合法样本：
+
+```md
+| IsRoot | NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 是 | root-1 | 函数 | 2 |  |  | 0 | 0 | 88 | 36 | #00B0F0 |
+| 否 | node-1 | 概念定义 | 2 | root-1 | 各类包含 | -180 | 120 | 72 | 36 | #000000 |
+| 否 | node-2 | 分类 | 2 | root-1 | 各类包含 | 140 | 120 | 72 | 36 | #000000 |
+| 否 | node-3 | 示例 | 6 | root-1 | 支持 | 220 | 240 | 88 | 40 | #000000 |
+| 否 | node-4 | 使用步骤 | 3 | root-1 | 各类包含 | -40 | 220 | 96 | 40 | #00B0F0 |
+| 否 | node-5 | 明确参数 | 3 | node-4 | 各类包含 | -40 | 300 | 96 | 40 | #000000 |
+| 否 | node-6 | 调用函数 | 3 | node-4 | 各类包含 | -40 | 360 | 96 | 40 | #000000 |
+| 否 | node-7 | 复盘检查 | 5 | root-1 | 支持 | 320 | 320 | 96 | 40 | #000000 |
+| 否 | node-7 | 复盘检查 | 5 | root-1 | 支持 | 320 | 320 | 96 | 40 | #000000 |
+```
 
 ## 工作流
 
@@ -130,107 +196,66 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 
 ### 4. 先生成有根知识树单表 Markdown
 
-先用一张 Markdown 表表达有根知识树，不要一上来直接写 JSON。
+先按上面的 `graph.md` 生成规范，一次性生成完整单表，不要一上来直接写 JSON。
 
-表头固定为：
+### 4.1 graph.md 生成规则
 
-```text
-| 是否根节点 | 当前节点ID | 当前节点文本 | 当前节点类型 | 父节点ID | 关系名称 | 当前节点X | 当前节点Y | 当前节点宽度 | 当前节点高度 | 当前节点颜色 |
-```
+这部分以上面的 `## graph.md 生成规范` 为准。生成出 `graph.md` 后，后续所有问题都只能通过编辑这个文件解决。
 
-规则：
-- 一行只定义一个当前节点
-- `当前节点ID` 全表唯一，不允许重复出现
-- 每个当前节点最多只有一个 `父节点ID`
-- 根节点行：`是否根节点=是`，`父节点ID` 和 `关系名称` 必须为空
-- 非根节点行：`是否根节点=否`，`父节点ID` 和 `关系名称` 必须非空
-- 全表必须有且仅有一个根节点
-- 节点文本和关系名称不允许换行
-- 如果某个节点同时需要表达额外语义，优先把它吸收到主树结构里，不要再给它第二个父节点
+### 5. 先校验 graph.md
 
-### 5. 再转换生成 `structured.json`
-
-先把单表直接转换成 `structured.json`：
+先用独立校验脚本检查 `graph.md`：
 
 ```bash
-python /skills/relation-graph/scripts/markdown_to_structured.py /relation-graph/graph.md --output /relation-graph/structured.json --pretty
-```
-
-结构化记录只保留真正需要模型决定的字段。
-
-节点至少保留：
-- `id`
-- `text`
-- `x`
-- `y`
-- `width`
-- `height`
-- `borderColor`
-- `data.type`
-
-连线至少保留：
-- `id`
-- `from`
-- `to`
-- `text`
-
-按需保留：
-- `fromJunctionPoint`
-- `toJunctionPoint`
-- `lineShape`
-
-不要：
-- 先输出超长最终 JSON 再赌模型一次写完
-- 把固定字段和固定值也交给模型重复生成几十上百次
-- 手动拼超长 `structured.json`
-- 使用 `edges`、`source`、`target`、`label` 之类的错误字段名
-
-### 6. 校验并编译最终 JSON
-
-先执行结构化产物校验：
-
-```bash
-python /skills/relation-graph/scripts/validate_structured.py /relation-graph/structured.json
-```
-
-只有结构化产物通过后，再执行：
-
-```bash
-python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured.json --output /relation-graph/result.json --pretty
+python /skills/relation-graph/scripts/validate_graph.py /output/graph.md
 ```
 
 要求：
-- 单表 Markdown 必须先于 `structured.json`
-- `graph.md` 中同一个 `当前节点ID` 不允许出现两次
-- 结构化产物不通过时，不要继续补全生成最终 JSON
-- 结构化产物校验不通过时，优先修改现有 `graph.md` 后重新生成新的 `structured.json`
-- 即使需要重新布局，也应优先修改单表中的 `x/y`、`width/height`、连接关系和分区，再重新生成结构化产物
-- 只有当前 `graph.md` 或 `structured.json` 无法稳定修改、已损坏、被截断，或用户明确要求保留历史版本时，才重新写入新的结构化文件
-- 编译脚本只负责补全固定字段和固定值
-- 不要手动在最终 JSON 上分段补字段
-- 如果怀疑输出被截断，优先检查并修复 `graph.md` 或重新生成新的 `structured.json`
+- 校验脚本只负责校验 `graph.md`
+- 校验脚本不生成 `result.json`
+- 校验不通过时，只能回去修改 `graph.md`
+- 校验通过后，才能进入生成步骤
 
-### 7. 写到固定输出位置
+### 6. 再生成最终 JSON
 
-结果文件必须写到：
+用生成脚本传入 `graph.md` 路径，生成最终 JSON：
 
-```text
-/relation-graph/result.json
+```bash
+python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /output/result.json --pretty
 ```
 
-若该文件已存在，则按序递增到下一个可用文件名，例如：
+要求：
+- `graph.md` 是后续唯一工作面
+- 所有修改只能通过 `edit` 修改现有 `graph.md`
+- 一旦生成出 `graph.md`，后续所有问题都只能通过修改 `graph.md` 再尝试生成 `result.json`
+- 不允许直接修改 `result.json`
+- 不允许通过 AI 临时生成整段脚本、heredoc、内联代码或一次性脚本替代既有脚本执行
+- 脚本必须只接受文件路径参数执行
+- 生成脚本只负责生成，不承担独立校验流程
+- 生成失败时不覆盖已有 `result.json`
+- 只有成功生成后，才覆盖目标 `result.json`
+
+输出要求：
+- 脚本只接受 `graph.md` 文件路径作为输入
+- 默认输出当前任务工作目录下的 `/output/result.json`
+- 允许通过 `--output` 指定结果文件，但必须仍位于当前任务工作目录下的 `/output` 目录
+- `references/schema.json` 只由校验脚本使用
+- 失败时直接提示回去修改 `graph.md`
+
+### 7. 输出位置
+
+结果文件必须写到当前任务工作目录下的 `/output` 目录。
+
+默认路径：
 
 ```text
-/relation-graph/result2.json
+/output/result.json
 ```
 
-这里的 `/relation-graph/` 指当前任务工作目录下的输出目录，不是技能目录下的路径。
-
-不要写到技能目录或其他路径。
-
-### 8. 生成最终文件
-
-结构化产物校验通过后，由编译脚本生成最终 JSON 文件。
+说明：
+- `/output/` 指当前任务工作目录下的输出目录，不是技能目录下的路径
+- `graph.md` 默认也应放在 `/output/graph.md`
+- 不要写到技能目录或其他路径
 
 ## 关键约束
 
@@ -238,6 +263,7 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 
 - 最外层字段名必须是 `rootId`、`nodes`、`lines`
 - `rootId` 非空且唯一
+- `rootId` 不要求引用任何节点 `id`
 - 节点 `id` 非空且唯一
 - 连线 `id` 非空且唯一
 - `from/to` 必须引用有效节点
@@ -247,7 +273,9 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 - `fromJunctionPoint/toJunctionPoint` 必须按节点相对位置与关系方向正确填写
 - 节点文本和关系文本都不允许换行
 - `borderColor` 与 `fontColor` 必须一致
-- 固定字段及其固定值必须以 `references/schema.json` 为准，由编译脚本统一补全，不要凭记忆补写
+- 固定字段及其固定值必须以 `references/schema.json` 为准，由单脚本统一补全，不要凭记忆补写
+- `graph.md` 保持固定表头，不要改格式
+- 脚本只能接受 `graph.md` 文件路径作为输入
 
 ## 节点与关系的语义要求
 
@@ -270,6 +298,7 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 - `from` 表示父节点，`to` 表示子节点
 - `fromJunctionPoint/toJunctionPoint` 必须按节点相对位置与关系方向正确填写
 - 关系文本必须真实表达语义
+- 关系文本只能使用这 9 个标准关系名：`各类包含`、`组成/构成`、`是一种`、`具有属性`、`具有特征`、`定义`、`并列`、`是前提`、`支持`
 - 连接关系必须优先组织成主知识树，再在树外做少量外围挂接
 - 避免网状结构、分支互连和多分支交叉
 - 案例节点、策略节点、练习节点默认只作为叶子外挂节点，不要反向连回主知识节点
@@ -277,9 +306,7 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 
 关系：
 - 关系文本必须真实表达语义
-- 优先使用清晰、稳定、可读的关系词
-- 优先使用 `references/schema.json` 中约定的常用连线关系文本
-- 如果常见关系不足以表达语义，允许使用更贴切的描述
+- 必须且只能使用 `references/schema.json` 中约定的 9 个标准关系名
 - 若出现跨分支语义，优先通过调整层级、重新归类或外围挂接表达，不要直接把多个分支重新连成网
 
 关系生成顺序：
@@ -292,6 +319,33 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 - 优先保持主知识树清楚，再追求语义补充完整
 - 宁可少一条容易引起交叉的补充关系，也不要把图做成网状结构
 - 当一个节点一级子节点过多时，先拆成二级分组节点，再继续展开
+
+## graph.md 固定规则
+
+- 一旦生成出 `graph.md`，后续所有问题都只能通过修改这个文件来尝试生成 `result.json`
+- 不允许重新生成整张 `graph.md`
+- 只允许在现有表上做定点 edit
+- 用户确认知识点和语义关系后，`graph.md` 表内容视为固定基线
+- `graph.md` 成功生成过一次 `result.json` 后，建模图内容即固定下来，后续调整都视为布局调整
+
+用户确认后，默认只允许修改这些布局字段：
+- `NodeX`
+- `NodeY`
+- `NodeWidth`
+- `NodeHeight`
+
+用户确认后，默认冻结这些字段：
+- `IsRoot`
+- `NodeID`
+- `NodeText`
+- `NodeType`
+- `ParentID`
+- `RelationText`
+- `NodeColor`
+
+例外：
+- 只有节点 `id`、关系 `id`、引用合法性这类基础标识问题会导致结果无法生成时，才允许做必要纠错
+- 这类纠错不能改变知识点内容、语义关系或整体结构
 
 ## 增量修改要求
 
@@ -307,20 +361,18 @@ python /skills/relation-graph/scripts/compose_json.py /relation-graph/structured
 
 1. 已读取 `references/schema.json`
 2. 坐标生成前已读取 `references/layout.md`
-3. 已先生成 `/relation-graph/graph.md` 单表，而不是直接拼超长最终 JSON
-4. 已用 `scripts/markdown_to_structured.py` 生成 `/relation-graph/structured.json`
-5. 已用 `scripts/validate_structured.py` 校验结构化产物并通过
-6. 已用 `scripts/compose_json.py` 编译出最终完整 JSON
-7. 结果文件写在 `/relation-graph/result.json` 或按序递增后的 `/relation-graph/resultN.json`
-8. 若为增量修改，未改动部分已尽量保持稳定
+3. 已先生成 `/output/graph.md` 单表，而不是直接拼超长最终 JSON
+4. 已使用 `scripts/validate_graph.py` 单独校验 `graph.md`
+5. 已使用 `scripts/build_graph.py` 传入 `graph.md` 路径生成最终 JSON
+6. 结果文件写在 `/output/result.json` 或用户通过 `--output` 显式指定的目标路径
+7. 若为增量修改，未改动部分已尽量保持稳定
+8. 若 `graph.md` 已成功生成过一次 `result.json`，后续只修改布局字段
 
 ## 输出要求
 
 默认交付：
-- 先生成 `/relation-graph/graph.md`
-- 生成 `/relation-graph/structured.json`
-- 再生成 `/relation-graph/result.json`
-- 若已有同名文件，优先在原文件基础上修改；只有无法稳定修改时，才生成下一个可用的 `/relation-graph/structuredN.json` 或 `/relation-graph/resultN.json`
+- 先生成 `/output/graph.md`
+- 再基于该文件生成 `/output/result.json`
 
 回复用户时：
 - 以结果完成情况为主

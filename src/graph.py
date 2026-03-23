@@ -35,19 +35,20 @@ from src.utils.util import get_backend_per_thread
 # 支持的 providers: openai, anthropic, qwq, qwen, deepseek 等
 # 可通过 configurable_fields 运行时切换模型
 chat_model = init_chat_model(
-    model=os.getenv('MODEL_MODEL_ID'),
-    model_provider=os.getenv('MODEL_PROVIDER'),
-    base_url=os.getenv('MODEL_BASE_URL'),
-    api_key=os.getenv('MODEL_API_KEY'),
+    model=os.getenv('L_MODEL_MODEL_ID'),
+    model_provider=os.getenv('L_MODEL_PROVIDER'),
+    base_url=os.getenv('L_MODEL_BASE_URL'),
+    api_key=os.getenv('L_MODEL_API_KEY'),
     temperature=0.0,
     streaming=True,  # 必须流式输出
     timeout=600,  # 超时 10 分钟
     max_retries=3,  # 最多重试 3 次
     configurable_fields=("model", "model_provider", "base_url", "api_key"),  # 支持运行时切换
+    # use_responses_api=True
 )
 
 # 设置 model profile，作为 MODEL_MAX_TOKENS 映射表之外模型的 fallback
-max_input_tokens = int(os.getenv('MODEL_MAX_INPUT_TOKENS', '80000'))
+max_input_tokens = int(os.getenv('L_MODEL_MAX_INPUT_TOKENS', '80000'))
 chat_model.profile = {"max_input_tokens": max_input_tokens}  # type: ignore[assignment]
 
 # 创建自定义工具限制中间件

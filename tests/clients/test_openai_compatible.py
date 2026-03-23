@@ -1,10 +1,10 @@
 """测试: 使用 OpenAI 兼容 API (阿里云 DashScope).
 
 环境变量配置:
-    - MODEL_PROVIDER=openai
-    - MODEL_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-    - MODEL_API_KEY=sk-3834e7c3cd41480e9f1c2aea2e8588dc
-    - MODEL_MODEL_ID=qwen3.5-plus
+    - L_MODEL_PROVIDER=openai
+    - L_MODEL_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+    - L_MODEL_API_KEY=sk-3834e7c3cd41480e9f1c2aea2e8588dc
+    - L_MODEL_MODEL_ID=qwen3.5-plus
 """
 
 import asyncio

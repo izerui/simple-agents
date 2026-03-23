@@ -473,20 +473,20 @@
 - 多个分支之间互相补线，形成网状结构
 - 同一节点同时挂接多个父节点，导致阅读路径不再唯一
 
-## 结构化参考
+## 布局参考样例
 
-`references/structured-reference.json` 可作为现有图谱的结构化参考，用于观察：
+`references/layout-example.json` 可作为现有图谱的布局参考样例，用于观察：
 - 主干、步骤列、枚举组、案例外挂的大致分区方式
 - 常见节点尺寸、纵列间距、外围案例放置方式
 - 不同语义类型在画布中的相对位置
 
-它主要用于参考结构组织与布局风格，不是结构权威。
+它主要用于参考结构组织与布局风格，不参与生成流程，也不是结构权威。
 
 冲突处理优先级：
 1. `references/schema.json`
 2. 用户当前任务的内容与增量约束
 3. 本文档
-4. `references/structured-reference.json`
+4. `references/layout-example.json`
 
 ## 生成前自检
 

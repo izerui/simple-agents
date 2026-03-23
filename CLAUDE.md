@@ -56,10 +56,10 @@ pytest tests/test_sandbox/              # 运行沙箱相关测试
 
 ### Environment Variables
 主要配置项：
-- `MODEL_MODEL_ID` - 模型 ID
-- `MODEL_PROVIDER` - 模型提供商 (anthropic, openai, deepseek 等)
-- `MODEL_BASE_URL` - API 基础 URL
-- `MODEL_API_KEY` - API 密钥
+- `L_MODEL_MODEL_ID` - 模型 ID
+- `L_MODEL_PROVIDER` - 模型提供商 (anthropic, openai, deepseek 等)
+- `L_MODEL_BASE_URL` - API 基础 URL
+- `L_MODEL_API_KEY` - API 密钥
 - `REDIS_URI` / `DATABASE_URI` - Redis 和 PostgreSQL 连接
 - `BROWSER_SERVICE_URL` - 浏览器抓取服务地址
 
