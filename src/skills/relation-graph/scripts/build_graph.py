@@ -62,7 +62,7 @@ REQUIRED_HEADERS = [
     "NodeY",
     "NodeWidth",
     "NodeHeight",
-    "NodeColor",
+    "NodeSemantic",
 ]
 NODE_TYPE_TO_INT = {
     "DK": 2,
@@ -70,13 +70,11 @@ NODE_TYPE_TO_INT = {
     "CS": 5,
     "FC": 6,
 }
-COLOR_ALIASES = {
-    "#ff0000": "#FF0000",
-    "#00b0f0": "#00B0F0",
-    "#00b050": "#00B050",
-    "#000000": "#000000",
-    "#548bd4": "#00B0F0",
-    "#0070c0": "#00B0F0",
+SEMANTIC_TO_COLOR = {
+    "核心知识点": "#FF0000",
+    "核心结构化知识框架": "#00B0F0",
+    "先决知识点": "#00B050",
+    "普通知识点": "#000000",
 }
 
 
@@ -85,8 +83,11 @@ def parse_number(value: str) -> int | float:
     return float(text) if "." in text else int(text)
 
 
-def normalize_color(value: str) -> str:
-    return COLOR_ALIASES.get(value.strip(), COLOR_ALIASES.get(value.strip().lower(), value.strip()))
+def parse_node_semantic(value: str) -> str:
+    text = value.strip()
+    if text not in SEMANTIC_TO_COLOR:
+        raise GraphError(f"`NodeSemantic` 仅支持 {sorted(SEMANTIC_TO_COLOR)}")
+    return text
 
 
 def parse_node_type(value: str) -> int:
@@ -238,7 +239,7 @@ def build_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
             parse_number(row["NodeY"]),
             parse_number(row["NodeWidth"]),
             parse_number(row["NodeHeight"]),
-            normalize_color(row["NodeColor"]),
+            SEMANTIC_TO_COLOR[parse_node_semantic(row["NodeSemantic"])],
         )
         node_defs.setdefault(node_id, node_signature)
 

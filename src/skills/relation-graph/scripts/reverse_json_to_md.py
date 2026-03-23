@@ -20,7 +20,7 @@ REQUIRED_HEADERS = [
     "NodeY",
     "NodeWidth",
     "NodeHeight",
-    "NodeColor",
+    "NodeSemantic",
 ]
 INT_TO_NODE_TYPE = {
     2: "DK",
@@ -29,13 +29,11 @@ INT_TO_NODE_TYPE = {
     6: "FC",
 }
 
-COLOR_ALIASES = {
-    "#ff0000": "#FF0000",
-    "#00b0f0": "#00B0F0",
-    "#00b050": "#00B050",
-    "#000000": "#000000",
-    "#548bd4": "#00B0F0",
-    "#0070c0": "#00B0F0",
+COLOR_TO_SEMANTIC = {
+    "#FF0000": "核心知识点",
+    "#00B0F0": "核心结构化知识框架",
+    "#00B050": "先决知识点",
+    "#000000": "普通知识点",
 }
 
 
@@ -67,8 +65,9 @@ def dump_text_atomic(path: Path, content: str) -> None:
         handle.write(content)
 
 
-def normalize_color(value: str) -> str:
-    return COLOR_ALIASES.get(value.strip(), COLOR_ALIASES.get(value.strip().lower(), value.strip()))
+def restore_node_semantic(value: object) -> str:
+    text = str(value).strip().upper()
+    return COLOR_TO_SEMANTIC.get(text, "普通知识点")
 
 
 def read_payload(path: Path) -> dict:
@@ -130,7 +129,7 @@ def build_markdown(payload: dict) -> tuple[str, int, int]:
         node_y = sanitize_cell(node.get("y", ""))
         node_width = sanitize_cell(node.get("width", ""))
         node_height = sanitize_cell(node.get("height", ""))
-        node_color = normalize_color(sanitize_cell(node.get("borderColor", "")))
+        node_semantic = restore_node_semantic(node.get("borderColor", ""))
 
         parent_rows = incoming.get(node_id)
         if not parent_rows:
@@ -147,7 +146,7 @@ def build_markdown(payload: dict) -> tuple[str, int, int]:
                         node_y,
                         node_width,
                         node_height,
-                        node_color,
+                        node_semantic,
                     ]
                 )
                 + " |"
@@ -169,7 +168,7 @@ def build_markdown(payload: dict) -> tuple[str, int, int]:
                         node_y,
                         node_width,
                         node_height,
-                        node_color,
+                        node_semantic,
                     ]
                 )
                 + " |"

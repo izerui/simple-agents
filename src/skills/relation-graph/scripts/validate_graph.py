@@ -21,7 +21,7 @@ REQUIRED_HEADERS = [
     "NodeY",
     "NodeWidth",
     "NodeHeight",
-    "NodeColor",
+    "NodeSemantic",
 ]
 NODE_TYPE_TO_INT = {
     "DK": 2,
@@ -29,14 +29,11 @@ NODE_TYPE_TO_INT = {
     "CS": 5,
     "FC": 6,
 }
-CANONICAL_COLORS = {"#FF0000", "#00B0F0", "#00B050", "#000000"}
-COLOR_ALIASES = {
-    "#ff0000": "#FF0000",
-    "#00b0f0": "#00B0F0",
-    "#00b050": "#00B050",
-    "#000000": "#000000",
-    "#548bd4": "#00B0F0",
-    "#0070c0": "#00B0F0",
+ALLOWED_NODE_SEMANTICS = {
+    "核心知识点",
+    "核心结构化知识框架",
+    "先决知识点",
+    "普通知识点",
 }
 ALLOWED_JUNCTION_POINTS = {"border", "left", "right", "top", "bottom"}
 ALLOWED_RELATION_TEXTS = {
@@ -93,11 +90,11 @@ def parse_node_type(value: str) -> int:
     return NODE_TYPE_TO_INT[text]
 
 
-def normalize_color(value: str, field_name: str) -> str:
-    canonical = COLOR_ALIASES.get(value.strip(), COLOR_ALIASES.get(value.strip().lower()))
-    if canonical not in CANONICAL_COLORS:
+def normalize_node_semantic(value: str, field_name: str) -> str:
+    canonical = require_text(value, field_name)
+    if canonical not in ALLOWED_NODE_SEMANTICS:
         raise GraphError(
-            f"`{field_name}` 仅支持 {sorted(CANONICAL_COLORS)}；请回去修改 graph.md"
+            f"`{field_name}` 仅支持 {sorted(ALLOWED_NODE_SEMANTICS)}；请回去修改 graph.md"
         )
     return canonical
 
@@ -268,8 +265,16 @@ def validate_rows(rows: list[dict[str, str]]) -> dict[str, int]:
         node_y = parse_number(row["NodeY"], "NodeY")
         node_width = parse_number(row["NodeWidth"], "NodeWidth")
         node_height = parse_number(row["NodeHeight"], "NodeHeight")
-        node_color = normalize_color(require_text(row["NodeColor"], "NodeColor"), "NodeColor")
-        node_signature = (node_text, node_type, node_x, node_y, node_width, node_height, node_color)
+        node_semantic = normalize_node_semantic(row["NodeSemantic"], "NodeSemantic")
+        node_signature = (
+            node_text,
+            node_type,
+            node_x,
+            node_y,
+            node_width,
+            node_height,
+            node_semantic,
+        )
         if node_id in node_defs and node_defs[node_id] != node_signature:
             raise GraphError(
                 f"`NodeID` `{node_id}` 重复出现时，节点定义字段必须完全一致；请回去修改 graph.md"

@@ -84,7 +84,7 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 固定表头：
 
 ```text
-| NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
+| NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeSemantic |
 ```
 
 固定规则：
@@ -102,7 +102,7 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 - `NodeID` 非空
 - 默认优先使用单父节点结构，尽量避免一个节点同时挂多个父节点
 - 只有在确有必要且无法通过重构语义层级解决时，才允许同一个 `NodeID` 重复出现，用于表达多个父节点
-- 同一个 `NodeID` 重复出现时，这些节点定义字段必须完全一致：`NodeText`、`NodeType`、`NodeX`、`NodeY`、`NodeWidth`、`NodeHeight`、`NodeColor`
+- 同一个 `NodeID` 重复出现时，这些节点定义字段必须完全一致：`NodeText`、`NodeType`、`NodeX`、`NodeY`、`NodeWidth`、`NodeHeight`、`NodeSemantic`
 - `NodeText` 非空，不允许换行
 - `NodeType` 只能填 `DK`、`PK`、`CS`、`FC`
 - 生成脚本内部固定映射为：
@@ -125,13 +125,16 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
   - `是前提`
   - `支持`
 - `NodeX/NodeY/NodeWidth/NodeHeight` 都必须是数字
-- `NodeColor` 只能是以下 4 个值之一：`#FF0000`、`#00B0F0`、`#00B050`、`#000000`
-- `NodeColor` 必须根据节点文本表达的语义来选取，不能随意填写
-- 颜色语义：
-  - `#FF0000`：核心知识点
-  - `#00B0F0`：核心结构化知识框架
-  - `#00B050`：先决知识点
-  - `#000000`：普通知识点
+- `NodeSemantic` 只能是以下 4 个值之一：
+  - `核心知识点`
+  - `核心结构化知识框架`
+  - `先决知识点`
+  - `普通知识点`
+- 生成脚本会固定映射颜色：
+  - `核心知识点 -> #FF0000`
+  - `核心结构化知识框架 -> #00B0F0`
+  - `先决知识点 -> #00B050`
+  - `普通知识点 -> #000000`
 
 完整性要求：
 - 先确定语义结构，再填写布局字段
@@ -140,16 +143,16 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 最小合法样本：
 
 ```md
-| NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeColor |
+| NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeSemantic |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| root-1 | 函数 | DK |  |  | 0 | 0 | 88 | 36 | #00B0F0 |
-| node-1 | 概念定义 | DK | root-1 | 包含 | -180 | 120 | 72 | 36 | #000000 |
-| node-2 | 分类 | DK | root-1 | 包含 | 140 | 120 | 72 | 36 | #000000 |
-| node-3 | 示例 | FC | root-1 | 支持 | 220 | 240 | 88 | 40 | #000000 |
-| node-4 | 使用步骤 | PK | root-1 | 包含 | -40 | 220 | 96 | 40 | #00B0F0 |
-| node-5 | 明确参数 | PK | node-4 | 包含 | -40 | 300 | 96 | 40 | #000000 |
-| node-6 | 调用函数 | PK | node-4 | 包含 | -40 | 360 | 96 | 40 | #000000 |
-| node-7 | 复盘检查 | CS | root-1 | 支持 | 320 | 320 | 96 | 40 | #000000 |
+| root-1 | 函数 | DK |  |  | 0 | 0 | 88 | 36 | 核心结构化知识框架 |
+| node-1 | 概念定义 | DK | root-1 | 包含 | -180 | 120 | 72 | 36 | 普通知识点 |
+| node-2 | 分类 | DK | root-1 | 包含 | 140 | 120 | 72 | 36 | 普通知识点 |
+| node-3 | 示例 | FC | root-1 | 支持 | 220 | 240 | 88 | 40 | 普通知识点 |
+| node-4 | 使用步骤 | PK | root-1 | 包含 | -40 | 220 | 96 | 40 | 核心结构化知识框架 |
+| node-5 | 明确参数 | PK | node-4 | 包含 | -40 | 300 | 96 | 40 | 普通知识点 |
+| node-6 | 调用函数 | PK | node-4 | 包含 | -40 | 360 | 96 | 40 | 普通知识点 |
+| node-7 | 复盘检查 | CS | root-1 | 支持 | 320 | 320 | 96 | 40 | 普通知识点 |
 ```
 
 ## 工作流
@@ -297,7 +300,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - 颜色表达语义层次
 - 形状表达知识类型
 - 不要把颜色和形状的语义混用
-- 颜色只能从四种允许颜色中选择，并根据既定颜色语义选择合适值
+- 语义字段只能从四种允许值中选择，并由脚本固定映射到颜色
 
 连线关键要求：
 - `text` 不允许换行
@@ -345,7 +348,7 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 - `NodeType`
 - `ParentID`
 - `RelationText`
-- `NodeColor`
+- `NodeSemantic`
 
 例外：
 - 只有节点 `id`、关系 `id`、引用合法性这类基础标识问题会导致结果无法生成时，才允许做必要纠错
