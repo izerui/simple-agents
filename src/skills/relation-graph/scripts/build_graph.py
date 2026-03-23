@@ -5,9 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
-import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -46,19 +44,12 @@ def resolve_output_path(raw_output: str | None) -> Path:
 
 def dump_json_atomic(path: Path, payload: Any, pretty: bool) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(prefix=".result.", suffix=".json", dir=path.parent)
-    temp_path = Path(temp_name)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            if pretty:
-                json.dump(payload, handle, ensure_ascii=False, indent=2)
-                handle.write("\n")
-            else:
-                json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
-        temp_path.replace(path)
-    finally:
-        if temp_path.exists():
-            temp_path.unlink()
+    with path.open("w", encoding="utf-8") as handle:
+        if pretty:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        else:
+            json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
 
 
 REQUIRED_HEADERS = [

@@ -5,9 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
-import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -59,15 +57,8 @@ def resolve_output_path(raw_output: str | None) -> Path:
 
 def dump_text_atomic(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(prefix=".graph.", suffix=".md", dir=path.parent)
-    temp_path = Path(temp_name)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(content)
-        temp_path.replace(path)
-    finally:
-        if temp_path.exists():
-            temp_path.unlink()
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(content)
 
 
 def normalize_color(value: str) -> str:
