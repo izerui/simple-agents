@@ -1,15 +1,15 @@
 ---
 name: relation-graph
-description: 生成或增量修改可直接导入前端的知识建模图 JSON。适用于把课程知识点、层级、关系、步骤链、案例、策略等内容转成最终图数据，并在需要时稳定调整布局。
+description: `graph.md` 是知识建模图生成与编辑的唯一文件。适用于从内容新建建模图、基于已有 `graph.md` 继续调整，或先将用户提供的建模图 JSON 反向转换为 `graph.md` 后再调整。
 ---
 
 # Relation Graph
 
 ## 1. 文档定位
 
-本手册用于规范知识建模图的生成、增量修改、校验与导出过程。
+本手册用于规范以 `graph.md` 作为唯一事实来源的知识建模图新生成、编辑更新、校验与导出过程。
 
-本 skill 的唯一目标是生成最终可用的知识建模图结果，不输出草稿结构、半成品字段或临时替代产物。
+本 skill 的核心要求是始终围绕 `graph.md` 工作；`graph.md` 是知识建模图生成与编辑的唯一文件，`result.json` 只是由其导出的最终产物，不是编辑对象。
 
 ## 2. 适用范围
 
@@ -17,17 +17,17 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 - 从知识点文本、课程内容、章节提纲生成知识建模图
 - 修改已有知识建模图
 - 追加节点、关系、步骤链、案例、策略节点
-- 调整图结构但仍需输出最终可导入 JSON
+- 调整图结构后仍需基于 `graph.md` 生成最终结果
 - 当前工作区已存在可编辑的 `graph.md`
 - 用户提供了现有知识建模图 JSON
 
 ## 3. 职责边界
 
 本 skill 负责以下事项：
-- 生成或增量修改 `graph.md`
+- 新生成或编辑更新 `graph.md`
 - 校验 `graph.md`
-- 基于 `graph.md` 生成最终 `result.json`
-- 在已有 `graph.md` 或已有图谱 JSON 的情况下执行稳定的增量修改流程
+- 在需要交付时基于 `graph.md` 导出最终 `result.json`
+- 在已有 `graph.md` 或已有建模图 JSON 的情况下执行稳定的编辑更新流程
 - 按既定格式、字段、布局和文件要求完成落盘
 
 本 skill 不负责以下事项：
@@ -59,7 +59,9 @@ description: 生成或增量修改可直接导入前端的知识建模图 JSON�
 - 不允许绕过 `graph.md` 直接手写最终 `result.json`
 - 不允许直接修改 `result.json` 作为修正手段
 - 不允许在已有可编辑 `graph.md` 的情况下脱离原文件另起一版
-- 不允许在用户提供现有图谱 JSON 后，不经转换直接重做整图
+- 只要用户提供了现有建模图 JSON，就必须先反向转换生成 `graph.md`，再基于该文件继续修改
+- 不允许在用户提供现有建模图 JSON 后，不经转换直接重做整图
+- 不允许在用户提供现有建模图 JSON 后，再重新生成一份新的 `graph.md` 替代反向转换得到的 `graph.md`
 - 若任一步失败，只能回到 `graph.md` 继续修改，再重新执行后续步骤
 
 ## 6. 资源与脚本使用规范
@@ -116,7 +118,9 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 
 执行要求：
 - 用户提供现有知识建模图 JSON 时，必须先执行该脚本将其转换为可编辑的 `graph.md`
+- 转换完成后，该 `graph.md` 立即成为后续流程唯一允许编辑的事实来源
 - 转换完成后，后续所有修改都必须基于该 `graph.md` 进行
+- 不允许跳过该转换结果重新生成一份新的 `graph.md`
 
 标准命令：
 
@@ -138,7 +142,7 @@ python /skills/relation-graph/scripts/validate_graph.py /output/graph.md
 python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /output/result.json --pretty
 ```
 
-若用户提供了现有 JSON，需要先反向转换：
+若用户提供了现有建模图 JSON，需要先反向转换：
 
 ```bash
 python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json --output /output/graph.md
@@ -148,7 +152,7 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 
 - `validate_graph.py` 只接受一个参数：`graph.md` 文件路径
 - `build_graph.py` 只接受 `graph.md` 文件路径，以及 `--output` 指定输出文件路径
-- `reverse_json_to_md.py` 只接受现有 JSON 文件路径，以及 `--output` 指定输出文件路径
+- `reverse_json_to_md.py` 只接受现有建模图 JSON 文件路径，以及 `--output` 指定输出文件路径
 - 输入输出必须是实际文件路径，不接受内联内容、stdin、字符串拼装内容或临时对象
 
 ### 7.3 明确禁止事项
@@ -279,14 +283,20 @@ echo '{}' > /output/result.json
 #### 新建场景
 
 满足以下条件时，按新建处理：
-- 用户未提供现有图 JSON
+- 用户未提供现有建模图 JSON
 - 当前不存在可复用的 `graph.md`
 
-#### 增量场景
+只要用户提供了现有建模图 JSON，就不得按新建场景处理。
 
-满足以下任一条件时，按增量处理：
+#### 编辑更新场景
+
+满足以下任一条件时，按编辑更新处理：
 - 当前已存在可编辑的 `graph.md`
-- 用户提供了现有图 JSON
+- 用户提供了现有建模图 JSON
+
+其中：
+- 只要新生成流程已经产出了 `graph.md`，后续继续调整时就不再属于新建，而属于编辑更新
+- 用户提供了现有建模图 JSON 的优先级高于“是否需要新建”，必须直接进入反向转换后的编辑更新流程
 
 ### 10.2 新建流程
 
@@ -297,18 +307,19 @@ echo '{}' > /output/result.json
 4. 执行 `validate_graph.py`
 5. 执行 `build_graph.py`
 
-### 10.3 增量流程
+### 10.3 编辑更新流程
 
-增量流程必须按以下顺序执行：
-1. 若已有可编辑 `graph.md`，直接基于该文件修改
-2. 若用户提供现有 JSON，先执行 `reverse_json_to_md.py` 转成 `graph.md`
-3. 所有修改均在该 `graph.md` 上完成
-4. 执行 `validate_graph.py`
-5. 执行 `build_graph.py`
+编辑更新流程必须按以下顺序执行：
+1. 若用户提供现有建模图 JSON，必须先执行 `reverse_json_to_md.py` 转成 `graph.md`
+2. 反向转换得到的 `graph.md` 必须作为后续修改的唯一基础，不得重新生成新的 `graph.md`
+3. 若用户未提供现有建模图 JSON，但已有可编辑 `graph.md`，则直接基于该文件修改
+4. 所有修改均在当前唯一有效的 `graph.md` 上完成
+5. 执行 `validate_graph.py`
+6. 执行 `build_graph.py`
 
-### 10.4 增量修改稳定性要求
+### 10.4 编辑更新稳定性要求
 
-增量修改时，稳定性优先于重排美观。
+编辑更新时，稳定性优先于重排美观。
 
 必须遵守以下要求：
 - 未被明确要求改动的旧节点、旧关系、旧坐标、旧尺寸应尽量保持不变
@@ -324,7 +335,7 @@ echo '{}' > /output/result.json
 - 允许修改字段：`NodeX`、`NodeY`、`NodeWidth`、`NodeHeight`
 - 默认不修改字段：`NodeID`、`NodeText`、`NodeType`、`ParentID`、`RelationText`、`NodeSemantic`
 
-若用户后续明确要求修改知识点内容、关系语义或结构层级，必须退出仅布局调整模式，恢复正常增量修改流程。
+若用户后续明确要求修改知识点内容、关系语义或结构层级，必须退出仅布局调整模式，恢复正常编辑更新流程。
 
 ## 11. 失败处理
 
@@ -343,7 +354,7 @@ echo '{}' > /output/result.json
 5. 若用户提供了现有建模图 JSON，已先使用 `scripts/reverse_json_to_md.py` 转成 `graph.md`
 6. 已使用 `scripts/build_graph.py` 生成最终 JSON
 7. 结果文件已写入 `/output/result.json` 或用户通过 `--output` 指定的合法路径
-8. 若为增量修改，未改动部分已尽量保持稳定
+8. 若为编辑更新，未改动部分已尽量保持稳定
 9. 若用户明确要求仅调整布局，已切换到仅布局调整模式
 
 ## 13. 交付要求
