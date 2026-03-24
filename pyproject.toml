@@ -34,6 +34,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "debugpy>=1.8.19",
+    "locust>=2.37.14",
 ]
 test = [
     "pytest>=7.0.0",
