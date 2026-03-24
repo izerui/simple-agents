@@ -16,6 +16,7 @@ from langchain.chat_models import init_chat_model
 from pydantic import BaseModel, Field
 
 from src.prompts import load_prompt_from_file
+from src.utils.model_config import get_model_init_kwargs
 
 app = FastAPI(title="Webapp Agents API", version="0.1.0")
 
@@ -224,13 +225,7 @@ def _get_extract_model():
     global _extract_model
     if _extract_model is None:
         _extract_model = init_chat_model(
-            model=os.getenv('L_MODEL_MODEL_ID'),
-            model_provider=os.getenv('L_MODEL_PROVIDER'),
-            base_url=os.getenv('L_MODEL_BASE_URL'),
-            api_key=os.getenv('L_MODEL_API_KEY'),
-            temperature=0.0,
-            streaming=False,
-            extra_body={"enable_thinking": False},
+            **get_model_init_kwargs(streaming=False, temperature=0.0),
         )
     return _extract_model
 

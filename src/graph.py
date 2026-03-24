@@ -28,6 +28,7 @@ from src.prompts import RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_url
 from src.tools.think import think_tool
+from src.utils.model_config import get_model_init_kwargs
 from src.utils._library_download import install_pip_if_needed
 from src.utils.util import get_backend_per_thread
 
@@ -35,12 +36,7 @@ from src.utils.util import get_backend_per_thread
 # 支持的 providers: openai, anthropic, qwq, qwen, deepseek 等
 # 可通过 configurable_fields 运行时切换模型
 chat_model = init_chat_model(
-    model=os.getenv('L_MODEL_MODEL_ID'),
-    model_provider=os.getenv('L_MODEL_PROVIDER'),
-    base_url=os.getenv('L_MODEL_BASE_URL'),
-    api_key=os.getenv('L_MODEL_API_KEY'),
-    temperature=0.0,
-    streaming=True,  # 必须流式输出
+    **get_model_init_kwargs(streaming=True, temperature=0.0),
     timeout=600,  # 超时 10 分钟
     max_retries=3,  # 最多重试 3 次
     configurable_fields=("model", "model_provider", "base_url", "api_key"),  # 支持运行时切换
