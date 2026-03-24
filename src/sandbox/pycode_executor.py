@@ -93,6 +93,12 @@ class OutputCapture:
             output += "\n[错误输出]\n{0}".format(stderr)
         return output
 
+    def append_stdout(self, message):
+        """向 stdout 捕获缓冲追加调试信息"""
+        self.stdout_buffer.write(message)
+        if message and not message.endswith("\n"):
+            self.stdout_buffer.write("\n")
+
 
 def _execute_in_subprocess(
         code,
@@ -118,747 +124,656 @@ def _execute_in_subprocess(
         readable_paths: 只读白名单路径列表
     """
     try:
-        # 切换工作目录
-        os.chdir(root_dir)
-        print("开始执行 Python 任务")
-        print("工作目录: /")
-        if script_path:
-            print("执行方式: script")
-            print("脚本路径: {0}".format(script_path))
-        else:
-            print("执行方式: inline")
-
-        # 设置超时信号
-        def timeout_handler(signum, frame):
-            raise TimeoutError("代码执行超时（超过 {0} 秒）".format(timeout))
-
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(timeout)
-
-        source_name = script_path if script_path else '<sandbox>'
-
-        # 编译代码
-        try:
-            compiled_code = compile(code, source_name, 'exec')
-        except SyntaxError as e:
-            result_queue.put(ExecuteResult(
-                output="语法错误: {0}".format(str(e)),
-                exit_code=-1,
-                error=str(e)
-            ))
-            return
-
-        # 准备执行环境
-        import builtins
-
-        # 预先导入 os.path（避免在 RestrictedOS.__getattr__ 中导入导致递归）
-        import os.path as _original_os_path
-
-        # 创建受限制的 open 函数
-        original_open = open
-        root_path = Path(root_dir).resolve()
-        writable_resolved = [Path(p).resolve() for p in writable_paths]
-        readable_resolved = [Path(p).resolve() for p in readable_paths]
-
-        def _is_within(path_obj, parent):
-            try:
-                path_obj.relative_to(parent)
-                return True
-            except ValueError:
-                return False
-
-        def _resolve_path(path_str):
-            file_path = Path(path_str).expanduser()
-            if file_path.is_absolute():
-                return file_path.resolve()
-            return (root_path / file_path).resolve()
-
-        def _classify_path(resolved_path):
-            if _is_within(resolved_path, root_path):
-                return 'root'
-            for wp in writable_resolved:
-                if _is_within(resolved_path, wp):
-                    return 'writable'
-            for rp in readable_resolved:
-                if _is_within(resolved_path, rp):
-                    return 'readable'
-            return 'other'
-
-        def _remap_external_absolute(file_path):
-            return root_path / file_path.relative_to(file_path.anchor)
-
-        def _redirect_for_read(path_str):
-            file_path = Path(path_str).expanduser()
-            if file_path.is_absolute():
-                resolved = file_path.resolve()
-                if _classify_path(resolved) == 'other':
-                    return _remap_external_absolute(file_path)
-                return resolved
-            return root_path / file_path
-
-        def _redirect_for_write(path_str):
-            file_path = Path(path_str).expanduser()
-            if file_path.is_absolute():
-                resolved = file_path.resolve()
-                location = _classify_path(resolved)
-                if location == 'readable':
-                    raise PermissionError("只读路径，禁止写入: {0}".format(path_str))
-                if location == 'other':
-                    return _remap_external_absolute(file_path)
-                return resolved
-            return root_path / file_path
-
-        def _resolve_for_operation(path_str, operation):
-            if operation == 'read':
-                return _redirect_for_read(path_str)
-            if operation in ('write', 'delete'):
-                return _redirect_for_write(path_str)
-            raise ValueError("不支持的操作类型: {0}".format(operation))
-
-        def redirect_path(path_str):
-            """
-            读取类路径使用统一重定向规则：
-            - 相对路径落到 root_dir
-            - root_dir/readable/writable 内保持原位
-            - 其他绝对路径映射到 root_dir
-            """
-            return str(_resolve_for_operation(path_str, 'read'))
-
-        def restricted_open(file, mode='r', *args, **kwargs):
-            """
-            受限的 open 函数，严格按照顺序检查：
-
-            路径处理顺序：
-            1. 相对路径：自动添加 root_dir 前缀
-
-            绝对路径检查顺序：
-            2. 在root_dir内：可读写
-            3. 只读白名单（readable_paths）内：只读
-            4. 读写白名单（writable_paths）内：可读写
-            5. 其他绝对路径：自动添加 root_dir 前缀后可读写
-            """
-            mode_str = mode if isinstance(mode, str) else 'r'
-            is_writing = any(c in mode_str for c in ['w', 'a', '+', 'x'])
-            operation = 'write' if is_writing else 'read'
-            final_path = str(_resolve_for_operation(file, operation))
-
-            # 写入模式下自动创建父目录
-            if is_writing and final_path:
-                parent_dir = Path(final_path).parent
-                if not parent_dir.exists():
-                    parent_dir.mkdir(parents=True, exist_ok=True)
-
-            return original_open(final_path, mode, *args, **kwargs)
-
-        # 创建受限的 Path 类
-        class _RestrictedPath(Path):
-            """受限的 Path 类，所有操作都经过权限检查"""
-            def __new__(cls, *args, **kwargs):
-                # 创建 Path 实例
-                if len(args) == 1 and isinstance(args[0], _RestrictedPath):
-                    return args[0]
-                return super(_RestrictedPath, cls).__new__(cls, *args, **kwargs)
-
-            def open(self, mode='r', *args, **kwargs):
-                return restricted_open(str(self), mode, *args, **kwargs)
-
-            def write_text(self, data, *args, **kwargs):
-                with self.open('w', *args, **kwargs) as f:
-                    return f.write(data)
-
-            def read_text(self, *args, **kwargs):
-                with self.open('r', *args, **kwargs) as f:
-                    return f.read()
-
-            def write_bytes(self, data, *args, **kwargs):
-                with self.open('wb', *args, **kwargs) as f:
-                    return f.write(data)
-
-            def read_bytes(self, *args, **kwargs):
-                with self.open('rb', *args, **kwargs) as f:
-                    return f.read()
-
-            def exists(self):
-                return os.path.exists(redirect_path(str(self)))
-
-            def is_file(self):
-                return os.path.isfile(redirect_path(str(self)))
-
-            def is_dir(self):
-                return os.path.isdir(redirect_path(str(self)))
-
-            def stat(self, *args, **kwargs):
-                return os.stat(redirect_path(str(self)), *args, **kwargs)
-
-            def lstat(self, *args, **kwargs):
-                return os.lstat(redirect_path(str(self)), *args, **kwargs)
-
-            def mkdir(self, mode=0o777, parents=False, exist_ok=False):
-                target = str(_resolve_for_operation(str(self), 'write'))
-                if parents:
-                    return os.makedirs(target, mode=mode, exist_ok=exist_ok)
-                return os.mkdir(target, mode=mode)
-
-            def rmdir(self):
-                target = str(_resolve_for_operation(str(self), 'delete'))
-                return os.rmdir(target)
-
-            def unlink(self, missing_ok=False):
-                target = str(_resolve_for_operation(str(self), 'delete'))
-                try:
-                    return os.unlink(target)
-                except FileNotFoundError:
-                    if missing_ok:
-                        return None
-                    raise
-
-            def rename(self, target):
-                src = str(_resolve_for_operation(str(self), 'read'))
-                dst = str(_resolve_for_operation(str(target), 'write'))
-                return self.__class__(os.rename(src, dst))
-
-            def replace(self, target):
-                src = str(_resolve_for_operation(str(self), 'read'))
-                dst = str(_resolve_for_operation(str(target), 'write'))
-                return self.__class__(os.replace(src, dst))
-
-            def touch(self, mode=0o666, exist_ok=True):
-                target = str(_resolve_for_operation(str(self), 'write'))
-                parent_dir = Path(target).parent
-                if not parent_dir.exists():
-                    parent_dir.mkdir(parents=True, exist_ok=True)
-                if exist_ok:
-                    try:
-                        os.utime(target, None)
-                    except OSError:
-                        pass
-                    else:
-                        return None
-
-                flags = os.O_CREAT | os.O_WRONLY
-                if not exist_ok:
-                    flags |= os.O_EXCL
-                fd = os.open(target, flags, mode)
-                os.close(fd)
-                return None
-
-            def chmod(self, mode, *, follow_symlinks=True):
-                target = str(_resolve_for_operation(str(self), 'write'))
-                return os.chmod(target, mode, follow_symlinks=follow_symlinks)
-
-            def symlink_to(self, target_is_directory=False):
-                raise AttributeError("Path.symlink_to 未开放")
-
-            def hardlink_to(self, target):
-                raise AttributeError("Path.hardlink_to 未开放")
-
-            def iterdir(self):
-                target = str(_resolve_for_operation(str(self), 'read'))
-                for entry in os.listdir(target):
-                    yield self.__class__(str(Path(target) / entry))
-
-            def glob(self, pattern):
-                target = Path(_resolve_for_operation(str(self), 'read'))
-                for entry in target.glob(pattern):
-                    yield self.__class__(str(entry))
-
-            def rglob(self, pattern):
-                target = Path(_resolve_for_operation(str(self), 'read'))
-                for entry in target.rglob(pattern):
-                    yield self.__class__(str(entry))
-
-        # 创建受限的 pathlib 模块
-        import pathlib as _original_pathlib
-
-        class _RestrictedPathlibModule:
-            """受限的 pathlib 模块"""
-            Path = _RestrictedPath
-            PurePath = _original_pathlib.PurePath
-            PosixPath = _original_pathlib.PosixPath if hasattr(_original_pathlib, 'PosixPath') else _RestrictedPath
-            WindowsPath = _original_pathlib.WindowsPath if hasattr(_original_pathlib, 'WindowsPath') else _RestrictedPath
-
-        class RestrictedPathlib:
-            """受限的 pathlib 模块包装器"""
-            def __init__(self):
-                object.__setattr__(self, '_module', _RestrictedPathlibModule())
-
-            def __getattr__(self, name):
-                return getattr(self._module, name)
-
-            def __setattr__(self, name, value):
-                raise AttributeError("不能修改 pathlib 模块")
-
-        # 创建受限的 os 模块
-        class RestrictedOS:
-            """受限的 os 模块，只禁用真正危险的函数，其他函数会进行路径重定向"""
-
-            def _redirect_path_args(self, args):
-                """重定向函数参数中的路径"""
-                if not args:
-                    return args
-                # 将第一个参数（通常是路径）进行重定向
-                redirected = [redirect_path(args[0])] + list(args[1:])
-                return tuple(redirected)
-
-            def mkdir(self, path, *args, **kwargs):
-                """创建目录，自动重定向路径"""
-                redirected_path = str(_resolve_for_operation(path, 'write'))
-                return os.mkdir(redirected_path, *args, **kwargs)
-
-            def makedirs(self, path, *args, **kwargs):
-                """递归创建目录，自动重定向路径"""
-                redirected_path = str(_resolve_for_operation(path, 'write'))
-                return os.makedirs(redirected_path, *args, **kwargs)
-
-            def remove(self, path, *args, **kwargs):
-                """删除文件，自动重定向路径"""
-                redirected_path = str(_resolve_for_operation(path, 'delete'))
-                return os.remove(redirected_path, *args, **kwargs)
-
-            def unlink(self, path, *args, **kwargs):
-                """删除文件，自动重定向路径"""
-                redirected_path = str(_resolve_for_operation(path, 'delete'))
-                return os.unlink(redirected_path, *args, **kwargs)
-
-            def rmdir(self, path, *args, **kwargs):
-                """删除目录，自动重定向路径"""
-                redirected_path = str(_resolve_for_operation(path, 'delete'))
-                return os.rmdir(redirected_path, *args, **kwargs)
-
-            def removedirs(self, path, *args, **kwargs):
-                """递归删除目录，自动重定向路径"""
-                redirected_path = str(_resolve_for_operation(path, 'delete'))
-                return os.removedirs(redirected_path, *args, **kwargs)
-
-            def listdir(self, path):
-                """列出目录内容，自动重定向路径"""
-                redirected_path = redirect_path(path)
-                return os.listdir(redirected_path)
-
-            def stat(self, path, *args, **kwargs):
-                """获取文件状态，自动重定向路径"""
-                redirected_path = redirect_path(path)
-                return os.stat(redirected_path, *args, **kwargs)
-
-            def lstat(self, path, *args, **kwargs):
-                """获取文件状态（不跟随符号链接），自动重定向路径"""
-                redirected_path = redirect_path(path)
-                return os.lstat(redirected_path, *args, **kwargs)
-
-            def rename(self, src, dst, *args, **kwargs):
-                """重命名文件，自动重定向路径并严格按顺序检查权限"""
-                src_redirected = str(_resolve_for_operation(src, 'read'))
-                dst_redirected = str(_resolve_for_operation(dst, 'write'))
-                return os.rename(src_redirected, dst_redirected, *args, **kwargs)
-
-            def replace(self, src, dst, *args, **kwargs):
-                """替换文件，自动重定向路径并严格按顺序检查权限"""
-                src_redirected = str(_resolve_for_operation(src, 'read'))
-                dst_redirected = str(_resolve_for_operation(dst, 'write'))
-                return os.replace(src_redirected, dst_redirected, *args, **kwargs)
-
-            def renames(self, src, dst, *args, **kwargs):
-                """递归重命名文件，自动重定向路径并严格按顺序检查权限"""
-                src_redirected = str(_resolve_for_operation(src, 'read'))
-                dst_redirected = str(_resolve_for_operation(dst, 'write'))
-                return os.renames(src_redirected, dst_redirected, *args, **kwargs)
-
-            def scandir(self, path='.'):
-                redirected_path = str(_resolve_for_operation(path, 'read'))
-                return os.scandir(redirected_path)
-
-            def walk(self, top, *args, **kwargs):
-                redirected_top = str(_resolve_for_operation(top, 'read'))
-                return os.walk(redirected_top, *args, **kwargs)
-
-            def open(self, path, flags, mode=0o777, *, dir_fd=None):
-                """打开文件描述符，路径仍走统一读写规则。"""
-                if dir_fd is not None:
-                    raise NotImplementedError("受限 os.open 暂不支持 dir_fd")
-
-                write_flags = (
-                    os.O_WRONLY |
-                    os.O_RDWR |
-                    os.O_APPEND |
-                    os.O_CREAT |
-                    os.O_TRUNC
-                )
-                operation = 'write' if flags & write_flags else 'read'
-                redirected_path = str(_resolve_for_operation(path, operation))
-                return os.open(redirected_path, flags, mode)
-
-            def chmod(self, path, mode, *, dir_fd=None, follow_symlinks=True):
-                if dir_fd is not None:
-                    raise NotImplementedError("受限 os.chmod 暂不支持 dir_fd")
-                redirected_path = str(_resolve_for_operation(path, 'write'))
-                return os.chmod(redirected_path, mode, follow_symlinks=follow_symlinks)
-
-            def utime(self, path, times=None, *, ns=None, dir_fd=None, follow_symlinks=True):
-                if dir_fd is not None:
-                    raise NotImplementedError("受限 os.utime 暂不支持 dir_fd")
-                redirected_path = str(_resolve_for_operation(path, 'write'))
-                kwargs = {'follow_symlinks': follow_symlinks}
-                if ns is not None:
-                    kwargs['ns'] = ns
-                    return os.utime(redirected_path, None if times is None else times, **kwargs)
-                return os.utime(redirected_path, times, **kwargs)
-
-            def truncate(self, path, length):
-                if isinstance(path, int):
-                    return os.truncate(path, length)
-                redirected_path = str(_resolve_for_operation(path, 'write'))
-                return os.truncate(redirected_path, length)
-
-            def symlink(self, src, dst, *args, **kwargs):
-                """创建符号链接，自动重定向路径"""
-                raise AttributeError("os.symlink 未开放")
-
-            def link(self, src, dst, *args, **kwargs):
-                """创建硬链接，自动重定向路径"""
-                raise AttributeError("os.link 未开放")
-
-            def __getattr__(self, name):
-                # 特殊处理 os.path 模块
-                if name == 'path':
-                    # 使用预先导入的 os.path 模块（避免递归）
-                    # 创建受限的 os.path 包装器
-                    class RestrictedOsPath:
-                        """受限的 os.path 模块，确保所有路径都经过重定向"""
-
-                        def __init__(self):
-                            object.__setattr__(self, '_module', _original_os_path)
-
-                        def exists(self, path):
-                            """检查路径是否存在，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.exists(redirected_path)
-
-                        def isfile(self, path):
-                            """检查是否是文件，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.isfile(redirected_path)
-
-                        def isdir(self, path):
-                            """检查是否是目录，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.isdir(redirected_path)
-
-                        def join(self, *paths):
-                            """连接路径，最后一个参数会被重定向"""
-                            if not paths:
-                                return ''
-                            # os.path.join 连接所有路径
-                            joined = self._module.join(*paths)
-                            # 只重定向最后一个完整路径
-                            return redirect_path(joined)
-
-                        def dirname(self, path):
-                            """获取目录名，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.dirname(redirected_path)
-
-                        def basename(self, path):
-                            """获取基础文件名（不需要重定向）"""
-                            return self._module.basename(path)
-
-                        def split(self, path):
-                            """分割路径，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.split(redirected_path)
-
-                        def splitext(self, path):
-                            """分割扩展名（不需要重定向）"""
-                            return self._module.splitext(path)
-
-                        def abspath(self, path):
-                            """获取绝对路径，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.abspath(redirected_path)
-
-                        def realpath(self, path):
-                            """获取真实路径，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.realpath(redirected_path)
-
-                        def relpath(self, path, start=None):
-                            """获取相对路径，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            if start is not None:
-                                start = redirect_path(start)
-                            return self._module.relpath(redirected_path, start)
-
-                        def isabs(self, path):
-                            """检查是否是绝对路径（不需要重定向）"""
-                            return self._module.isabs(path)
-
-                        def getsize(self, path):
-                            """获取文件大小，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.getsize(redirected_path)
-
-                        def getmtime(self, path):
-                            """获取修改时间，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.getmtime(redirected_path)
-
-                        def getatime(self, path):
-                            """获取访问时间，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.getatime(redirected_path)
-
-                        def getctime(self, path):
-                            """获取创建时间，自动重定向路径"""
-                            redirected_path = redirect_path(path)
-                            return self._module.getctime(redirected_path)
-
-                        def __getattr__(self, name):
-                            """其他方法和属性直接转发到原始模块"""
-                            return getattr(self._module, name)
-
-                        def __setattr__(self, name, value):
-                            raise AttributeError("不能修改 os.path 模块")
-
-                    return RestrictedOsPath()
-
-                if name in ['write', 'fdopen']:
-                    raise AttributeError(f"os.{name} 未开放")
-
-                # 返回原始 os 模块的属性
-                return getattr(os, name)
-
-            def __setattr__(self, name, value):
-                raise AttributeError("不能修改 os 模块")
-
-        # 在替换 sys.modules 之前，先导入所有原始模块
-        import sys as _sys
-        import tarfile as _original_tarfile
-        import zipfile as _original_zipfile
-        import io as _original_io
-        import shutil as _original_shutil
-
-        # 受限的 tarfile 模块
-        class _RestrictedTarFileClass(_original_tarfile.TarFile):
-            """受限的 TarFile 类，重定向路径"""
-            def __init__(self, name=None, mode='r', fileobj=None, *args, **kwargs):
-                # 重定向路径
-                if name is not None and fileobj is None:
-                    name = redirect_path(name)
-                super().__init__(name, mode, fileobj, *args, **kwargs)
-
-        class RestrictedTarfile:
-            """受限的 tarfile 模块，确保文件路径被重定向"""
-
-            # 将 TarFile 类作为类属性（不是方法）
-            TarFile = _RestrictedTarFileClass
-            TarFileCompat = _RestrictedTarFileClass
-
-            def open(self, name, mode='r', *args, **kwargs):
-                """打开 tarfile，自动重定向路径"""
-                redirected_name = redirect_path(name)
-                return _original_tarfile.open(redirected_name, mode, *args, **kwargs)
-
-            def is_tarfile(self, name):
-                """检查文件是否是 tarfile，自动重定向路径"""
-                redirected_name = redirect_path(name)
-                return _original_tarfile.is_tarfile(redirected_name)
-
-            def __getattr__(self, name):
-                """其他属性和方法直接返回原始值"""
-                return getattr(_original_tarfile, name)
-
-            def __setattr__(self, name, value):
-                raise AttributeError("不能修改 tarfile 模块")
-
-        # 受限的 zipfile 模块
-        class _RestrictedZipFile(_original_zipfile.ZipFile):
-            """受限的 ZipFile 类，重定向路径"""
-            def __init__(self, file, mode='r', compression=_original_zipfile.ZIP_STORED,
-                         allowZip64=True, *args, **kwargs):
-                # 重定向路径（仅当 file 是字符串路径时）
-                if isinstance(file, str):
-                    file = redirect_path(file)
-                super().__init__(file, mode, compression, allowZip64, *args, **kwargs)
-
-        class RestrictedZipfile:
-            """受限的 zipfile 模块，确保文件路径被重定向"""
-
-            # ZipFile 类作为类属性
-            ZipFile = _RestrictedZipFile
-
-            # 常量
-            ZIP_STORED = _original_zipfile.ZIP_STORED
-            ZIP_DEFLATED = _original_zipfile.ZIP_DEFLATED
-            ZIP_BZIP2 = _original_zipfile.ZIP_BZIP2
-            ZIP_LZMA = _original_zipfile.ZIP_LZMA
-
-            @staticmethod
-            def is_zipfile(filename, *args, **kwargs):
-                """检查文件是否是 zip 文件"""
-                if isinstance(filename, (str, os.PathLike)):
-                    filename = redirect_path(filename)
-                return _original_zipfile.is_zipfile(filename, *args, **kwargs)
-
-            def __getattr__(self, name):
-                """其他属性和方法直接返回原始值"""
-                return getattr(_original_zipfile, name)
-
-            def __setattr__(self, name, value):
-                raise AttributeError("不能修改 zipfile 模块")
-
-        # 受限的 io 模块（拦截 io.open）
-        class RestrictedIo:
-            """受限的 io 模块，确保 open() 使用路径重定向"""
-
-            open = restricted_open  # 使用受限的 open 函数
-            StringIO = _original_io.StringIO
-            BytesIO = _original_io.BytesIO
-            BufferedIOBase = _original_io.BufferedIOBase
-
-            def __getattr__(self, name):
-                """其他属性和方法直接返回原始值"""
-                return getattr(_original_io, name)
-
-            def __setattr__(self, name, value):
-                raise AttributeError("不能修改 io 模块")
-
-        class RestrictedShutil:
-            """受限的 shutil 模块，确保读写路径遵守同一套规则"""
-
-            def copy(self, src, dst, *args, **kwargs):
-                src = str(_resolve_for_operation(src, 'read'))
-                dst = str(_resolve_for_operation(dst, 'write'))
-                return _original_shutil.copy(src, dst, *args, **kwargs)
-
-            def copy2(self, src, dst, *args, **kwargs):
-                src = str(_resolve_for_operation(src, 'read'))
-                dst = str(_resolve_for_operation(dst, 'write'))
-                return _original_shutil.copy2(src, dst, *args, **kwargs)
-
-            def copytree(self, src, dst, *args, **kwargs):
-                src = str(_resolve_for_operation(src, 'read'))
-                dst = str(_resolve_for_operation(dst, 'write'))
-                return _original_shutil.copytree(src, dst, *args, **kwargs)
-
-            def move(self, src, dst, *args, **kwargs):
-                src = str(_resolve_for_operation(src, 'read'))
-                dst = str(_resolve_for_operation(dst, 'write'))
-                return _original_shutil.move(src, dst, *args, **kwargs)
-
-            def rmtree(self, path, *args, **kwargs):
-                path = str(_resolve_for_operation(path, 'delete'))
-                return _original_shutil.rmtree(path, *args, **kwargs)
-
-            def __getattr__(self, name):
-                return getattr(_original_shutil, name)
-
-            def __setattr__(self, name, value):
-                raise AttributeError("不能修改 shutil 模块")
-
-        # 替换 builtins.open，让所有第三方库都使用受限的 open 函数
-        _original_builtins_open = builtins.open
-        builtins.open = restricted_open
-
-        safe_globals = {
-            '__builtins__': builtins,
-            '__name__': '__main__',
-            '__file__': source_name,
-            'print': print,
-            'open': restricted_open,
-            'range': range,
-            'len': len,
-            'str': str,
-            'int': int,
-            'float': float,
-            'list': list,
-            'dict': dict,
-            'tuple': tuple,
-            'set': set,
-            'bool': bool,
-            'type': type,
-        }
-
-        # 添加受限的系统模块
-        safe_globals['sys'] = sys
-
-        # 创建受限的 os 模块实例
-        restricted_os = RestrictedOS()
-        safe_globals['os'] = restricted_os
-
-        # 同时也需要替换 pathlib 模块
-        safe_globals['Path'] = _RestrictedPath
-        restricted_pathlib = RestrictedPathlib()
-        safe_globals['pathlib'] = restricted_pathlib
-
-        # 创建受限的文件相关模块实例
-        restricted_tarfile = RestrictedTarfile()
-        restricted_zipfile = RestrictedZipfile()
-        restricted_io = RestrictedIo()
-        restricted_shutil = RestrictedShutil()
-
-        safe_globals['tarfile'] = restricted_tarfile
-        safe_globals['zipfile'] = restricted_zipfile
-        safe_globals['io'] = restricted_io
-        safe_globals['shutil'] = restricted_shutil
-
-        # 将受限模块注入到 sys.modules，防止 import 绕过限制
-        # 注意：这需要在当前进程中修改 sys.modules
-        _original_os = _sys.modules.get('os')
-        _sys.modules['os'] = restricted_os
-
-        _original_pathlib = _sys.modules.get('pathlib')
-        _sys.modules['pathlib'] = restricted_pathlib
-
-        _original_tarfile_module = _sys.modules.get('tarfile')
-        _sys.modules['tarfile'] = restricted_tarfile
-
-        _original_zipfile_module = _sys.modules.get('zipfile')
-        _sys.modules['zipfile'] = restricted_zipfile
-
-        _original_io_module = _sys.modules.get('io')
-        _sys.modules['io'] = restricted_io
-
-        _original_shutil_module = _sys.modules.get('shutil')
-        _sys.modules['shutil'] = restricted_shutil
-
-        # 设置 sys.argv
-        if script_path:
-            # 脚本执行：argv[0] = 脚本名，argv[1:] = 参数
-            safe_globals['sys'].argv = [script_path] + script_args
-        else:
-            # 代码字符串执行：argv[0] = '-c'
-            safe_globals['sys'].argv = ['-c'] + script_args
-
-        # 创建局部命名空间
-        locals_dict = safe_globals.copy()
-
-        # 执行代码
         with OutputCapture() as output_capture:
+            # 切换工作目录
+            os.chdir(root_dir)
+            print("开始执行 Python 任务")
+            print("工作目录: /")
+            if script_path:
+                print("执行方式: script")
+                print("脚本路径: {0}".format(script_path))
+            else:
+                print("执行方式: inline")
+
+            # 设置超时信号
+            def timeout_handler(signum, frame):
+                raise TimeoutError("代码执行超时（超过 {0} 秒）".format(timeout))
+
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout)
+
+            source_name = script_path if script_path else '<sandbox>'
+
+            # 编译代码
+            try:
+                compiled_code = compile(code, source_name, 'exec')
+            except SyntaxError as e:
+                output_capture.append_stdout("语法错误: {0}".format(str(e)))
+                result_queue.put(ExecuteResult(
+                    output=output_capture.get_output(),
+                    exit_code=-1,
+                    error=str(e)
+                ))
+                return
+
+            # 准备执行环境
+            import builtins
+
+            # 预先导入 os.path（避免在 RestrictedOS.__getattr__ 中导入导致递归）
+            import os.path as _original_os_path
+
+            # 创建受限制的 open 函数
+            original_open = open
+            root_path = Path(root_dir).resolve()
+            writable_resolved = [Path(p).resolve() for p in writable_paths]
+            readable_resolved = [Path(p).resolve() for p in readable_paths]
+
+            def _is_within(path_obj, parent):
+                try:
+                    path_obj.relative_to(parent)
+                    return True
+                except ValueError:
+                    return False
+
+            def _resolve_path(path_str):
+                file_path = Path(path_str).expanduser()
+                if file_path.is_absolute():
+                    return file_path.resolve()
+                return (root_path / file_path).resolve()
+
+            def _classify_path(resolved_path):
+                if _is_within(resolved_path, root_path):
+                    return 'root'
+                for wp in writable_resolved:
+                    if _is_within(resolved_path, wp):
+                        return 'writable'
+                for rp in readable_resolved:
+                    if _is_within(resolved_path, rp):
+                        return 'readable'
+                return 'other'
+
+            def _remap_external_absolute(file_path):
+                return root_path / file_path.relative_to(file_path.anchor)
+
+            def _redirect_for_read(path_str):
+                file_path = Path(path_str).expanduser()
+                if file_path.is_absolute():
+                    resolved = file_path.resolve()
+                    if _classify_path(resolved) == 'other':
+                        return _remap_external_absolute(file_path)
+                    return resolved
+                return root_path / file_path
+
+            def _redirect_for_write(path_str):
+                file_path = Path(path_str).expanduser()
+                if file_path.is_absolute():
+                    resolved = file_path.resolve()
+                    location = _classify_path(resolved)
+                    if location == 'readable':
+                        raise PermissionError("只读路径，禁止写入: {0}".format(path_str))
+                    if location == 'other':
+                        return _remap_external_absolute(file_path)
+                    return resolved
+                return root_path / file_path
+
+            def _resolve_for_operation(path_str, operation):
+                if operation == 'read':
+                    return _redirect_for_read(path_str)
+                if operation in ('write', 'delete'):
+                    return _redirect_for_write(path_str)
+                raise ValueError("不支持的操作类型: {0}".format(operation))
+
+            def redirect_path(path_str):
+                """
+                读取类路径使用统一重定向规则：
+                - 相对路径落到 root_dir
+                - root_dir/readable/writable 内保持原位
+                - 其他绝对路径映射到 root_dir
+                """
+                return str(_resolve_for_operation(path_str, 'read'))
+
+            def restricted_open(file, mode='r', *args, **kwargs):
+                """
+                受限的 open 函数，严格按照顺序检查：
+
+                路径处理顺序：
+                1. 相对路径：自动添加 root_dir 前缀
+
+                绝对路径检查顺序：
+                2. 在root_dir内：可读写
+                3. 只读白名单（readable_paths）内：只读
+                4. 读写白名单（writable_paths）内：可读写
+                5. 其他绝对路径：自动添加 root_dir 前缀后可读写
+                """
+                mode_str = mode if isinstance(mode, str) else 'r'
+                is_writing = any(c in mode_str for c in ['w', 'a', '+', 'x'])
+                operation = 'write' if is_writing else 'read'
+                final_path = str(_resolve_for_operation(file, operation))
+
+                # 写入模式下自动创建父目录
+                if is_writing and final_path:
+                    parent_dir = Path(final_path).parent
+                    if not parent_dir.exists():
+                        parent_dir.mkdir(parents=True, exist_ok=True)
+
+                return original_open(final_path, mode, *args, **kwargs)
+
+            # 创建受限的 Path 类
+            class _RestrictedPath(Path):
+                """受限的 Path 类，所有操作都经过权限检查"""
+                def __new__(cls, *args, **kwargs):
+                    # 创建 Path 实例
+                    if len(args) == 1 and isinstance(args[0], _RestrictedPath):
+                        return args[0]
+                    return super(_RestrictedPath, cls).__new__(cls, *args, **kwargs)
+
+                def open(self, mode='r', *args, **kwargs):
+                    return restricted_open(str(self), mode, *args, **kwargs)
+
+                def write_text(self, data, *args, **kwargs):
+                    with self.open('w', *args, **kwargs) as f:
+                        return f.write(data)
+
+                def read_text(self, *args, **kwargs):
+                    with self.open('r', *args, **kwargs) as f:
+                        return f.read()
+
+                def write_bytes(self, data, *args, **kwargs):
+                    with self.open('wb', *args, **kwargs) as f:
+                        return f.write(data)
+
+                def read_bytes(self, *args, **kwargs):
+                    with self.open('rb', *args, **kwargs) as f:
+                        return f.read()
+
+                def exists(self):
+                    return os.path.exists(redirect_path(str(self)))
+
+                def is_file(self):
+                    return os.path.isfile(redirect_path(str(self)))
+
+                def is_dir(self):
+                    return os.path.isdir(redirect_path(str(self)))
+
+                def stat(self, *args, **kwargs):
+                    return os.stat(redirect_path(str(self)), *args, **kwargs)
+
+                def lstat(self, *args, **kwargs):
+                    return os.lstat(redirect_path(str(self)), *args, **kwargs)
+
+                def mkdir(self, mode=0o777, parents=False, exist_ok=False):
+                    target = str(_resolve_for_operation(str(self), 'write'))
+                    if parents:
+                        return os.makedirs(target, mode=mode, exist_ok=exist_ok)
+                    return os.mkdir(target, mode=mode)
+
+                def rmdir(self):
+                    target = str(_resolve_for_operation(str(self), 'delete'))
+                    return os.rmdir(target)
+
+                def unlink(self, missing_ok=False):
+                    target = str(_resolve_for_operation(str(self), 'delete'))
+                    try:
+                        return os.unlink(target)
+                    except FileNotFoundError:
+                        if missing_ok:
+                            return None
+                        raise
+
+                def rename(self, target):
+                    src = str(_resolve_for_operation(str(self), 'read'))
+                    dst = str(_resolve_for_operation(str(target), 'write'))
+                    return self.__class__(os.rename(src, dst))
+
+                def replace(self, target):
+                    src = str(_resolve_for_operation(str(self), 'read'))
+                    dst = str(_resolve_for_operation(str(target), 'write'))
+                    return self.__class__(os.replace(src, dst))
+
+                def touch(self, mode=0o666, exist_ok=True):
+                    target = str(_resolve_for_operation(str(self), 'write'))
+                    parent_dir = Path(target).parent
+                    if not parent_dir.exists():
+                        parent_dir.mkdir(parents=True, exist_ok=True)
+                    if exist_ok:
+                        try:
+                            os.utime(target, None)
+                        except OSError:
+                            pass
+                        else:
+                            return None
+
+                    flags = os.O_CREAT | os.O_WRONLY
+                    if not exist_ok:
+                        flags |= os.O_EXCL
+                    fd = os.open(target, flags, mode)
+                    os.close(fd)
+                    return None
+
+                def chmod(self, mode, *, follow_symlinks=True):
+                    target = str(_resolve_for_operation(str(self), 'write'))
+                    return os.chmod(target, mode, follow_symlinks=follow_symlinks)
+
+                def symlink_to(self, target_is_directory=False):
+                    raise AttributeError("Path.symlink_to 未开放")
+
+                def hardlink_to(self, target):
+                    raise AttributeError("Path.hardlink_to 未开放")
+
+                def iterdir(self):
+                    target = str(_resolve_for_operation(str(self), 'read'))
+                    for entry in os.listdir(target):
+                        yield self.__class__(str(Path(target) / entry))
+
+                def glob(self, pattern):
+                    target = Path(_resolve_for_operation(str(self), 'read'))
+                    for entry in target.glob(pattern):
+                        yield self.__class__(str(entry))
+
+                def rglob(self, pattern):
+                    target = Path(_resolve_for_operation(str(self), 'read'))
+                    for entry in target.rglob(pattern):
+                        yield self.__class__(str(entry))
+
+            # 创建受限的 pathlib 模块
+            import pathlib as _original_pathlib
+
+            class _RestrictedPathlibModule:
+                """受限的 pathlib 模块"""
+                Path = _RestrictedPath
+                PurePath = _original_pathlib.PurePath
+                PosixPath = _original_pathlib.PosixPath if hasattr(_original_pathlib, 'PosixPath') else _RestrictedPath
+                WindowsPath = _original_pathlib.WindowsPath if hasattr(_original_pathlib, 'WindowsPath') else _RestrictedPath
+
+            class RestrictedPathlib:
+                """受限的 pathlib 模块包装器"""
+                def __init__(self):
+                    object.__setattr__(self, '_module', _RestrictedPathlibModule())
+
+                def __getattr__(self, name):
+                    return getattr(self._module, name)
+
+                def __setattr__(self, name, value):
+                    raise AttributeError("不能修改 pathlib 模块")
+
+            # 创建受限的 os 模块
+            class RestrictedOS:
+                """受限的 os 模块，只禁用真正危险的函数，其他函数会进行路径重定向"""
+
+                def _redirect_path_args(self, args):
+                    """重定向函数参数中的路径"""
+                    if not args:
+                        return args
+                    redirected = [redirect_path(args[0])] + list(args[1:])
+                    return tuple(redirected)
+
+                def mkdir(self, path, *args, **kwargs):
+                    redirected_path = str(_resolve_for_operation(path, 'write'))
+                    return os.mkdir(redirected_path, *args, **kwargs)
+
+                def makedirs(self, path, *args, **kwargs):
+                    redirected_path = str(_resolve_for_operation(path, 'write'))
+                    return os.makedirs(redirected_path, *args, **kwargs)
+
+                def remove(self, path, *args, **kwargs):
+                    redirected_path = str(_resolve_for_operation(path, 'delete'))
+                    return os.remove(redirected_path, *args, **kwargs)
+
+                def unlink(self, path, *args, **kwargs):
+                    redirected_path = str(_resolve_for_operation(path, 'delete'))
+                    return os.unlink(redirected_path, *args, **kwargs)
+
+                def rmdir(self, path, *args, **kwargs):
+                    redirected_path = str(_resolve_for_operation(path, 'delete'))
+                    return os.rmdir(redirected_path, *args, **kwargs)
+
+                def removedirs(self, path, *args, **kwargs):
+                    redirected_path = str(_resolve_for_operation(path, 'delete'))
+                    return os.removedirs(redirected_path, *args, **kwargs)
+
+                def listdir(self, path):
+                    return os.listdir(redirect_path(path))
+
+                def stat(self, path, *args, **kwargs):
+                    return os.stat(redirect_path(path), *args, **kwargs)
+
+                def lstat(self, path, *args, **kwargs):
+                    return os.lstat(redirect_path(path), *args, **kwargs)
+
+                def rename(self, src, dst, *args, **kwargs):
+                    src_redirected = str(_resolve_for_operation(src, 'read'))
+                    dst_redirected = str(_resolve_for_operation(dst, 'write'))
+                    return os.rename(src_redirected, dst_redirected, *args, **kwargs)
+
+                def replace(self, src, dst, *args, **kwargs):
+                    src_redirected = str(_resolve_for_operation(src, 'read'))
+                    dst_redirected = str(_resolve_for_operation(dst, 'write'))
+                    return os.replace(src_redirected, dst_redirected, *args, **kwargs)
+
+                def renames(self, src, dst, *args, **kwargs):
+                    src_redirected = str(_resolve_for_operation(src, 'read'))
+                    dst_redirected = str(_resolve_for_operation(dst, 'write'))
+                    return os.renames(src_redirected, dst_redirected, *args, **kwargs)
+
+                def scandir(self, path='.'):
+                    redirected_path = str(_resolve_for_operation(path, 'read'))
+                    return os.scandir(redirected_path)
+
+                def walk(self, top, *args, **kwargs):
+                    redirected_top = str(_resolve_for_operation(top, 'read'))
+                    return os.walk(redirected_top, *args, **kwargs)
+
+                def open(self, path, flags, mode=0o777, *, dir_fd=None):
+                    if dir_fd is not None:
+                        raise NotImplementedError("受限 os.open 暂不支持 dir_fd")
+
+                    write_flags = (
+                        os.O_WRONLY |
+                        os.O_RDWR |
+                        os.O_APPEND |
+                        os.O_CREAT |
+                        os.O_TRUNC
+                    )
+                    operation = 'write' if flags & write_flags else 'read'
+                    redirected_path = str(_resolve_for_operation(path, operation))
+                    return os.open(redirected_path, flags, mode)
+
+                def chmod(self, path, mode, *, dir_fd=None, follow_symlinks=True):
+                    if dir_fd is not None:
+                        raise NotImplementedError("受限 os.chmod 暂不支持 dir_fd")
+                    redirected_path = str(_resolve_for_operation(path, 'write'))
+                    return os.chmod(redirected_path, mode, follow_symlinks=follow_symlinks)
+
+                def utime(self, path, times=None, *, ns=None, dir_fd=None, follow_symlinks=True):
+                    if dir_fd is not None:
+                        raise NotImplementedError("受限 os.utime 暂不支持 dir_fd")
+                    redirected_path = str(_resolve_for_operation(path, 'write'))
+                    kwargs = {'follow_symlinks': follow_symlinks}
+                    if ns is not None:
+                        kwargs['ns'] = ns
+                        return os.utime(redirected_path, None if times is None else times, **kwargs)
+                    return os.utime(redirected_path, times, **kwargs)
+
+                def truncate(self, path, length):
+                    if isinstance(path, int):
+                        return os.truncate(path, length)
+                    redirected_path = str(_resolve_for_operation(path, 'write'))
+                    return os.truncate(redirected_path, length)
+
+                def symlink(self, src, dst, *args, **kwargs):
+                    raise AttributeError("os.symlink 未开放")
+
+                def link(self, src, dst, *args, **kwargs):
+                    raise AttributeError("os.link 未开放")
+
+                def __getattr__(self, name):
+                    if name == 'path':
+                        class RestrictedOsPath:
+                            """受限的 os.path 模块，确保所有路径都经过重定向"""
+
+                            def __init__(self):
+                                object.__setattr__(self, '_module', _original_os_path)
+
+                            def exists(self, path):
+                                return self._module.exists(redirect_path(path))
+
+                            def isfile(self, path):
+                                return self._module.isfile(redirect_path(path))
+
+                            def isdir(self, path):
+                                return self._module.isdir(redirect_path(path))
+
+                            def join(self, *paths):
+                                if not paths:
+                                    return ''
+                                joined = self._module.join(*paths)
+                                return redirect_path(joined)
+
+                            def dirname(self, path):
+                                return self._module.dirname(redirect_path(path))
+
+                            def basename(self, path):
+                                return self._module.basename(path)
+
+                            def split(self, path):
+                                return self._module.split(redirect_path(path))
+
+                            def splitext(self, path):
+                                return self._module.splitext(path)
+
+                            def abspath(self, path):
+                                return self._module.abspath(redirect_path(path))
+
+                            def realpath(self, path):
+                                return self._module.realpath(redirect_path(path))
+
+                            def relpath(self, path, start=None):
+                                redirected_path = redirect_path(path)
+                                if start is not None:
+                                    start = redirect_path(start)
+                                return self._module.relpath(redirected_path, start)
+
+                            def isabs(self, path):
+                                return self._module.isabs(path)
+
+                            def getsize(self, path):
+                                return self._module.getsize(redirect_path(path))
+
+                            def getmtime(self, path):
+                                return self._module.getmtime(redirect_path(path))
+
+                            def getatime(self, path):
+                                return self._module.getatime(redirect_path(path))
+
+                            def getctime(self, path):
+                                return self._module.getctime(redirect_path(path))
+
+                            def __getattr__(self, name):
+                                return getattr(self._module, name)
+
+                            def __setattr__(self, name, value):
+                                raise AttributeError("不能修改 os.path 模块")
+
+                        return RestrictedOsPath()
+
+                    if name in ['write', 'fdopen']:
+                        raise AttributeError(f"os.{name} 未开放")
+
+                    return getattr(os, name)
+
+                def __setattr__(self, name, value):
+                    raise AttributeError("不能修改 os 模块")
+
+            import sys as _sys
+            import tarfile as _original_tarfile
+            import zipfile as _original_zipfile
+            import io as _original_io
+            import shutil as _original_shutil
+
+            class _RestrictedTarFileClass(_original_tarfile.TarFile):
+                """受限的 TarFile 类，重定向路径"""
+                def __init__(self, name=None, mode='r', fileobj=None, *args, **kwargs):
+                    if name is not None and fileobj is None:
+                        name = redirect_path(name)
+                    super().__init__(name, mode, fileobj, *args, **kwargs)
+
+            class RestrictedTarfile:
+                """受限的 tarfile 模块，确保文件路径被重定向"""
+                TarFile = _RestrictedTarFileClass
+                TarFileCompat = _RestrictedTarFileClass
+
+                def open(self, name, mode='r', *args, **kwargs):
+                    redirected_name = redirect_path(name)
+                    return _original_tarfile.open(redirected_name, mode, *args, **kwargs)
+
+                def is_tarfile(self, name):
+                    redirected_name = redirect_path(name)
+                    return _original_tarfile.is_tarfile(redirected_name)
+
+                def __getattr__(self, name):
+                    return getattr(_original_tarfile, name)
+
+                def __setattr__(self, name, value):
+                    raise AttributeError("不能修改 tarfile 模块")
+
+            class _RestrictedZipFile(_original_zipfile.ZipFile):
+                """受限的 ZipFile 类，重定向路径"""
+                def __init__(self, file, mode='r', compression=_original_zipfile.ZIP_STORED,
+                             allowZip64=True, *args, **kwargs):
+                    if isinstance(file, str):
+                        file = redirect_path(file)
+                    super().__init__(file, mode, compression, allowZip64, *args, **kwargs)
+
+            class RestrictedZipfile:
+                """受限的 zipfile 模块，确保文件路径被重定向"""
+                ZipFile = _RestrictedZipFile
+                ZIP_STORED = _original_zipfile.ZIP_STORED
+                ZIP_DEFLATED = _original_zipfile.ZIP_DEFLATED
+                ZIP_BZIP2 = _original_zipfile.ZIP_BZIP2
+                ZIP_LZMA = _original_zipfile.ZIP_LZMA
+
+                @staticmethod
+                def is_zipfile(filename, *args, **kwargs):
+                    if isinstance(filename, (str, os.PathLike)):
+                        filename = redirect_path(filename)
+                    return _original_zipfile.is_zipfile(filename, *args, **kwargs)
+
+                def __getattr__(self, name):
+                    return getattr(_original_zipfile, name)
+
+                def __setattr__(self, name, value):
+                    raise AttributeError("不能修改 zipfile 模块")
+
+            class RestrictedIo:
+                """受限的 io 模块，确保 open() 使用路径重定向"""
+                open = restricted_open
+                StringIO = _original_io.StringIO
+                BytesIO = _original_io.BytesIO
+                BufferedIOBase = _original_io.BufferedIOBase
+
+                def __getattr__(self, name):
+                    return getattr(_original_io, name)
+
+                def __setattr__(self, name, value):
+                    raise AttributeError("不能修改 io 模块")
+
+            class RestrictedShutil:
+                """受限的 shutil 模块，确保读写路径遵守同一套规则"""
+                def copy(self, src, dst, *args, **kwargs):
+                    src = str(_resolve_for_operation(src, 'read'))
+                    dst = str(_resolve_for_operation(dst, 'write'))
+                    return _original_shutil.copy(src, dst, *args, **kwargs)
+
+                def copy2(self, src, dst, *args, **kwargs):
+                    src = str(_resolve_for_operation(src, 'read'))
+                    dst = str(_resolve_for_operation(dst, 'write'))
+                    return _original_shutil.copy2(src, dst, *args, **kwargs)
+
+                def copytree(self, src, dst, *args, **kwargs):
+                    src = str(_resolve_for_operation(src, 'read'))
+                    dst = str(_resolve_for_operation(dst, 'write'))
+                    return _original_shutil.copytree(src, dst, *args, **kwargs)
+
+                def move(self, src, dst, *args, **kwargs):
+                    src = str(_resolve_for_operation(src, 'read'))
+                    dst = str(_resolve_for_operation(dst, 'write'))
+                    return _original_shutil.move(src, dst, *args, **kwargs)
+
+                def rmtree(self, path, *args, **kwargs):
+                    path = str(_resolve_for_operation(path, 'delete'))
+                    return _original_shutil.rmtree(path, *args, **kwargs)
+
+                def __getattr__(self, name):
+                    return getattr(_original_shutil, name)
+
+                def __setattr__(self, name, value):
+                    raise AttributeError("不能修改 shutil 模块")
+
+            _original_builtins_open = builtins.open
+            builtins.open = restricted_open
+
+            safe_globals = {
+                '__builtins__': builtins,
+                '__name__': '__main__',
+                '__file__': source_name,
+                'print': print,
+                'open': restricted_open,
+                'range': range,
+                'len': len,
+                'str': str,
+                'int': int,
+                'float': float,
+                'list': list,
+                'dict': dict,
+                'tuple': tuple,
+                'set': set,
+                'bool': bool,
+                'type': type,
+            }
+
+            safe_globals['sys'] = sys
+            restricted_os = RestrictedOS()
+            safe_globals['os'] = restricted_os
+            safe_globals['Path'] = _RestrictedPath
+            restricted_pathlib = RestrictedPathlib()
+            safe_globals['pathlib'] = restricted_pathlib
+
+            restricted_tarfile = RestrictedTarfile()
+            restricted_zipfile = RestrictedZipfile()
+            restricted_io = RestrictedIo()
+            restricted_shutil = RestrictedShutil()
+
+            safe_globals['tarfile'] = restricted_tarfile
+            safe_globals['zipfile'] = restricted_zipfile
+            safe_globals['io'] = restricted_io
+            safe_globals['shutil'] = restricted_shutil
+
+            _original_os = _sys.modules.get('os')
+            _sys.modules['os'] = restricted_os
+
+            _original_pathlib = _sys.modules.get('pathlib')
+            _sys.modules['pathlib'] = restricted_pathlib
+
+            _original_tarfile_module = _sys.modules.get('tarfile')
+            _sys.modules['tarfile'] = restricted_tarfile
+
+            _original_zipfile_module = _sys.modules.get('zipfile')
+            _sys.modules['zipfile'] = restricted_zipfile
+
+            _original_io_module = _sys.modules.get('io')
+            _sys.modules['io'] = restricted_io
+
+            _original_shutil_module = _sys.modules.get('shutil')
+            _sys.modules['shutil'] = restricted_shutil
+
+            if script_path:
+                safe_globals['sys'].argv = [script_path] + script_args
+            else:
+                safe_globals['sys'].argv = ['-c'] + script_args
+
+            locals_dict = safe_globals.copy()
             exit_code = 0
             try:
                 exec(compiled_code, locals_dict, locals_dict)
                 print("✓ 代码执行完成")
             except SystemExit as e:
-                # 正常退出
                 exit_code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
                 print("SystemExit: {0}".format(exit_code))
             except MemoryError:
                 print("✗ 内存错误")
                 exit_code = -1
-                traceback.print_exc()  # 输出完整堆栈
+                traceback.print_exc()
             except RecursionError:
                 print("✗ 递归错误")
                 exit_code = -1
-                traceback.print_exc()  # 输出完整堆栈
+                traceback.print_exc()
             except Exception as e:
-                # 执行错误
                 print("✗ 执行异常: {0}".format(type(e).__name__))
                 exit_code = 1
-                traceback.print_exc()  # 输出完整堆栈
+                traceback.print_exc()
             finally:
-                # 恢复原始的 builtins.open
                 builtins.open = _original_builtins_open
 
-                # 恢复原始的 os、pathlib、tarfile、zipfile、io、docx 模块
                 if _original_os is not None:
                     _sys.modules['os'] = _original_os
                 elif 'os' in _sys.modules:
@@ -889,17 +804,13 @@ def _execute_in_subprocess(
                 elif 'shutil' in _sys.modules:
                     del _sys.modules['shutil']
 
-        # 获取输出
-        output = output_capture.get_output()
-
-        # 发送结果
-        result_queue.put(ExecuteResult(
-            output=output,
-            exit_code=exit_code
-        ))
+            output = output_capture.get_output()
+            result_queue.put(ExecuteResult(
+                output=output,
+                exit_code=exit_code
+            ))
 
     except TimeoutError as e:
-        print("✗ 超时")
         tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
             output="执行超时: {0}\n\n{1}".format(str(e), tb_str),
@@ -907,7 +818,6 @@ def _execute_in_subprocess(
             error=str(e)
         ))
     except MemoryError as e:
-        print("✗ 内存错误")
         tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
             output="错误: 内存使用超过限制\n\n{0}".format(tb_str),
@@ -915,7 +825,6 @@ def _execute_in_subprocess(
             error=str(e)
         ))
     except RecursionError as e:
-        print("✗ 递归错误")
         tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
             output="错误: 递归深度超过限制（可能导致无限递归）\n\n{0}".format(tb_str),
@@ -923,7 +832,6 @@ def _execute_in_subprocess(
             error=str(e)
         ))
     except Exception as e:
-        print("✗ 未预期异常")
         tb_str = traceback.format_exc()
         result_queue.put(ExecuteResult(
             output="执行错误:\n{0}: {1}\n{2}".format(type(e).__name__, str(e), tb_str),
@@ -1046,8 +954,8 @@ class CodeExecutor:
             rewritten = rewritten.replace(source, target)
         return rewritten
 
-    def _debug_print(self, message: str) -> None:
-        print(self._virtualize_path_text(message))
+    def _append_debug(self, debug_logs: list[str], message: str) -> None:
+        debug_logs.append(self._virtualize_path_text(message))
 
     def _snapshot_root_files(self) -> dict[str, dict[str, object]]:
         """记录 root_dir 中文件的元信息，用于执行后给出摘要。"""
@@ -1097,7 +1005,7 @@ class CodeExecutor:
 
         return lines
 
-    def _parse_command(self, command):
+    def _parse_command(self, command, debug_logs=None):
         """
         解析命令字符串
 
@@ -1190,7 +1098,8 @@ class CodeExecutor:
                 parsed_parts = shlex.split(command)
             except ValueError as e:
                 # 如果 shlex 解析失败（如不匹配的引号），回退到简单分割
-                self._debug_print("shlex 解析失败，回退到简单分割: {0}".format(e))
+                if debug_logs is not None:
+                    self._append_debug(debug_logs, "shlex 解析失败，回退到简单分割: {0}".format(e))
                 parsed_parts = command.split()
 
             if len(parsed_parts) < 2:
@@ -1201,7 +1110,7 @@ class CodeExecutor:
 
             return None, script_path, script_args
 
-    def _read_script_file(self, script_path):
+    def _read_script_file(self, script_path, debug_logs=None):
         """
         读取脚本文件内容
 
@@ -1211,16 +1120,19 @@ class CodeExecutor:
         Returns:
             脚本内容
         """
-        self._debug_print("→ 读取脚本文件: {0}".format(script_path))
+        if debug_logs is not None:
+            self._append_debug(debug_logs, "→ 读取脚本文件: {0}".format(script_path))
 
         full_path = self._resolve_script_source_path(script_path)
 
         if not full_path.exists():
-            self._debug_print("✗ 文件不存在: {0}".format(full_path))
+            if debug_logs is not None:
+                self._append_debug(debug_logs, "✗ 文件不存在: {0}".format(full_path))
             raise FileNotFoundError(str(full_path))
 
         content = full_path.read_text(encoding='utf-8')
-        self._debug_print("✓ 文件读取成功 ({0} 字节)".format(len(content)))
+        if debug_logs is not None:
+            self._append_debug(debug_logs, "✓ 文件读取成功 ({0} 字节)".format(len(content)))
         return content
 
     def execute(self, command):
@@ -1234,12 +1146,16 @@ class CodeExecutor:
             ExecuteResponse 包含输出、退出码和截断标志
         """
         try:
+            debug_logs: list[str] = []
             # 步骤 1: 解析命令
             try:
-                code, script_path, script_args = self._parse_command(command)
+                code, script_path, script_args = self._parse_command(command, debug_logs)
             except ValueError as e:
                 return ExecuteResponse(
-                    output="命令格式错误:\n{0}".format(str(e)),
+                    output=self._merge_debug_output(
+                        debug_logs,
+                        "命令格式错误:\n{0}".format(str(e))
+                    ),
                     exit_code=-1,
                     truncated=False
                 )
@@ -1247,19 +1163,21 @@ class CodeExecutor:
             # 步骤 2: 如果是脚本文件，读取内容
             if script_path:
                 try:
-                    code = self._read_script_file(script_path)
+                    code = self._read_script_file(script_path, debug_logs)
                 except FileNotFoundError as e:
                     return ExecuteResponse(
-                        output=self._virtualize_path_text(
+                        output=self._merge_debug_output(
+                            debug_logs,
                             "错误: 脚本文件不存在: {0}\n详细信息: {1}".format(script_path, str(e))
                         ),
                         exit_code=-1,
                         truncated=False
                     )
                 except Exception as e:
-                    self._debug_print("✗ 读取文件失败")
+                    self._append_debug(debug_logs, "✗ 读取文件失败")
                     return ExecuteResponse(
-                        output=self._virtualize_path_text(
+                        output=self._merge_debug_output(
+                            debug_logs,
                             "错误: 读取脚本文件失败: {0}\n详细信息: {1}".format(script_path, str(e))
                         ),
                         exit_code=-1,
@@ -1270,9 +1188,9 @@ class CodeExecutor:
             code = code.strip()
 
             if not code:
-                self._debug_print("✗ 代码为空")
+                self._append_debug(debug_logs, "✗ 代码为空")
                 return ExecuteResponse(
-                    output="错误: 没有提供要执行的代码",
+                    output=self._merge_debug_output(debug_logs, "错误: 没有提供要执行的代码"),
                     exit_code=-1,
                     truncated=False
                 )
@@ -1321,15 +1239,15 @@ class CodeExecutor:
                 result = result_queue.get()
             else:
                 # 子进程异常退出但没有返回结果
-                self._debug_print("✗ 进程异常退出")
+                self._append_debug(debug_logs, "✗ 进程异常退出")
                 return ExecuteResponse(
-                    output="错误: 子进程异常退出，没有返回结果",
+                    output=self._merge_debug_output(debug_logs, "错误: 子进程异常退出，没有返回结果"),
                     exit_code=-1,
                     truncated=False
                 )
 
             # 步骤 4: 检查输出长度并截断
-            output = self._virtualize_path_text(result.output)
+            output = self._merge_debug_output(debug_logs, result.output)
             after_file_snapshot = self._snapshot_root_files()
             summary_lines = [
                 "执行结束: exit_code={0}".format(result.exit_code),
@@ -1354,15 +1272,25 @@ class CodeExecutor:
 
         except Exception as e:
             # 捕获任何未预期的异常
-            self._debug_print("✗ 系统异常")
+            debug_logs = locals().get("debug_logs", [])
+            self._append_debug(debug_logs, "✗ 系统异常")
             import traceback
             return ExecuteResponse(
-                output=self._virtualize_path_text(
+                output=self._merge_debug_output(
+                    debug_logs,
                     "系统异常: {0}\n{1}".format(str(e), traceback.format_exc())
                 ),
                 exit_code=-1,
                 truncated=False
             )
+
+    def _merge_debug_output(self, debug_logs: list[str], output: str) -> str:
+        sections = []
+        if debug_logs:
+            sections.append("\n".join(debug_logs))
+        if output:
+            sections.append(self._virtualize_path_text(output))
+        return "\n".join(sections)
 
 
 if __name__ == '__main__':
