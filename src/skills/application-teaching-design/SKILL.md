@@ -5,7 +5,13 @@ description: 生成可直接解析、可校验、可适配前端导入写入接�
 
 # 课程设计最终 JSON 生成
 
-## 任务目标
+## 1. 文档定位
+
+本手册用于规范课程设计最终 JSON 的生成、校验、修正与交付过程。
+
+本 skill 的核心要求是始终围绕 `references/schema.json` 工作；`references/schema.json` 是课程设计最终 JSON 的唯一结构基准，任何字段命名、层级、类型、必填项、数组形式与约束解释都必须以它为准。
+
+## 2. 任务目标
 
 你的目标不是解释思路，而是直接产出最终 JSON。
 
@@ -13,22 +19,108 @@ description: 生成可直接解析、可校验、可适配前端导入写入接�
 - 严格符合 `references/schema.json`
 - 面向解析、校验、前端回填和导入接口映射
 - 所有结构字段都以 schema 定义的对象、数组、整数或字符串类型输出
+- 最终交付物必须是通过校验的 JSON 文件；未通过校验的内容不得作为最终结果
 
-## 关联文件
+## 3. 职责边界
 
-- `references/schema.json`
-  - 最终输出的唯一结构基准
-  - 需要确认字段结构、类型、必填项、数组形式、枚举值时，优先看这个文件
-- `scripts/validate_json.py`
-  - 本技能的校验脚本
-  - 生成结果后必须用它校验 schema 合法性和业务约束
-  - 只有校验通过，结果才算完成
-  - 用法：`python3 /skills/application-teaching-design/scripts/validate_json.py /to/result.json`
+本 skill 负责以下事项：
+- 基于用户输入、附件与上下文生成课程设计最终 JSON
+- 按 `references/schema.json` 进行结构化映射
+- 执行 `scripts/validate_json.py` 校验最终 JSON
+- 在校验失败时继续修正 JSON，直到通过校验
+- 在需要交付时按约定路径落盘最终 JSON
 
-使用顺序：
-- 先按本 `SKILL.md` 理解生成规则与前端口径
-- 再以 `references/schema.json` 约束最终结构
-- 产出 JSON 后必须用 `scripts/validate_json.py` 校验，通过后才算完成
+本 skill 不负责以下事项：
+- 替代上层提示词决定是否需要追问用户
+- 绕过 schema 自行发明字段、层级或兼容格式
+- 以旧版扁平 JSON、自然语言提纲或非 schema 结构直接作为最终交付物
+- 在校验未通过的情况下宣布完成
+
+上述事项由上层提示词负责；一旦进入最终课程设计 JSON 生成阶段，凡涉及结构、字段、脚本校验与输出文件要求，均以本手册为准。
+
+## 4. 交付物与默认路径
+
+默认交付物如下：
+- 最终文件：`/output/teaching-design/<文件名>.json`
+
+路径要求如下：
+- `/output/teaching-design/` 指当前任务工作目录下的输出目录，不是技能目录
+- 最终 JSON 默认写入 `/output/teaching-design/`
+- 不得写入技能目录或其他未约定路径
+
+## 5. 总体执行原则
+
+执行本 skill 时，必须遵守以下原则：
+- 在首次生成最终 JSON 之前，必须完整阅读本 skill 文档以及本 skill 明确要求的相关参考文件；不得未读完规则就开始生成
+- 唯一主流程必须是：按 schema 生成 JSON -> 校验 JSON -> 校验通过后交付最终结果
+- 不允许绕过 `references/schema.json` 凭记忆输出旧版字段、扁平字段或自定义层级
+- 不允许把未通过校验的 JSON 当作“基本完成”“可先导入版本”或“临时最终结果”
+- 校验失败时，必须立即停止交付，回到 JSON 内容本身继续修正，再重新执行校验
+- 若校验结果提示缺少必填字段、出现额外字段、类型错误、枚举错误、结构层级错误或业务约束错误，必须修正到通过为止
+- 不允许输出与 schema 不一致但“语义上差不多”的兼容格式，例如将 `课程名称` 直接放在顶层、将 `教学目标` 替代 `学习目标`、将 `任务序列` 放在顶层替代 `活动序列`
+- 不允许把自然语言提纲、半结构化草稿、旧格式 JSON 或附件识别结果直接当作最终 JSON 交付
+
+## 6. 关联文件与脚本使用规范
+
+执行本 skill 时，必须按以下顺序读取参考资源并调用脚本。
+
+### 6.1 结构基准文件
+
+资源：`references/schema.json`
+
+执行要求：
+- 任何需要确认字段结构、类型、必填项、数组形式、枚举值、对象层级、附加字段限制的任务，必须先读取该文件
+- 最终输出结构必须逐项对齐该文件，不允许凭经验简化
+
+### 6.2 校验脚本
+
+脚本：`scripts/validate_json.py`
+
+执行要求：
+- 在交付最终 JSON 之前，必须先执行该脚本校验结果
+- 该脚本负责校验 schema 合法性与业务约束
+- 校验不通过时，必须立即停止交付，并回到 JSON 内容继续修改
+- 只有校验通过，结果才算完成
+
+标准命令：
+
+```bash
+python /skills/application-teaching-design/scripts/validate_json.py /output/teaching-design/result.json
+```
+
+## 7. 脚本调用强制规范
+
+生成最终结果时，必须执行本 skill 提供的校验脚本。
+
+### 7.1 唯一允许的标准执行方式
+
+```bash
+python /skills/application-teaching-design/scripts/validate_json.py /output/teaching-design/result.json
+```
+
+### 7.2 参数规则
+
+- `validate_json.py` 接受待校验 JSON 文件路径
+- 输入必须是实际文件路径，不接受内联内容、stdin、字符串拼装内容或临时对象
+
+### 7.3 明确禁止事项
+
+禁止以下做法：
+- 不经 `validate_json.py` 校验就直接交付最终 JSON
+- 只口头声称“已符合 schema”但未实际执行校验脚本
+- 使用旧版字段结构、扁平结构或自定义结构替代 `references/schema.json`
+- 在校验失败后不修改 JSON 本体，而是仅追加解释说明继续交付
+- 把校验报错中的“required property”“additional properties”“type error”“enum error”解释成可以忽略的兼容差异
+
+错误示例：
+
+```bash
+# 错误：未校验直接交付
+echo 'deliver result without validation'
+
+# 错误：把扁平旧字段 JSON 当作最终结果
+echo '{"课程名称":"示例课程","任务序列":[]}' > /output/teaching-design/result.json
+```
 
 ## 输入处理原则
 
