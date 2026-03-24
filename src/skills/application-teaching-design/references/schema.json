@@ -88,8 +88,9 @@
     "learningLevels": {
       "type": "array",
       "minItems": 1,
+      "maxItems": 1,
       "uniqueItems": true,
-      "description": "学习水平数组。前端勾选框字段，允许多选，但至少选择 1 项，不可重复。",
+      "description": "学习水平数组。取值仅限“记忆”“理解”“运用”；三者有高低层次，若同一知识点同时匹配多个水平，只保留最高的那 1 项。",
       "items": {
         "$ref": "#/$defs/learningLevel"
       }
@@ -117,7 +118,7 @@
         },
         "学习水平": {
           "$ref": "#/$defs/learningLevels",
-          "description": "该知识点对应的学习水平数组，可多选。"
+          "description": "该知识点对应的学习水平数组。若同一知识点同时匹配“记忆”“理解”“运用”中的多个水平，只保留最高的那 1 项。"
         },
         "说明": {
           "type": "string",
