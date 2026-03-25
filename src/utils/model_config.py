@@ -10,22 +10,6 @@ def _is_truthy(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _thinking_control_kwargs(model: str | None) -> dict[str, Any]:
-    """Return provider-specific switches that disable thinking for a model."""
-    model_name = str(model or "").strip().lower()
-
-    if model_name.startswith("deepseek"):
-        return {"extra_body": {"enable_thinking": False}}
-
-    if model_name.startswith("minimax"):
-        return {"extra_body": {"reasoning_split": True}}
-
-    if model_name.startswith("kimi"):
-        return {"thinking": {"type": "disabled"}}
-
-    return {}
-
-
 def get_model_init_kwargs(*, streaming: bool, temperature: float = 0.0) -> dict[str, Any]:
     """Build common init kwargs for chat models.
 
@@ -46,6 +30,6 @@ def get_model_init_kwargs(*, streaming: bool, temperature: float = 0.0) -> dict[
 
     provider = os.getenv("L_MODEL_PROVIDER")
     if provider == "openai" and not _is_truthy(os.getenv("L_MODEL_ENABLE_THINKING")):
-        kwargs.update(_thinking_control_kwargs(kwargs["model"]))
+        kwargs["extra_body"] = {"enable_thinking": False}
 
     return kwargs
