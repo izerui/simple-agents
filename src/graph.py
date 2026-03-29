@@ -11,7 +11,6 @@ import os
 logger = logging.getLogger(__name__)
 
 from langchain.agents.middleware import ToolCallLimitMiddleware
-from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
 from langchain_core.stores import InMemoryStore
 from langgraph_sdk import Auth
@@ -30,22 +29,17 @@ from src.tools.fetch import fetch_url
 from src.tools.think import think_tool
 from src.utils.model_config import get_model_init_kwargs
 from src.utils._library_download import install_pip_if_needed
+from src.utils.dynamic_chat_model import DynamicChatModel
 from src.utils.util import get_backend_per_thread
 
-# Model - 使用环境变量配置
-# 支持的 providers: openai, anthropic, qwq, qwen, deepseek 等
-# 可通过 configurable_fields 运行时切换模型
-chat_model = init_chat_model(
-    **get_model_init_kwargs(streaming=True, temperature=0.0),
-    timeout=600,  # 超时 10 分钟
-    max_retries=3,  # 最多重试 3 次
-    configurable_fields=("model", "model_provider", "base_url", "api_key"),  # 支持运行时切换
-    # use_responses_api=True
+# Model - 使用 BaseChatModel 代理保持 deepagents 兼容，同时支持运行时切换
+chat_model = DynamicChatModel(
+    default_kwargs={
+        **get_model_init_kwargs(streaming=True, temperature=0.0),
+        "timeout": 600,  # 超时 10 分钟
+        "max_retries": 3,  # 最多重试 3 次
+    }
 )
-
-# 设置 model profile，作为 MODEL_MAX_TOKENS 映射表之外模型的 fallback
-max_input_tokens = int(os.getenv('L_MODEL_MAX_INPUT_TOKENS', '80000'))
-chat_model.profile = {"max_input_tokens": max_input_tokens}  # type: ignore[assignment]
 
 # 创建自定义工具限制中间件
 def cus_tool_limiter(tool_name: str, run_limit: int) -> ToolCallLimitMiddleware:
