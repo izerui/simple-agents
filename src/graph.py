@@ -29,7 +29,7 @@ from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_url
 from src.tools.think import think_tool
 from src.utils.model_config import get_model_init_kwargs
-from src.utils._library_download import install_pip_if_needed
+from src.utils.library_download import install_pip_if_needed
 from src.utils.dynamic_chat_model import DynamicChatModel
 from src.utils.util import get_backend_per_thread
 
