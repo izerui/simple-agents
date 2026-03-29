@@ -19,6 +19,65 @@ def test_profile_uses_default_model_mapping():
     assert model.profile == {"max_input_tokens": 80000}
 
 
+def test_profile_prefers_runtime_max_input_tokens_over_model_mapping():
+    model = DynamicChatModel(
+        default_kwargs={
+            "model": "qwen3-max",
+            "model_provider": "openai",
+            "streaming": True,
+        }
+    )
+
+    profile = model._get_runtime_profile_for_config(
+        {"configurable": {"model": "deepseek-v3.2", "max_input_tokens": 123456}}
+    )
+
+    assert profile == {"max_input_tokens": 123456}
+
+
+def test_profile_uses_runtime_model_mapping_when_model_is_passed():
+    model = DynamicChatModel(
+        default_kwargs={
+            "model": "qwen3-max",
+            "model_provider": "openai",
+            "streaming": True,
+        }
+    )
+
+    profile = model._get_runtime_profile_for_config({"configurable": {"model": "deepseek-v3.2"}})
+
+    assert profile == {"max_input_tokens": 98304}
+
+
+def test_profile_uses_default_model_mapping_when_runtime_model_missing():
+    model = DynamicChatModel(
+        default_kwargs={
+            "model": "deepseek-v3.2",
+            "model_provider": "openai",
+            "streaming": True,
+        }
+    )
+
+    profile = model._get_runtime_profile_for_config({"configurable": {}})
+
+    assert profile == {"max_input_tokens": 98304}
+
+
+def test_profile_falls_back_to_env_limit_when_model_not_mapped(monkeypatch):
+    monkeypatch.setenv("L_MODEL_MAX_INPUT_TOKENS", "65000")
+    model = DynamicChatModel(
+        default_kwargs={
+            "model": "unknown-model",
+            "model_provider": "openai",
+            "streaming": True,
+        }
+    )
+
+    profile = model._get_runtime_profile_for_config({"configurable": {"model": "unknown-model"}})
+
+    assert profile == {"max_input_tokens": 65000}
+
+
 def test_cache_key_changes_with_runtime_model():
     model = DynamicChatModel(
         default_kwargs={

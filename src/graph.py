@@ -23,6 +23,7 @@ from src.middleware.fix_dangling_tool_messages import FixDanglingToolMessagesMid
 from src.middleware.suggested_questions import SuggestedQuestionsMiddleware
 from src.middleware.system_prompt import SystemPromptMiddleware
 from src.middleware.dynamic_schema_tools import DynamicSchemaToolsMiddleware
+from src.middleware.summarization_status import SummarizationStatusMiddleware
 from src.prompts import RESEARCH_AGENT_INSTRUCTIONS, MAIN_AGENT_INSTRUCTIONS
 from src.tools.converts import convert_to_markdown
 from src.tools.fetch import fetch_url
@@ -101,6 +102,7 @@ agent = create_deep_agent(
     middleware=[
         SystemPromptMiddleware(default_system_prompt=MAIN_AGENT_INSTRUCTIONS),  # 从输入中提取 system message
         DynamicSchemaToolsMiddleware(),  # 通过 config.configurable.dynamic_tools 为当前 run 动态追加 schema 工具
+        SummarizationStatusMiddleware(),  # 打印当前上下文占用情况，便于观察自动压缩时机
         upload_files,
         StreamingToolCallFixMiddleware(),  # 修复流式输出工具调用问题，必须放在第一个
         FixDanglingToolMessagesMiddleware(),  # 修复手动停止工具调用后 有tool_calls 但是没有 tool 的消息

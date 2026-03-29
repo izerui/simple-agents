@@ -248,7 +248,10 @@ class DynamicChatModel(BaseChatModel):
             yield chunk
 
     def _get_runtime_profile(self) -> dict[str, int]:
-        configurable = self._get_configurable()
+        return self._get_runtime_profile_for_config({"configurable": self._get_configurable()})
+
+    def _get_runtime_profile_for_config(self, config: RunnableConfig | dict[str, Any] | None) -> dict[str, int]:
+        configurable = self._get_configurable(config if isinstance(config, dict) else config)
 
         max_input_tokens = configurable.get("max_input_tokens")
         if isinstance(max_input_tokens, int):
