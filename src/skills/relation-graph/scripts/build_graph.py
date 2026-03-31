@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 import uuid
@@ -30,15 +31,44 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("graph", help="Path to the markdown graph table file.")
     parser.add_argument(
         "--output",
-        help="Path to the final result JSON. Defaults to /output/result.json.",
+        help=(
+            "Path to the final result JSON. If omitted, defaults to /output/result.json "
+            "or the next available /output/result-N.json when the base file already exists."
+        ),
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print output JSON.")
     return parser
 
 
+RESULT_FILE_PATTERN = re.compile(r"^result(?:-(\d+))?\.json$")
+
+
+def next_available_result_path(output_dir: Path) -> Path:
+    base_path = output_dir / "result.json"
+    if not base_path.exists():
+        return base_path
+
+    used_indices = {1}
+    for child in output_dir.iterdir():
+        if not child.is_file():
+            continue
+        match = RESULT_FILE_PATTERN.match(child.name)
+        if not match:
+            continue
+        suffix = match.group(1)
+        used_indices.add(1 if suffix is None else int(suffix))
+
+    candidate = 2
+    while candidate in used_indices:
+        candidate += 1
+    return output_dir / f"result-{candidate}.json"
+
+
 def resolve_output_path(raw_output: str | None) -> Path:
     if raw_output is None:
-        return Path("/output/result.json")
+        output_dir = Path("/output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return next_available_result_path(output_dir)
     return Path(raw_output).resolve()
 
 
