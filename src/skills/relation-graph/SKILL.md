@@ -82,8 +82,7 @@ description: `graph.md` 是知识建模图生成与编辑的唯一文件。适�
 
 执行要求：
 - 在生成最终结果 JSON 之前，必须先执行该脚本
-- 该脚本先做结构与字段硬校验（表结构、字段合法性、父子引用），失败立即报错退出
-- 硬校验通过后，脚本自动修复布局坐标：消除子树级别的重叠、保证最小间距、整体居中，并将修正后的坐标直接写回 `graph.md`
+- 该脚本做结构与字段硬校验（表结构、字段合法性、父子引用），失败立即报错退出
 - 该脚本校验失败时，必须先修正 `graph.md`，否则不得进入后续步骤
 
 标准命令：
@@ -137,7 +136,7 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 ### 7.1 唯一允许的标准执行方式
 
 ```bash
-# 1. 校验 graph.md 并自动修复布局坐标（直接写回 graph.md）
+# 1. 校验 graph.md
 python /skills/relation-graph/scripts/validate_graph.py /output/graph.md
 
 # 2. 生成最终结果 JSON
@@ -234,6 +233,30 @@ echo '{}' > /output/result.json
   - `并列`
   - `是前提`
   - `支持`
+
+### 8.3.1 关系语义与箭头方向规则
+
+**包含类关系（包含、组成、构成）：**
+
+- 核心语义：整体与局部、集合与子集、父项与子项的从属/组成关系，子知识点完全隶属于父知识点范畴
+- 箭头方向：包含方（父知识点）→ 被包含方（子知识点），即 `ParentID` 填包含方
+- 原则上每个包含关系至少有 2 个子内容
+- 必须 100% 覆盖全量细分场景，不得笼统标注，应识别并使用对应细分类型：
+  - 条件包含、步骤包含、内容包含、常见问题包含、原因包含、关键点包含、科目包含、形式包含、要求包含等
+- 严禁将细分包含关系错标为支持关系
+
+**支持关系：**
+
+- 核心语义：一个或多个知识点为另一个知识点提供辅助条件、先决条件或非从属支撑，无严格上下级层级绑定
+- 箭头方向：若 A 支持 B（A 为 B 提供先决条件/支撑），则 `ParentID` 填 A，即 A → B
+- 必须从语义本质出发判定支撑逻辑，不得与包含类关系混用
+
+**生成完成后必须执行自检：**
+
+1. 所有标注为"支持"的关系，箭头方向是否正确（提供支撑的一方指向被支撑的一方）
+2. 所有包含类关系是否精准匹配细分场景，有无笼统错标
+3. 箭头方向（ParentID 所指）是否符合对应关系语义
+4. 不符合要求的立即修正后再继续
 - `NodeX`、`NodeY`、`NodeWidth`、`NodeHeight` 必须是数字
 - `NodeSemantic` 只能填写以下 4 个值：
   - `核心知识点`
@@ -315,7 +338,7 @@ echo '{}' > /output/result.json
 1. 识别语义骨架
 2. 依据布局规则规划坐标
 3. 生成完整的 `graph.md`
-4. 执行 `validate_graph.py`（校验 + 自动修复布局，直接写回 `graph.md`）
+4. 执行 `validate_graph.py`（硬校验）
 5. 执行 `build_graph.py`
 
 ### 10.3 编辑更新流程
@@ -325,7 +348,7 @@ echo '{}' > /output/result.json
 2. 反向转换得到的 `graph.md` 必须作为后续修改的唯一基础，不得重新生成新的 `graph.md`
 3. 若用户未提供现有建模图 JSON，但已有可编辑 `graph.md`，则直接基于该文件修改
 4. 所有修改均在当前唯一有效的 `graph.md` 上完成
-5. 执行 `validate_graph.py`（校验 + 自动修复布局，直接写回 `graph.md`）
+5. 执行 `validate_graph.py`（硬校验）
 6. 执行 `build_graph.py`
 
 ### 10.4 编辑更新稳定性要求
@@ -351,7 +374,6 @@ echo '{}' > /output/result.json
 ## 11. 失败处理
 
 - `validate_graph.py` 硬校验失败时，必须先修正结构与字段问题，再重新执行
-- `validate_graph.py` 布局修复后 `graph.md` 已自动更新，无需手动调整坐标
 - `build_graph.py` 生成失败时，不得手工拼接或修补最终 JSON，必须回到 `graph.md` 修正后重新生成
 - `build_graph.py` 生成失败时，不得覆盖已有结果文件；只有成功生成后，才允许写入目标结果文件
 - `graph.md` 始终是唯一可编辑事实来源，最终结果 JSON 只是由其生成的最终产物
@@ -361,7 +383,7 @@ echo '{}' > /output/result.json
 交付前至少确认以下事项：
 1. 已读取 `references/layout.md`
 2. 已先生成 `/output/graph.md`
-3. 已使用 `scripts/validate_graph.py` 校验并自动修复布局
+3. 已使用 `scripts/validate_graph.py` 校验 `graph.md`
 4. 若已有可编辑的 `graph.md`，已优先在该文件基础上修改
 5. 若用户提供了现有建模图 JSON，已先使用 `scripts/reverse_json_to_md.py` 转成 `graph.md`
 6. 已使用 `scripts/build_graph.py` 生成最终 JSON
