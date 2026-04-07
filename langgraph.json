@@ -9,7 +9,13 @@
   ],
   "python_version": "3.12",
   "http": {
-    "app": "./src/webapp.py:app"
+    "app": "./src/webapp.py:app",
+    "cors": {
+      "allow_origins": ["*"],
+      "allow_methods": ["*"],
+      "allow_headers": ["*"],
+      "allow_credentials": false
+    }
   },
   "watch": {
     "ignore": ["data/"]
