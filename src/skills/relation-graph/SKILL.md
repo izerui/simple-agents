@@ -9,7 +9,7 @@ description: `graph.md` 是知识建模图生成与编辑的唯一文件。适�
 
 本手册用于规范以 `graph.md` 作为唯一事实来源的知识建模图新生成、编辑更新、校验与导出过程。
 
-本 skill 的核心要求是始终围绕 `graph.md` 工作；`graph.md` 是知识建模图生成与编辑的唯一文件，`result.json` 只是由其导出的最终产物，不是编辑对象。
+本 skill 的核心要求是始终围绕 `graph.md` 工作；`graph.md` 是知识建模图生成与编辑的唯一文件，`result.json` 或按序递增的 `result-N.json` 只是由其导出的最终产物，不是编辑对象。
 
 ## 2. 适用范围
 
@@ -26,7 +26,7 @@ description: `graph.md` 是知识建模图生成与编辑的唯一文件。适�
 本 skill 负责以下事项：
 - 新生成或编辑更新 `graph.md`
 - 校验 `graph.md`
-- 在需要交付时基于 `graph.md` 导出最终 `result.json`
+- 在需要交付时基于 `graph.md` 导出最终结果 JSON（默认文件名为 `result.json`，若已存在则顺延为 `result-2.json`、`result-3.json` ...）
 - 在已有 `graph.md` 或已有建模图 JSON 的情况下执行稳定的编辑更新流程
 - 按既定格式、字段、布局和文件要求完成落盘
 
@@ -43,21 +43,22 @@ description: `graph.md` 是知识建模图生成与编辑的唯一文件。适�
 
 默认交付物如下：
 - 中间文件：`/output/graph.md`
-- 最终文件：`/output/result.json`
+- 最终文件：`/output/result.json`；若该文件已存在，则自动顺延为 `/output/result-2.json`、`/output/result-3.json` ...
 
 路径要求如下：
 - `/output/` 指当前任务工作目录下的输出目录，不是技能目录
 - `graph.md` 默认写入 `/output/graph.md`
-- `result.json` 默认写入 `/output/result.json`
+- 最终结果默认优先写入 `/output/result.json`
+- 若 `/output/result.json` 已存在，则必须改为写入当前目录下下一个可用的递增文件名，如 `/output/result-2.json`、`/output/result-3.json`
 - 不得写入技能目录或其他未约定路径
 
 ## 5. 总体执行原则
 
 执行本 skill 时，必须遵守以下原则：
 - 在首次生成 `graph.md` 之前，必须完整阅读本 skill 文档以及本 skill 明确要求的相关参考文件；不得未读完规则就开始生成
-- 唯一主流程必须是：生成或修改 `graph.md` -> 校验 `graph.md` -> 生成 `result.json`
-- 不允许绕过 `graph.md` 直接手写最终 `result.json`
-- 不允许直接修改 `result.json` 作为修正手段
+- 唯一主流程必须是：生成或修改 `graph.md` -> 校验 `graph.md` -> 生成最终结果 JSON
+- 不允许绕过 `graph.md` 直接手写最终结果 JSON（包括 `result.json` 或任意 `result-N.json`）
+- 不允许直接修改最终结果 JSON 作为修正手段
 - 不允许在已有可编辑 `graph.md` 的情况下脱离原文件另起一版
 - 只要用户提供了现有建模图 JSON，就必须先反向转换生成 `graph.md`，再基于该文件继续修改
 - 不允许在用户提供现有建模图 JSON 后，不经转换直接重做整图
@@ -75,21 +76,14 @@ description: `graph.md` 是知识建模图生成与编辑的唯一文件。适�
 执行要求：
 - 任何需要生成或调整 `x/y/width/height`、阅读路径、分区布局、连线拓扑的任务，必须先读取该文件
 
-### 6.2 样例参考文件
-
-资源：`references/example.md`
-
-执行要求：
-- 生成或调整布局时，必须结合该文件参考节点密度、分区方式、外围挂接方式和坐标尺度
-
-### 6.3 校验脚本
+### 6.3 校验与布局修复脚本
 
 脚本：`scripts/validate_graph.py`
 
 执行要求：
-- 在生成 `result.json` 之前，必须先执行该脚本校验 `graph.md`
-- 该脚本只负责校验 `graph.md`，不负责生成最终结果
-- 校验不通过时，必须立即停止后续生成，并回到 `graph.md` 修改
+- 在生成最终结果 JSON 之前，必须先执行该脚本
+- 该脚本做结构与字段硬校验（表结构、字段合法性、父子引用），失败立即报错退出
+- 该脚本校验失败时，必须先修正 `graph.md`，否则不得进入后续步骤
 
 标准命令：
 
@@ -102,15 +96,19 @@ python /skills/relation-graph/scripts/validate_graph.py /output/graph.md
 脚本：`scripts/build_graph.py`
 
 执行要求：
-- 只有在 `graph.md` 已通过 `validate_graph.py` 校验后，才允许执行该脚本
-- 该脚本只负责基于 `graph.md` 生成最终 `result.json`
+- 在完成 `validate_graph.py` 的校验与布局修复后，就允许执行该脚本
+- 该脚本只负责基于 `graph.md` 生成最终结果 JSON
 - 该脚本只接受文件路径参数
 
 标准命令：
 
 ```bash
-python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /output/result.json --pretty
+python /skills/relation-graph/scripts/build_graph.py /output/graph.md --pretty
 ```
+
+默认行为说明：
+- 未显式传入 `--output` 时，脚本优先写入 `/output/result.json`
+- 若 `/output/result.json` 已存在，脚本必须自动选择下一个可用文件名，如 `/output/result-2.json`、`/output/result-3.json`
 
 ### 6.5 反向转换脚本
 
@@ -128,6 +126,9 @@ python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /
 python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json --output /output/graph.md
 ```
 
+说明：
+- 若用户提供的现有建模图 JSON 实际文件名为 `result-2.json`、`result-3.json` 或其他合法 JSON 路径，应以用户实际提供路径为准
+
 ## 7. 脚本调用强制规范
 
 生成最终结果时，只允许调用本 skill 提供的现有脚本。
@@ -138,8 +139,8 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 # 1. 校验 graph.md
 python /skills/relation-graph/scripts/validate_graph.py /output/graph.md
 
-# 2. 校验通过后生成 result.json
-python /skills/relation-graph/scripts/build_graph.py /output/graph.md --output /output/result.json --pretty
+# 2. 生成最终结果 JSON
+python /skills/relation-graph/scripts/build_graph.py /output/graph.md --pretty
 ```
 
 若用户提供了现有建模图 JSON，需要先反向转换：
@@ -162,7 +163,7 @@ python /skills/relation-graph/scripts/reverse_json_to_md.py /output/result.json 
 - 自行编写 JSON 拼装逻辑替代 `build_graph.py`
 - 自行从 Markdown 表格解析节点与关系，再手工拼装 `nodes` / `relations` 结构替代正式结果
 - 绕过 `validate_graph.py` 直接生成最终结果
-- 绕过 `build_graph.py` 手写或拼接 `result.json`
+- 绕过 `build_graph.py` 手写或拼接最终结果 JSON
 - 使用与本 skill 无关的其他脚本、工具或自定义命令替代上述脚本
 
 错误示例：
@@ -173,7 +174,7 @@ python <<'EOF'
 print('temporary script')
 EOF
 
-# 错误：自己编写脚本拼接 result.json
+# 错误：自己编写脚本拼接最终结果 JSON
 python custom_build_result.py /output/graph.md
 
 # 错误：自己解析 Markdown 表格并手工拼 nodes/relations
@@ -253,21 +254,6 @@ echo '{}' > /output/result.json
 
 - 必须先确定语义结构，再填写布局字段
 
-### 8.6 最小合法样本
-
-```md
-| NodeID | NodeText | NodeType | ParentID | RelationText | NodeX | NodeY | NodeWidth | NodeHeight | NodeSemantic |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| root-1 | 函数 | DK |  |  | 0 | 0 | 88 | 36 | 核心结构化知识框架 |
-| node-1 | 概念定义 | DK | root-1 | 包含 | -180 | 120 | 72 | 36 | 普通知识点 |
-| node-2 | 分类 | DK | root-1 | 包含 | 140 | 120 | 72 | 36 | 普通知识点 |
-| node-3 | 示例 | FC | root-1 | 支持 | 220 | 240 | 88 | 40 | 普通知识点 |
-| node-4 | 使用步骤 | PK | root-1 | 包含 | -40 | 220 | 96 | 40 | 核心结构化知识框架 |
-| node-5 | 明确参数 | PK | node-4 | 包含 | -40 | 300 | 96 | 40 | 普通知识点 |
-| node-6 | 调用函数 | PK | node-4 | 包含 | -40 | 360 | 96 | 40 | 普通知识点 |
-| node-7 | 复盘检查 | CS | root-1 | 支持 | 320 | 320 | 96 | 40 | 普通知识点 |
-```
-
 ## 9. 布局规范
 
 生成坐标前，必须先读取 `references/layout.md`。
@@ -275,6 +261,30 @@ echo '{}' > /output/result.json
 执行要求：
 - 生成或调整 `NodeX`、`NodeY`、`NodeWidth`、`NodeHeight` 时，必须以 `references/layout.md` 作为唯一布局依据
 - `x/y/width/height` 的取值必须按 `references/layout.md` 的规则统筹生成，不得脱离该文件自行另定布局标准
+- 子节点布局方向必须相对其父节点做放射式外扩，优先形成向四面八方延展的分布，不得把同一父节点的大多数子节点机械地堆在单一方向
+- 子节点数量为 `2-3` 时至少覆盖 `2` 个方向，`4-5` 时至少覆盖 `3` 个方向，`>=6` 时至少覆盖 `4` 个方向；不满足视为布局不合格
+
+### 9.1 区块的概念
+
+**区块（Branch Block）** 是指一个节点及其所有后代节点所占据的矩形范围，即该子树的最小外接矩形。
+
+例如节点 A 有子节点 B、C，B 下还有 D：
+
+```text
+区块 A = 包围 A、B、C、D 所有节点的最小矩形
+区块 B = 包围 B、D 的最小矩形
+区块 C = C 节点自身的矩形
+```
+
+**区块不重叠**是布局的硬性约束，必须在填写坐标时主动保证：
+
+- 同一父节点下，各子区块之间必须留出至少 `80px` 的可视间距
+- 不同一级主干的区块之间，间距不得小于 `80px`
+- 判断是否重叠时，必须把整个区块（含所有后代节点）的外接矩形算进去，不能只看当前节点自身的坐标
+
+**常见错误**：只看父节点和直接子节点的坐标，忽略子节点下面还挂有后代节点，导致后代节点的区块伸入了相邻区块的范围。
+
+**正确做法**：为每个子树预估区块高度和宽度（含所有后代），再据此分配各子树的起始坐标，保证区块间有足够间距。
 
 ## 10. 执行流程
 
@@ -304,7 +314,7 @@ echo '{}' > /output/result.json
 1. 识别语义骨架
 2. 依据布局规则规划坐标
 3. 生成完整的 `graph.md`
-4. 执行 `validate_graph.py`
+4. 执行 `validate_graph.py`（硬校验）
 5. 执行 `build_graph.py`
 
 ### 10.3 编辑更新流程
@@ -314,7 +324,7 @@ echo '{}' > /output/result.json
 2. 反向转换得到的 `graph.md` 必须作为后续修改的唯一基础，不得重新生成新的 `graph.md`
 3. 若用户未提供现有建模图 JSON，但已有可编辑 `graph.md`，则直接基于该文件修改
 4. 所有修改均在当前唯一有效的 `graph.md` 上完成
-5. 执行 `validate_graph.py`
+5. 执行 `validate_graph.py`（硬校验）
 6. 执行 `build_graph.py`
 
 ### 10.4 编辑更新稳定性要求
@@ -339,10 +349,10 @@ echo '{}' > /output/result.json
 
 ## 11. 失败处理
 
-- `validate_graph.py` 校验失败时，不得继续执行生成步骤，必须回到 `graph.md` 修正
+- `validate_graph.py` 硬校验失败时，必须先修正结构与字段问题，再重新执行
 - `build_graph.py` 生成失败时，不得手工拼接或修补最终 JSON，必须回到 `graph.md` 修正后重新生成
-- `build_graph.py` 生成失败时，不得覆盖已有 `result.json`；只有成功生成后，才允许覆盖目标结果文件
-- `graph.md` 始终是唯一可编辑事实来源，`result.json` 只是由其生成的最终产物
+- `build_graph.py` 生成失败时，不得覆盖已有结果文件；只有成功生成后，才允许写入目标结果文件
+- `graph.md` 始终是唯一可编辑事实来源，最终结果 JSON 只是由其生成的最终产物
 
 ## 12. 交付前检查
 
@@ -353,7 +363,7 @@ echo '{}' > /output/result.json
 4. 若已有可编辑的 `graph.md`，已优先在该文件基础上修改
 5. 若用户提供了现有建模图 JSON，已先使用 `scripts/reverse_json_to_md.py` 转成 `graph.md`
 6. 已使用 `scripts/build_graph.py` 生成最终 JSON
-7. 结果文件已写入 `/output/result.json` 或用户通过 `--output` 指定的合法路径
+7. 结果文件已写入 `/output/result.json`、自动顺延生成的 `/output/result-N.json`，或用户通过 `--output` 指定的合法路径
 8. 若为编辑更新，未改动部分已尽量保持稳定
 9. 若用户明确要求仅调整布局，已切换到仅布局调整模式
 
@@ -361,7 +371,7 @@ echo '{}' > /output/result.json
 
 默认交付方式如下：
 - `/output/graph.md`
-- `/output/result.json`
+- `/output/result.json`；若已存在，则为自动顺延生成的 `/output/result-N.json`
 
 回复用户时应遵守以下要求：
 - 以结果完成情况为主
