@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """Validate graph.md before generating the final relation graph JSON."""
 
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
@@ -15,10 +15,6 @@ REQUIRED_HEADERS = [
     "NodeType",
     "ParentID",
     "RelationText",
-    "NodeX",
-    "NodeY",
-    "NodeWidth",
-    "NodeHeight",
     "NodeSemantic",
 ]
 NODE_TYPE_TO_INT = {
@@ -65,17 +61,6 @@ def require_text(value: str, field_name: str) -> str:
     if any(char in text for char in ("\r", "\n")):
         raise GraphError(f"`{field_name}` 不允许换行；请回去修改 graph.md")
     return text
-
-
-def parse_number(value: str, field_name: str) -> int | float:
-    text = value.strip()
-    if not text:
-        raise GraphError(f"`{field_name}` 不能为空；请回去修改 graph.md")
-    if re.fullmatch(r"-?\d+", text):
-        return int(text)
-    if re.fullmatch(r"-?\d+\.\d+", text):
-        return float(text)
-    raise GraphError(f"`{field_name}` 必须是数字；请回去修改 graph.md")
 
 
 def parse_node_type(value: str) -> int:
@@ -136,24 +121,16 @@ def parse_table(path: Path) -> list[dict[str, str]]:
 
 
 def validate_rows(rows: list[dict[str, str]]) -> dict[str, int]:
-    node_defs: dict[str, tuple[str, int, int | float, int | float, int | float, int | float, str]] = {}
+    node_defs: dict[str, tuple[str, int, str]] = {}
     line_count = 0
     for row in rows:
         node_id = require_text(row["NodeID"], "NodeID")
         node_text = require_text(row["NodeText"], "NodeText")
         node_type = parse_node_type(row["NodeType"])
-        node_x = parse_number(row["NodeX"], "NodeX")
-        node_y = parse_number(row["NodeY"], "NodeY")
-        node_width = parse_number(row["NodeWidth"], "NodeWidth")
-        node_height = parse_number(row["NodeHeight"], "NodeHeight")
         node_semantic = normalize_node_semantic(row["NodeSemantic"], "NodeSemantic")
         node_signature = (
             node_text,
             node_type,
-            node_x,
-            node_y,
-            node_width,
-            node_height,
             node_semantic,
         )
         if node_id in node_defs and node_defs[node_id] != node_signature:
@@ -200,6 +177,7 @@ def main() -> int:
         print(f"输入文件: {graph_path}")
         print(f"节点数量: {summary['nodeCount']}")
         print(f"连线数量: {summary['lineCount']}")
+        print("布局字段: 已从 graph.md 中移除，由 build_graph.py 统一布局")
         return 0
     except GraphError as exc:
         print(str(exc), file=sys.stderr)

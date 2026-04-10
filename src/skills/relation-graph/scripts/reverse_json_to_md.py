@@ -16,10 +16,6 @@ REQUIRED_HEADERS = [
     "NodeType",
     "ParentID",
     "RelationText",
-    "NodeX",
-    "NodeY",
-    "NodeWidth",
-    "NodeHeight",
     "NodeSemantic",
 ]
 INT_TO_NODE_TYPE = {
@@ -50,6 +46,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="Path to the output markdown file. Defaults to /output/graph.md.",
     )
+    parser.add_argument(
+        "--layout-output",
+        help="Path to the output graph.layout.json file. Defaults to graph.layout.json next to graph.md.",
+    )
     return parser
 
 
@@ -63,6 +63,19 @@ def dump_text_atomic(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         handle.write(content)
+
+
+def dump_json_atomic(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+
+
+def resolve_layout_output_path(markdown_path: Path, raw_layout_output: str | None) -> Path:
+    if raw_layout_output is not None:
+        return Path(raw_layout_output).resolve()
+    return markdown_path.with_name("graph.layout.json")
 
 
 def restore_node_semantic(value: object) -> str:
@@ -125,10 +138,6 @@ def build_markdown(payload: dict) -> tuple[str, int, int]:
         node = node_map[node_id]
         node_text = sanitize_cell(node.get("text", ""))
         node_type = restore_node_type(node.get("data", {}).get("type", ""))
-        node_x = sanitize_cell(node.get("x", ""))
-        node_y = sanitize_cell(node.get("y", ""))
-        node_width = sanitize_cell(node.get("width", ""))
-        node_height = sanitize_cell(node.get("height", ""))
         node_semantic = restore_node_semantic(node.get("borderColor", ""))
 
         parent_rows = incoming.get(node_id)
@@ -142,10 +151,6 @@ def build_markdown(payload: dict) -> tuple[str, int, int]:
                         node_type,
                         "",
                         "",
-                        node_x,
-                        node_y,
-                        node_width,
-                        node_height,
                         node_semantic,
                     ]
                 )
@@ -164,10 +169,6 @@ def build_markdown(payload: dict) -> tuple[str, int, int]:
                         node_type,
                         parent_id,
                         relation_text,
-                        node_x,
-                        node_y,
-                        node_width,
-                        node_height,
                         node_semantic,
                     ]
                 )
@@ -178,6 +179,21 @@ def build_markdown(payload: dict) -> tuple[str, int, int]:
     return ("\n".join(rows) + "\n", len(node_order), row_count)
 
 
+def build_layout_state(payload: dict) -> dict:
+    state_nodes: dict[str, dict[str, int]] = {}
+    for node in payload["nodes"]:
+        node_id = str(node.get("id", "")).strip()
+        if not node_id:
+            continue
+        state_nodes[node_id] = {
+            "x": int(round(float(node.get("x", 0)))),
+            "y": int(round(float(node.get("y", 0)))),
+            "width": int(round(float(node.get("width", 0)))),
+            "height": int(round(float(node.get("height", 0)))),
+        }
+    return {"nodes": state_nodes}
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -185,12 +201,16 @@ def main() -> int:
     json_path = Path(args.json_file).resolve()
     try:
         output_path = resolve_output_path(args.output)
+        layout_output_path = resolve_layout_output_path(output_path, args.layout_output)
         payload = read_payload(json_path)
         markdown, node_count, row_count = build_markdown(payload)
+        layout_state = build_layout_state(payload)
         dump_text_atomic(output_path, markdown)
+        dump_json_atomic(layout_output_path, layout_state)
         print("反向生成完成")
         print(f"输入文件: {json_path}")
         print(f"输出文件: {output_path}")
+        print(f"布局文件: {layout_output_path}")
         print(f"节点数量: {node_count}")
         print(f"表格行数: {row_count}")
         return 0
