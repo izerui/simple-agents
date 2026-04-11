@@ -438,24 +438,27 @@ def layout_subtree(node_id: str, x: float, y: float, ctx: LayoutContext) -> None
 
     horizontal = ctx.params.direction == "horizontal"
     gap = ctx.params.sibling_spacing
+    node_w, node_h = ctx.node_dims[node_id]
 
     if horizontal:
         child_heights = [ctx.bbox_cache[child["id"]][1] for child in children]
         total_h = sum(child_heights) + gap * (len(children) - 1)
-        start_y = y - total_h / 2
-        child_x = x + ctx.params.level_spacing
+        start_y = y + node_h / 2 - total_h / 2
+        child_x = x + node_w + ctx.params.level_spacing
         for index, child in enumerate(children):
-            child_y = start_y + child_heights[index] / 2
+            child_h = ctx.node_dims[child["id"]][1]
+            child_y = start_y + child_heights[index] / 2 - child_h / 2
             layout_subtree(child["id"], child_x, child_y, ctx)
             start_y += child_heights[index] + gap
         return
 
     child_widths = [ctx.bbox_cache[child["id"]][0] for child in children]
     total_w = sum(child_widths) + gap * (len(children) - 1)
-    start_x = x - total_w / 2
-    child_y = y + ctx.params.level_spacing
+    start_x = x + node_w / 2 - total_w / 2
+    child_y = y + node_h + ctx.params.level_spacing
     for index, child in enumerate(children):
-        child_x = start_x + child_widths[index] / 2
+        child_w = ctx.node_dims[child["id"]][0]
+        child_x = start_x + child_widths[index] / 2 - child_w / 2
         layout_subtree(child["id"], child_x, child_y, ctx)
         start_x += child_widths[index] + gap
 
@@ -474,26 +477,58 @@ def layout_subtree_into(
 
     horizontal = ctx.params.direction == "horizontal"
     gap = ctx.params.sibling_spacing
+    node_w, node_h = ctx.node_dims[node_id]
 
     if horizontal:
         child_heights = [ctx.bbox_cache[child["id"]][1] for child in children]
         total_h = sum(child_heights) + gap * (len(children) - 1)
-        start_y = y - total_h / 2
-        child_x = x + ctx.params.level_spacing
+        start_y = y + node_h / 2 - total_h / 2
+        child_x = x + node_w + ctx.params.level_spacing
         for index, child in enumerate(children):
-            child_y = start_y + child_heights[index] / 2
+            child_h = ctx.node_dims[child["id"]][1]
+            child_y = start_y + child_heights[index] / 2 - child_h / 2
             layout_subtree_into(child["id"], child_x, child_y, ctx, positions)
             start_y += child_heights[index] + gap
         return
 
     child_widths = [ctx.bbox_cache[child["id"]][0] for child in children]
     total_w = sum(child_widths) + gap * (len(children) - 1)
-    start_x = x - total_w / 2
-    child_y = y + ctx.params.level_spacing
+    start_x = x + node_w / 2 - total_w / 2
+    child_y = y + node_h + ctx.params.level_spacing
     for index, child in enumerate(children):
-        child_x = start_x + child_widths[index] / 2
+        child_w = ctx.node_dims[child["id"]][0]
+        child_x = start_x + child_widths[index] / 2 - child_w / 2
         layout_subtree_into(child["id"], child_x, child_y, ctx, positions)
         start_x += child_widths[index] + gap
+
+
+def compute_positions_bbox(
+    positions: dict[str, tuple[float, float]],
+    ctx: LayoutContext,
+    include_margin: bool = True,
+) -> tuple[float, float, float, float]:
+    margin = ctx.params.node_margin if include_margin else 0
+    left = math.inf
+    top = math.inf
+    right = -math.inf
+    bottom = -math.inf
+
+    for node_id, (x, y) in positions.items():
+        width, height = ctx.node_dims[node_id]
+        left = min(left, x - margin)
+        top = min(top, y - margin)
+        right = max(right, x + width + margin)
+        bottom = max(bottom, y + height + margin)
+
+    if left == math.inf:
+        return 0.0, 0.0, 0.0, 0.0
+    return left, top, right, bottom
+
+
+def convert_positions_to_top_left(ctx: LayoutContext) -> None:
+    for node_id, (x, y) in list(ctx.positions.items()):
+        width, height = ctx.node_dims[node_id]
+        ctx.positions[node_id] = (x - width / 2, y - height / 2)
 
 
 def detect_collisions(ctx: LayoutContext) -> list[tuple[str, str]]:
@@ -504,13 +539,13 @@ def detect_collisions(ctx: LayoutContext) -> list[tuple[str, str]]:
     for index in range(len(ids)):
         x1, y1 = ctx.positions[ids[index]]
         w1, h1 = ctx.node_dims[ids[index]]
-        l1, r1 = x1 - w1 / 2 - margin, x1 + w1 / 2 + margin
-        t1, b1 = y1 - h1 / 2 - margin, y1 + h1 / 2 + margin
+        l1, r1 = x1 - margin, x1 + w1 + margin
+        t1, b1 = y1 - margin, y1 + h1 + margin
         for inner in range(index + 1, len(ids)):
             x2, y2 = ctx.positions[ids[inner]]
             w2, h2 = ctx.node_dims[ids[inner]]
-            l2, r2 = x2 - w2 / 2 - margin, x2 + w2 / 2 + margin
-            t2, b2 = y2 - h2 / 2 - margin, y2 + h2 / 2 + margin
+            l2, r2 = x2 - margin, x2 + w2 + margin
+            t2, b2 = y2 - margin, y2 + h2 + margin
             if not (r1 < l2 or l1 > r2 or b1 < t2 or t1 > b2):
                 collisions.append((ids[index], ids[inner]))
     return collisions
@@ -533,12 +568,8 @@ def resolve_collisions(
             w2, h2 = ctx.node_dims[nid2]
             margin = ctx.params.node_margin
 
-            overlap_x = min(x1 + w1 / 2 + margin, x2 + w2 / 2 + margin) - max(
-                x1 - w1 / 2 - margin, x2 - w2 / 2 - margin
-            )
-            overlap_y = min(y1 + h1 / 2 + margin, y2 + h2 / 2 + margin) - max(
-                y1 - h1 / 2 - margin, y2 - h2 / 2 - margin
-            )
+            overlap_x = min(x1 + w1 + margin, x2 + w2 + margin) - max(x1 - margin, x2 - margin)
+            overlap_y = min(y1 + h1 + margin, y2 + h2 + margin) - max(y1 - margin, y2 - margin)
             dx = x2 - x1
             dy = y2 - y1
             dist = math.sqrt(dx * dx + dy * dy)
@@ -592,13 +623,13 @@ def apply_locked_layout(
     anchor_delta: tuple[float, float] | None = None
     for node in nodes:
         node_id = node["id"]
-        if node_id not in fixed_ids or "locked_center" not in node or node_id not in positions:
+        if node_id not in fixed_ids or "locked_position" not in node or node_id not in positions:
             continue
-        locked_center = node["locked_center"]
-        current_center = positions[node_id]
+        locked_position = node["locked_position"]
+        current_position = positions[node_id]
         anchor_delta = (
-            locked_center[0] - current_center[0],
-            locked_center[1] - current_center[1],
+            locked_position[0] - current_position[0],
+            locked_position[1] - current_position[1],
         )
         break
 
@@ -612,8 +643,8 @@ def apply_locked_layout(
 
     for node in nodes:
         node_id = node["id"]
-        if node_id in fixed_ids and "locked_center" in node:
-            shifted_positions[node_id] = node["locked_center"]
+        if node_id in fixed_ids and "locked_position" in node:
+            shifted_positions[node_id] = node["locked_position"]
     return shifted_positions, anchor_delta
 
 
@@ -636,16 +667,13 @@ def layout_balanced(ctx: LayoutContext) -> None:
         local: dict[str, tuple[float, float]] = {}
         layout_subtree_into(cid, 0, 0, ctx, local)
         subtree_local[cid] = local
-        xs = [position[0] for position in local.values()] or [0]
-        ys = [position[1] for position in local.values()] or [0]
-        subtree_bboxes[cid] = (min(xs), min(ys), max(xs), max(ys))
+        subtree_bboxes[cid] = compute_positions_bbox(local, ctx)
 
     if len(l1_children) == 1:
         cid = l1_children[0]["id"]
         bbox = subtree_bboxes[cid]
-        bbox_w = bbox[2] - bbox[0]
         root_w = ctx.node_dims[ctx.root_id][0]
-        offset_x = root_w / 2 + ctx.params.subtree_spacing + bbox_w / 2
+        offset_x = root_w + ctx.params.subtree_spacing - bbox[0]
         ctx.positions[cid] = (offset_x, 0)
         for nid, (lx, ly) in subtree_local[cid].items():
             if nid != cid:
@@ -681,12 +709,12 @@ def layout_balanced(ctx: LayoutContext) -> None:
     for child, start_a, end_a in sectors:
         cid = child["id"]
         mid_angle = start_a + (end_a - start_a) / 2
-        cx = radius * math.cos(mid_angle)
-        cy = radius * math.sin(mid_angle)
-        ctx.positions[cid] = (cx, cy)
+        offset_x = radius * math.cos(mid_angle)
+        offset_y = radius * math.sin(mid_angle)
+        ctx.positions[cid] = (offset_x, offset_y)
         for nid, (lx, ly) in subtree_local[cid].items():
             if nid != cid:
-                ctx.positions[nid] = (cx + lx, cy + ly)
+                ctx.positions[nid] = (offset_x + lx, offset_y + ly)
 
 
 def layout_sector(ctx: LayoutContext) -> None:
@@ -719,15 +747,16 @@ def layout_sector(ctx: LayoutContext) -> None:
         rows.append(current_row)
 
     root_h = ctx.node_dims[ctx.root_id][1]
-    current_y = root_h / 2 + ctx.params.level_spacing
+    current_y = root_h + ctx.params.level_spacing
     for row in rows:
         row_w = sum(info["bbox_w"] for info in row) + ctx.params.subtree_spacing * (len(row) - 1)
         start_x = -row_w / 2
         max_h = max(info["bbox_h"] for info in row)
         col_x = start_x
         for info in row:
-            col_center = col_x + info["bbox_w"] / 2
-            layout_subtree(info["id"], col_center, current_y, ctx)
+            child_w = ctx.node_dims[info["id"]][0]
+            child_x = col_x + info["bbox_w"] / 2 - child_w / 2
+            layout_subtree(info["id"], child_x, current_y, ctx)
             col_x += info["bbox_w"] + ctx.params.subtree_spacing
         current_y += max_h + ctx.params.subtree_spacing
 
@@ -749,11 +778,12 @@ def layout_hierarchical(ctx: LayoutContext) -> None:
     total_w = sum(info["bbox_w"] for info in subtree_info) + gap * (len(subtree_info) - 1)
     start_x = -total_w / 2
     root_h = ctx.node_dims[ctx.root_id][1]
-    y = root_h / 2 + ctx.params.level_spacing
+    y = root_h + ctx.params.level_spacing
     col_x = start_x
     for info in subtree_info:
-        col_center = col_x + info["bbox_w"] / 2
-        layout_subtree(info["id"], col_center, y, ctx)
+        child_w = ctx.node_dims[info["id"]][0]
+        child_x = col_x + info["bbox_w"] / 2 - child_w / 2
+        layout_subtree(info["id"], child_x, y, ctx)
         col_x += info["bbox_w"] + gap
 
 
@@ -764,12 +794,14 @@ def layout_subtree_horizontal(node_id: str, x: float, y: float, ctx: LayoutConte
         return
 
     gap = ctx.params.sibling_spacing
+    node_w, node_h = ctx.node_dims[node_id]
     child_heights = [ctx.bbox_cache[child["id"]][1] for child in children]
     total_h = sum(child_heights) + gap * (len(children) - 1)
-    start_y = y - total_h / 2
-    child_x = x + ctx.params.level_spacing
+    start_y = y + node_h / 2 - total_h / 2
+    child_x = x + node_w + ctx.params.level_spacing
     for index, child in enumerate(children):
-        child_y = start_y + child_heights[index] / 2
+        child_h = ctx.node_dims[child["id"]][1]
+        child_y = start_y + child_heights[index] / 2 - child_h / 2
         layout_subtree_horizontal(child["id"], child_x, child_y, ctx)
         start_y += child_heights[index] + gap
 
@@ -787,12 +819,14 @@ def layout_subtree_horizontal_into(
         return
 
     gap = ctx.params.sibling_spacing
+    node_w, node_h = ctx.node_dims[node_id]
     child_heights = [ctx.bbox_cache[child["id"]][1] for child in children]
     total_h = sum(child_heights) + gap * (len(children) - 1)
-    start_y = y - total_h / 2
-    child_x = x + ctx.params.level_spacing
+    start_y = y + node_h / 2 - total_h / 2
+    child_x = x + node_w + ctx.params.level_spacing
     for index, child in enumerate(children):
-        child_y = start_y + child_heights[index] / 2
+        child_h = ctx.node_dims[child["id"]][1]
+        child_y = start_y + child_heights[index] / 2 - child_h / 2
         layout_subtree_horizontal_into(child["id"], child_x, child_y, ctx, positions)
         start_y += child_heights[index] + gap
 
@@ -822,11 +856,12 @@ def layout_dispersed(ctx: LayoutContext) -> None:
 
     right_total_h = sum(info["bbox_h"] for info in right_infos) + gap * (len(right_infos) - 1)
     right_start_y = -right_total_h / 2
-    right_x = root_w / 2 + ctx.params.level_spacing
+    right_x = root_w + ctx.params.level_spacing
     current_y = right_start_y
     for info in right_infos:
-        center_y = current_y + info["bbox_h"] / 2
-        layout_subtree_horizontal(info["id"], right_x, center_y, ctx)
+        child_h = ctx.node_dims[info["id"]][1]
+        child_y = current_y + info["bbox_h"] / 2 - child_h / 2
+        layout_subtree_horizontal(info["id"], right_x, child_y, ctx)
         current_y += info["bbox_h"] + gap
 
     if not left_group:
@@ -843,8 +878,9 @@ def layout_dispersed(ctx: LayoutContext) -> None:
     temp_positions: dict[str, tuple[float, float]] = {}
     current_y = left_start_y
     for info in left_infos:
-        center_y = current_y + info["bbox_h"] / 2
-        layout_subtree_horizontal_into(info["id"], 0, center_y, ctx, temp_positions)
+        child_h = ctx.node_dims[info["id"]][1]
+        child_y = current_y + info["bbox_h"] / 2 - child_h / 2
+        layout_subtree_horizontal_into(info["id"], 0, child_y, ctx, temp_positions)
         current_y += info["bbox_h"] + gap
 
     min_x_old = min(position[0] for position in temp_positions.values())
@@ -1104,10 +1140,7 @@ def build_layout_nodes(
             node["locked_y"] = saved["y"]
             node["locked_width"] = saved["width"]
             node["locked_height"] = saved["height"]
-            node["locked_center"] = (
-                int(round(saved["x"] + saved["width"] / 2)),
-                int(round(saved["y"] + saved["height"] / 2)),
-            )
+            node["locked_position"] = (saved["x"], saved["y"])
         node_map[node_id] = node
 
     anchors, detached_for_layout = choose_component_anchors(order, primary_parent)
@@ -1120,7 +1153,7 @@ def build_layout_nodes(
 
     roots = anchors
     nodes = [node_map[node_id] for node_id in order]
-    fixed_ids = {node["id"] for node in nodes if "locked_center" in node}
+    fixed_ids = {node["id"] for node in nodes if "locked_position" in node}
     return nodes, roots, fixed_ids
 
 
@@ -1151,6 +1184,8 @@ def build_payload(
     effective_fixed_ids = set(fixed_ids)
     if root_id == LAYOUT_ROOT_ID:
         effective_fixed_ids.discard(LAYOUT_ROOT_ID)
+    if effective_fixed_ids == {node["id"] for node in layout_nodes}:
+        effective_fixed_ids.clear()
     positions, strategy = auto_layout(layout_input, root_id, params, fixed_ids=effective_fixed_ids)
     if root_id == LAYOUT_ROOT_ID:
         positions.pop(LAYOUT_ROOT_ID, None)
@@ -1161,9 +1196,9 @@ def build_payload(
         if node["id"] == LAYOUT_ROOT_ID:
             continue
         width, height = get_node_dimensions(node)
-        center_x_value, center_y_value = positions.get(node["id"], (0, 0))
-        x = int(round(center_x_value - width / 2))
-        y = int(round(center_y_value - height / 2))
+        x, y = positions.get(node["id"], (0, 0))
+        x = int(round(x))
+        y = int(round(y))
         new_layout_state_nodes[node["id"]] = {
             "x": x,
             "y": y,
