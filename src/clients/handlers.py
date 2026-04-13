@@ -1,343 +1,290 @@
-"""事件处理器.
+"""规范化事件处理器.
 
-提供默认的事件处理器，可继承并覆盖方法来实现自定义处理。
+客户端使用建议：
 
-解析逻辑:
-- 遍历原始 chunk 数据
-- 根据 chunk.event 分发事件
-- 触发流式事件: on_ai_message_chunk, on_tool_call_start, on_tool_call_args_chunk, on_tool_result_chunk
-- 累积参数，触发完成事件: on_tool_call_complete
+1. 增量回调（会重复触发，适合做流式内容更新）
+   - on_message_streaming: assistant 正文增量
+   - on_tool_streaming_args: 工具参数增量
+
+2. 阶段回调（通常只在阶段切换时触发一次，适合做状态更新）
+   - on_run_started / on_run_completed / on_run_failed
+   - on_message_completed
+   - on_tool_pending / on_tool_running / on_tool_completed
+   - on_custom
+
+使用规则：
+- 只在 `streaming` 回调里做“内容追加/覆盖”
+- 不要在 `completed/pending/running/started/failed` 回调里重复追加内容
+- `completed` 类回调更适合做“节点收尾、状态落盘、最终结果更新”
 """
 
-import logging
-from abc import abstractmethod, ABC
-from typing import Any, override
+from __future__ import annotations
 
-logger = logging.getLogger(__name__)
+from typing import AsyncIterable
+
+from .client import (
+    CustomEvent,
+    MessageEvent,
+    RunEvent,
+    StreamingEvent,
+    ToolEvent,
+)
 
 
-class StreamingEventHandlers(ABC):
+class StreamingEventHandlers:
     """事件处理器基类.
 
-    使用方式:
-        handler = EventHandlers()
-        async for chunk in client.stream_chat("你好"):
-            await handler.receive_chunk(chunk)
+    推荐用法：
 
-    可继承并覆盖以下方法:
-        - on_ai_message_chunk(content: str, is_chunk_start: bool)  # AI 文本流式
-        - on_tool_call_start(tool_id, tool_name)  # 工具调用开始
-        - on_tool_call_args_chunk(tool_id, args_chunk, is_chunk_start)  # 参数流式
-        - on_tool_result_chunk(tool_id, content, is_chunk_start)  # 结果流式
-        - on_tool_call_complete(tool_id, tool_name, args, content, status)  # 完整结果
-        - on_custom(data: dict)  # 自定义事件
-        - on_error(error: Exception)  # 错误
+    ```python
+    class MyHandler(StreamingEventHandlers):
+        async def on_message_streaming(self, event):
+            # 这里只处理正文流式内容
+            ...
+
+        async def on_tool_pending(self, event):
+            # 这里只创建工具节点
+            ...
+
+        async def on_tool_completed(self, event):
+            # 这里只处理工具最终状态
+            ...
+    ```
+
+    设计目标：
+    - client 负责把原始 chunk 解析为规范化事件
+    - handler 只负责消费规范化事件
+    - 客户端通过覆写少数几个阶段方法即可完成接入
     """
 
-    def __init__(self):
-        # 工具调用注册表: {tool_id: {name, args}}
-        self._tool_calls_registry: dict[str, dict] = {}
-        # 标记：工具调用是否刚刚完成（用于 on_ai_message_chunk 换行判断）
-        self._last_tool_call_ended: bool = False
+    async def consume(self, events: AsyncIterable[StreamingEvent]) -> None:
+        """顺序消费一个规范化事件流."""
+        async for event in events:
+            await self.handle(event)
 
-    async def receive_chunk(self, chunk: Any):
-        """接收原始 chunk，解析并分发事件."""
-        try:
-            event_name = chunk.event if hasattr(chunk, "event") else None
-            data = chunk.data if hasattr(chunk, "data") else None
-            if event_name is None:
-                return
+    async def handle(self, event: StreamingEvent) -> None:
+        """处理单个规范化事件并分发到对应阶段方法.
 
-            # 自定义事件
-            if event_name == "custom" and isinstance(data, dict):
-                await self.on_custom(data)
-                return
-
-            # 消息事件
-            if event_name == "messages":
-                if not isinstance(data, list) or len(data) < 2:
-                    return
-
-                msg_list = data[0]
-                if not isinstance(msg_list, list):
-                    msg_list = [msg_list]
-
-                for msg in msg_list:
-                    if not isinstance(msg, dict):
-                        continue
-                    msg_type = msg.get("type")
-
-                    if msg_type == "AIMessageChunk":
-                        await self._handle_ai_message_chunk(msg)
-                    elif msg_type == "tool":
-                        await self._handle_tool_message(msg)
-
-        except Exception as e:
-            logger.error(f"Error processing chunk: {e}")
-            await self.on_error(e)
-
-    async def _handle_ai_message_chunk(self, msg: dict):
-        """处理 AI 消息块."""
-        content = msg.get("content", "")
-        chunk_position = msg.get("chunk_position")
-        is_chunk_end = chunk_position == "last"
-
-        if content:
-            # 工具调用完成后新一轮 AI 输出开始，需要换行
-            is_chunk_start = self._last_tool_call_ended
-            if is_chunk_start:
-                self._last_tool_call_ended = False
-            await self.on_ai_message_chunk(content, is_chunk_start, is_chunk_end)
-
-        # tool_calls - 工具调用开始（args 为空，参数通过 tool_call_chunks 流式传递）
-        tool_calls = msg.get("tool_calls", [])
-        for idx, tc in enumerate(tool_calls):
-            tool_name = tc.get("name", "")
-            tool_id = tc.get("id", "")
-            if tool_name and tool_id:
-                self._tool_calls_registry[tool_id] = {
-                    "name": tool_name,
-                    "args": "",
-                    "index": idx,  # 保存 index 用于 fallback 匹配
-                }
-                await self.on_tool_call_start(tool_id, tool_name)
-
-        # tool_call_chunks - 参数流式
-        tool_call_chunks = msg.get("tool_call_chunks", [])
-        for tcc in tool_call_chunks:
-            tcc_id = tcc.get("id", "")
-            tcc_index = tcc.get("index")  # 获取 index
-            args_chunk = tcc.get("args", "")
-
-            # 累加参数：优先通过 ID，其次通过 index，最后通过 name
-            matched_id = None
-            is_args_chunk_start = False
-            if tcc_id and tcc_id in self._tool_calls_registry:
-                self._tool_calls_registry[tcc_id]["args"] += args_chunk
-                matched_id = tcc_id
-                # 检查是否是第一次参数
-                if not hasattr(self, '_tool_args_started'):
-                    self._tool_args_started = {}
-                is_args_chunk_start = not self._tool_args_started.get(tcc_id, False)
-                self._tool_args_started[tcc_id] = True
-            elif tcc_index is not None:
-                # 通过 index 匹配
-                for tid, info in self._tool_calls_registry.items():
-                    if info.get("index") == tcc_index:
-                        self._tool_calls_registry[tid]["args"] += args_chunk
-                        matched_id = tid
-                        if not hasattr(self, '_tool_args_started'):
-                            self._tool_args_started = {}
-                        is_args_chunk_start = not self._tool_args_started.get(tid, False)
-                        self._tool_args_started[tid] = True
-                        break
-            elif args_chunk:
-                # 最后尝试通过 name 匹配
-                name = tcc.get("name", "")
-                for tid, info in self._tool_calls_registry.items():
-                    if info.get("name") == name:
-                        self._tool_calls_registry[tid]["args"] += args_chunk
-                        matched_id = tid
-                        if not hasattr(self, '_tool_args_started'):
-                            self._tool_args_started = {}
-                        is_args_chunk_start = not self._tool_args_started.get(tid, False)
-                        self._tool_args_started[tid] = True
-                        break
-
-            # 无论是否找到匹配，都流式输出参数
-            if args_chunk:
-                await self.on_tool_call_args_chunk(matched_id or tcc_id, args_chunk, is_args_chunk_start)
-
-    async def _handle_tool_message(self, msg: dict):
-        """处理工具消息."""
-        tool_name = msg.get("name", "unknown")
-        tool_content = msg.get("content", "")
-        tool_call_id = msg.get("tool_call_id", "")
-        tool_status = msg.get("status")
-
-        # 结果流式
-        if tool_content:
-            # 检查是否是第一次结果（用于 is_chunk_start）
-            is_result_chunk_start = not hasattr(self, '_tool_result_started') or not self._tool_result_started.get(tool_call_id, False)
-            if not hasattr(self, '_tool_result_started'):
-                self._tool_result_started = {}
-            self._tool_result_started[tool_call_id] = True
-
-            await self.on_tool_result_chunk(tool_call_id, tool_content, is_result_chunk_start)
-            # 标记工具调用已结束，下一次 AI 输出需要换行
-            self._last_tool_call_ended = True
-
-        # 完整结果（累积的参数 + 最终结果）
-        args = ""
-        if tool_call_id and tool_call_id in self._tool_calls_registry:
-            tool_call_info = self._tool_calls_registry.pop(tool_call_id)
-            args = tool_call_info.get("args", "")
-            tool_name = tool_call_info.get("name", tool_name)
-
-        await self.on_tool_call_complete(
-            tool_id=tool_call_id,
-            tool_name=tool_name,
-            args=args,
-            content=tool_content,
-            status=tool_status,
-        )
-
-    # ========== 可覆盖的处理方法 ==========
-
-    @abstractmethod
-    async def on_ai_message_chunk(
-        self, content: str, is_chunk_start: bool = False, is_chunk_end: bool = False
-    ):
-        """AI 文本流式输出.
-
-        Args:
-            content: AI 输出的文本
-            is_chunk_start: 是否是工具调用完成后新一轮 chunk 开始（需要换行）
-            is_chunk_end: 是否是当前 LLM 调用的最后一个 chunk
+        分发规则：
+        - RunEvent    -> on_run_started / on_run_completed / on_run_failed
+        - MessageEvent -> on_message_streaming / on_message_completed
+        - ToolEvent   -> on_tool_pending / on_tool_streaming_args / on_tool_running / on_tool_completed
+        - CustomEvent -> on_custom
         """
-        pass
+        if isinstance(event, RunEvent):
+            # run 事件是“整轮请求”的生命周期。
+            if event.status == "started":
+                await self.on_run_started(event)
+            elif event.status == "completed":
+                await self.on_run_completed(event)
+            elif event.status == "failed":
+                await self.on_run_failed(event)
+            return
 
-    @abstractmethod
-    async def on_tool_call_start(self, tool_id: str, tool_name: str):
-        """工具调用开始."""
-        pass
+        if isinstance(event, MessageEvent):
+            # message 事件只保留最常用的“流式中/已完成”两个阶段。
+            if event.status == "streaming":
+                await self.on_message_streaming(event)
+            elif event.status == "completed":
+                await self.on_message_completed(event)
+            return
 
-    @abstractmethod
-    async def on_tool_call_args_chunk(self, tool_id: str, args_chunk: str, is_chunk_start: bool = False):
-        """工具参数流式输出.
+        if isinstance(event, ToolEvent):
+            # tool 事件只暴露稳定阶段，不让调用端接触底层匿名/抖动状态。
+            if event.status == "pending":
+                await self.on_tool_pending(event)
+            elif event.status == "streaming_args":
+                await self.on_tool_streaming_args(event)
+            elif event.status == "running":
+                await self.on_tool_running(event)
+            elif event.status in {"success", "failed", "streaming_result"}:
+                await self.on_tool_completed(event)
+            return
 
-        Args:
-            tool_id: 工具调用 ID
-            args_chunk: 参数字符串片段
-            is_chunk_start: 是否是参数流式开始
+        if isinstance(event, CustomEvent):
+            await self.on_custom(event)
+            return
+
+    async def on_run_started(self, event: RunEvent) -> None:
+        """一轮请求开始.
+
+        用途：
+        - 设置“本轮请求开始中/执行中”状态
+        - 初始化本轮运行上下文
+
+        注意：
+        - 这是阶段回调，不是流式内容回调
+        - 不要在这里追加正文内容
         """
-        pass
+        return None
 
-    @abstractmethod
-    async def on_tool_result_chunk(self, tool_id: str, content: str, is_chunk_start: bool = False):
-        """工具结果流式输出.
+    async def on_run_completed(self, event: RunEvent) -> None:
+        """一轮请求正常结束.
 
-        Args:
-            tool_id: 工具调用 ID
-            content: 工具返回的内容
-            is_chunk_start: 是否是结果流式开始
+        用途：
+        - 清理“执行中”状态
+        - 标记本轮完成
+        - 做整轮级别的收尾处理
+
+        注意：
+        - 这是阶段回调
+        - 不负责追加正文内容
         """
-        pass
+        return None
 
-    @abstractmethod
-    async def on_tool_call_complete(
-        self,
-        tool_id: str,
-        tool_name: str,
-        args: str,
-        content: str,
-        status: str | None,
-    ):
-        """工具调用完整结果.
+    async def on_run_failed(self, event: RunEvent) -> None:
+        """一轮请求失败结束.
 
-        Args:
-            tool_id: 工具调用 ID
-            tool_name: 工具名称
-            args: 完整参数
-            content: 完整结果
-            status: 执行状态
+        用途：
+        - 标记本轮失败
+        - 读取 `event.error` 展示错误信息
+        - 做失败兜底收尾
+
+        注意：
+        - 这是整轮 run 级别的失败，不是单个 token 的问题
         """
-        pass
+        return None
 
-    @abstractmethod
-    async def on_custom(self, data: dict):
-        """自定义事件."""
-        pass
+    async def on_message_streaming(self, event: MessageEvent) -> None:
+        """assistant 正文流式增量.
 
-    @abstractmethod
-    async def on_error(self, error: Exception):
-        """错误事件."""
-        pass
+        这是“正文流式打字”的主回调，会重复触发。
+
+        典型用途：
+        - 追加/覆盖当前 assistant 消息内容
+        - 实时渲染打字效果
+
+        重点字段：
+        - event.delta: 本次新增文本
+        - event.current: 当前这条消息的累计文本
+        """
+        return None
+
+    async def on_message_completed(self, event: MessageEvent) -> None:
+        """当前 assistant 消息结束.
+
+        用途：
+        - 标记当前消息完成
+        - 做消息级收尾
+
+        注意：
+        - 这是阶段回调
+        - 不建议在这里重复追加正文内容
+        - 正文内容应主要在 `on_message_streaming` 中处理
+        """
+        return None
+
+    async def on_tool_pending(self, event: ToolEvent) -> None:
+        """工具节点已稳定识别，可正式创建.
+
+        典型用途：
+        - 在客户端创建工具节点
+        - 初始化工具状态
+
+        说明：
+        - 只有当 SDK 认为工具身份已经稳定后，才会触发这个回调
+        - `on_tool_pending` 一定早于 `on_tool_streaming_args`
+        """
+        return None
+
+    async def on_tool_streaming_args(self, event: ToolEvent) -> None:
+        """工具参数流式增量.
+
+        这是“工具参数流式展示”的主回调，会重复触发。
+
+        典型用途：
+        - 追加/覆盖工具参数显示
+        - 实时展示模型正在构造的工具调用参数
+
+        重点字段：
+        - event.args_delta: 本次新增参数片段
+        - event.args_current: 当前累计参数
+
+        注意：
+        - 只在这里做参数内容更新
+        - 不要在 `on_tool_completed` 里重复拼接参数
+        """
+        return None
+
+    async def on_tool_running(self, event: ToolEvent) -> None:
+        """工具开始执行.
+
+        用途：
+        - 将工具节点状态切换为“执行中”
+        - 结束参数编辑阶段，进入执行阶段
+
+        注意：
+        - 这是阶段回调，不是结果流式回调
+        """
+        return None
+
+    async def on_tool_completed(self, event: ToolEvent) -> None:
+        """工具调用结束.
+
+        成功和失败都会进入这里，最终状态由 `event.status` 决定：
+        - success
+        - failed
+
+        典型用途：
+        - 更新工具最终状态
+        - 写入最终结果 `event.result_current`
+        - 失败时读取 `event.error`
+
+        注意：
+        - 这是阶段回调
+        - 工具结果以最终结果为主，不建议在这里做增量拼接
+        """
+        return None
+
+    async def on_custom(self, event: CustomEvent) -> None:
+        """后端自定义事件.
+
+        SDK 不解释业务语义，原样透传给客户端。
+        """
+        return None
 
 
 class SimpleStreamingEventHandlers(StreamingEventHandlers):
+    """默认打印型处理器."""
 
-    async def on_ai_message_chunk(
-        self, content: str, is_chunk_start: bool = False, is_chunk_end: bool = False
-    ):
-        """AI 文本流式输出.
+    async def on_message_streaming(self, event: MessageEvent) -> None:
+        if event.delta:
+            # 这里只打印 delta，模拟终端逐字输出。
+            print(f"[on_message_streaming] {event.delta}", end="", flush=True)
 
-        Args:
-            content: AI 输出的文本
-            is_chunk_start: 是否是工具调用完成后新一轮 chunk 开始（需要换行）
-            is_chunk_end: 是否是当前 LLM 调用的最后一个 chunk
-        """
-        if content:
-            if is_chunk_start:
-                print("\n\n", end="")
-            print(content, end="", flush=True)
+    async def on_message_completed(self, event: MessageEvent) -> None:
+        # message 收尾时只打印标记，不重复打印 current。
+        print(f"\n[on_message_completed] message_id={event.message_id}")
 
-    async def on_tool_call_start(self, tool_id: str, tool_name: str):
-        """工具调用开始."""
-        print(f"工具: {tool_name}")
-        print(f"ID: {tool_id}")
+    async def on_tool_pending(self, event: ToolEvent) -> None:
+        print(f"\n\n[on_tool_pending] tool_name={event.tool_name}")
+        if event.tool_call_id:
+            print(f"[on_tool_pending] tool_call_id={event.tool_call_id}")
 
-    async def on_tool_call_args_chunk(self, tool_id: str, args_chunk: str, is_chunk_start: bool = False):
-        """工具参数流式输出.
+    async def on_tool_streaming_args(self, event: ToolEvent) -> None:
+        if event.args_delta:
+            # 参数阶段和正文阶段一样，只消费增量，避免 current 重复打印。
+            print(f"[on_tool_streaming_args] {event.args_delta}", end="", flush=True)
 
-        Args:
-            tool_id: 工具调用 ID
-            args_chunk: 参数字符串片段
-            is_chunk_start: 是否是参数流式开始
-        """
-        if args_chunk:
-            if is_chunk_start:
-                print("")
-            print(f"{args_chunk}", end="", flush=True)
+    async def on_tool_running(self, event: ToolEvent) -> None:
+        print("\n[on_tool_running]")
 
-    async def on_tool_result_chunk(self, tool_id: str, content: str, is_chunk_start: bool = False):
-        """工具结果流式输出.
+    async def on_tool_completed(self, event: ToolEvent) -> None:
+        # 工具完成时统一打印最终状态和累计值，便于排查阶段是否完整。
+        print(
+            f"\n[on_tool_completed] status={event.status} tool_name={event.tool_name} "
+            f"tool_call_id={event.tool_call_id} args_current={event.args_current!r} "
+            f"result_current={event.result_current!r} error={event.error!r}"
+        )
 
-        Args:
-            tool_id: 工具调用 ID
-            content: 工具返回的内容
-            is_chunk_start: 是否是结果流式开始
-        """
-        # 截断显示
-        if content:
-            if is_chunk_start:
-                print("")  # 换行
-            print(f"{content}", end="", flush=True)
+    async def on_custom(self, event: CustomEvent) -> None:
+        print(f"\n[on_custom] data={event.data}")
 
-    async def on_tool_call_complete(
-        self,
-        tool_id: str,
-        tool_name: str,
-        args: str,
-        content: str,
-        status: str | None,
-    ):
-        """工具调用完整结果.
+    async def on_run_started(self, event: RunEvent) -> None:
+        print(f"[on_run_started] thread_id={event.thread_id} run_id={event.run_id}")
 
-        Args:
-            tool_id: 工具调用 ID
-            tool_name: 工具名称
-            args: 完整参数
-            content: 完整结果
-            status: 执行状态
-        """
-        print(f"\n\n🔧 ===== 工具调用完成 =====")
-        print(f"工具: {tool_name}")
-        print(f"ID: {tool_id}")
-        if status:
-            print(f"状态: {status}")
-        # 截断显示
-        display_args = args[:50] + "..." if len(args) > 50 else args
-        display_content = content[:50] + "..." if len(content) > 50 else content
-        print(f"参数: {display_args}")
-        print(f"结果: {display_content}")
-        print(f"===========================\n")
+    async def on_run_completed(self, event: RunEvent) -> None:
+        print(f"[on_run_completed] thread_id={event.thread_id} run_id={event.run_id}")
 
-    async def on_custom(self, data: dict):
-        """自定义事件."""
-        print(f"\n🔔 自定义事件")
-        print(f"   数据: {data}")
-
-    async def on_error(self, error: Exception):
-        """错误事件."""
-        print(f"\n❌ 错误: {error}")
+    async def on_run_failed(self, event: RunEvent) -> None:
+        print(f"[on_run_failed] thread_id={event.thread_id} run_id={event.run_id} error={event.error!r}")

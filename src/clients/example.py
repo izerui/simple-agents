@@ -1,7 +1,8 @@
 """使用示例."""
 
 import asyncio
-from src.clients import StreamingClient, StreamingEventHandlers
+
+from src.clients import MessageEvent, StreamingClient, StreamingEventHandlers
 from src.clients.handlers import SimpleStreamingEventHandlers
 
 
@@ -14,23 +15,23 @@ async def example_basic():
     print("示例1: 基础用法")
     print("=" * 50)
 
-    async for chunk in client.stream_chat("你好，请介绍一下自己"):
-        await handler.receive_chunk(chunk)
+    await handler.consume(
+        client.chat_stream(
+            message="你好，请介绍一下自己",
+            thread_id="example-basic",
+        )
+    )
 
 
 async def example_custom_handler():
     """示例2: 自定义处理器（继承类）."""
 
     class MyHandler(StreamingEventHandlers):
-        """自定义处理器."""
+        async def on_message_streaming(self, event: MessageEvent) -> None:
+            print(f"[AI] {event.delta}", end="")
 
-        async def on_ai_message_chunk(
-            self, content: str, is_chunk_start: bool = False, is_chunk_end: bool = False
-        ):
-            print(f"[AI] {content}", end="")
-
-        async def on_tool_call_complete(self, tool_id, tool_name, args, content, status):
-            print(f"\n[工具] {tool_name}, 参数: {args[:50]}...")
+        async def on_tool_completed(self, event) -> None:
+            print(f"\n[工具] {event.tool_name}, 参数: {event.args_current[:50]}...")
 
     client = StreamingClient("http://localhost:2024")
     handler = MyHandler()
@@ -39,8 +40,12 @@ async def example_custom_handler():
     print("示例2: 自定义处理器")
     print("=" * 50)
 
-    async for chunk in client.stream_chat("列出当前目录的文件"):
-        await handler.receive_chunk(chunk)
+    await handler.consume(
+        client.chat_stream(
+            message="列出当前目录的文件",
+            thread_id="example-custom",
+        )
+    )
 
 
 async def example_with_files():
@@ -52,16 +57,13 @@ async def example_with_files():
     print("示例3: 带文件上传")
     print("=" * 50)
 
-    # 支持直接传入文件路径
-    files = [
-        "example.pdf",
-    ]
-
-    async for chunk in client.chat_stream(
-        message="请分析这个文件",
-        files=files,
-    ):
-        await handler.receive_chunk(chunk)
+    await handler.consume(
+        client.chat_stream(
+            message="请分析这个文件",
+            files=["example.pdf"],
+            thread_id="example-files",
+        )
+    )
 
 
 if __name__ == "__main__":
