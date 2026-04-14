@@ -55,6 +55,7 @@ RELATION_TO_LINE_TYPE = {
     "并列": 8,
     "是前提": 9,
 }
+REVERSED_RELATIONS = {"支持", "定义", "组成"}
 
 CHAR_WIDTH_CN = 19
 CHAR_WIDTH_EN = 10
@@ -1017,15 +1018,21 @@ def compose_node(
 
 
 def compose_line(parent_id: str, node_id: str, relation: str, node_map: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    source = node_map[parent_id]
-    target = node_map[node_id]
+    relation_text = relation.strip()
+    from_id = parent_id
+    to_id = node_id
+    if relation_text in REVERSED_RELATIONS:
+        from_id, to_id = to_id, from_id
+
+    source = node_map[from_id]
+    target = node_map[to_id]
     from_junction, to_junction = choose_junction_points(source, target)
     return {
         "id": f"line-{uuid.uuid4().hex[:12]}",
         "type": "line",
-        "text": relation.strip(),
-        "from": parent_id,
-        "to": node_id,
+        "text": relation_text,
+        "from": from_id,
+        "to": to_id,
         "lineWidth": 1,
         "color": "#000000",
         "isHide": False,
@@ -1052,7 +1059,7 @@ def compose_line(parent_id: str, node_id: str, relation: str, node_map: dict[str
         "toJuctionPointOffsetY": 0,
         "polyLineRadius": 0,
         "hidden": False,
-        "data": {"type": RELATION_TO_LINE_TYPE.get(relation.strip(), 1)},
+        "data": {"type": RELATION_TO_LINE_TYPE.get(relation_text, 1)},
     }
 
 
