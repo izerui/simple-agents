@@ -43,9 +43,9 @@ SEMANTIC_TO_COLOR = {
     "先决知识点": "#00B050",
     "普通知识点": "#000000",
 }
+# 关系到连线类型的映射（移除"包含”，只保留细分类型）
 RELATION_TO_LINE_TYPE = {
     "支持": 0,
-    "包含": 1,
     "组成": 1,
     "构成": 1,
     "是一种": 3,
@@ -54,6 +54,16 @@ RELATION_TO_LINE_TYPE = {
     "定义": 6,
     "并列": 8,
     "是前提": 9,
+    # 包含关系细分类型
+    "条件包含": 1,
+    "步骤包含": 1,
+    "内容包含": 1,
+    "常见问题包含": 1,
+    "原因包含": 1,
+    "关键点包含": 1,
+    "科目包含": 1,
+    "形式包含": 1,
+    "要求包含": 1,
 }
 REVERSED_RELATIONS = {"支持", "定义", "组成"}
 
@@ -230,9 +240,9 @@ def parse_table_for_build(path: Path) -> list[dict[str, str]]:
 def estimate_text_width(text: str) -> int:
     width = 0
     for char in text:
-        if "\u4e00" <= char <= "\u9fff":
+        if "一" <= char <= "鿿":
             width += CHAR_WIDTH_CN
-        elif "\uFF00" <= char <= "\uFFEF":
+        elif "＀" <= char <= "￯":
             width += CHAR_WIDTH_CN
         elif char in "0123456789":
             width += CHAR_WIDTH_EN

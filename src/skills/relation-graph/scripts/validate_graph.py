@@ -29,8 +29,8 @@ ALLOWED_NODE_SEMANTICS = {
     "先决知识点",
     "普通知识点",
 }
+# 9 个标准关系名（不包含"包含"本身）
 ALLOWED_RELATION_TEXTS = {
-    "包含",
     "组成",
     "构成",
     "是一种",
@@ -40,6 +40,18 @@ ALLOWED_RELATION_TEXTS = {
     "并列",
     "是前提",
     "支持",
+}
+# 包含关系的细分类型
+CONTAIN_SUBTYPES = {
+    "条件包含",
+    "步骤包含",
+    "内容包含",
+    "常见问题包含",
+    "原因包含",
+    "关键点包含",
+    "科目包含",
+    "形式包含",
+    "要求包含",
 }
 
 
@@ -81,13 +93,35 @@ def normalize_node_semantic(value: str, field_name: str) -> str:
     return canonical
 
 
+def is_contain_subtype(text: str) -> bool:
+    """判断是否为包含关系的细分类型（以'包含'结尾但不是'包含'本身）"""
+    return text.endswith("包含") and text != "包含"
+
+
 def normalize_relation_text(value: str, field_name: str) -> str:
     text = require_text(value, field_name)
-    if text not in ALLOWED_RELATION_TEXTS:
+
+    # 禁止直接使用"包含"
+    if text == "包含":
         raise GraphError(
-            f"`{field_name}` 只能使用 {sorted(ALLOWED_RELATION_TEXTS)}；请回去修改 graph.md"
+            f"`{field_name}` 不允许直接使用'包含'，必须使用细分类型（条件包含、步骤包含、内容包含、常见问题包含、原因包含、关键点包含、科目包含、形式包含、要求包含）；请回去修改 graph.md"
         )
-    return text
+
+    # 允许标准关系名
+    if text in ALLOWED_RELATION_TEXTS:
+        return text
+
+    # 允许预定义的包含细分类型
+    if text in CONTAIN_SUBTYPES:
+        return text
+
+    # 允许自定义包含细分类型（以"包含"结尾但不是"包含"本身）
+    if is_contain_subtype(text):
+        return text
+
+    raise GraphError(
+        f"`{field_name}` 只能使用标准关系名（组成、构成、是一种、具有属性、具有特征、定义、并列、是前提、支持）或包含关系细分类型（条件包含、步骤包含、内容包含、常见问题包含、原因包含、关键点包含、科目包含、形式包含、要求包含等）；请回去修改 graph.md"
+    )
 
 
 def parse_table(path: Path) -> list[dict[str, str]]:
