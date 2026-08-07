@@ -44,7 +44,9 @@ services:
         environment:
             REDIS_URI: redis://redis:6379
             DATABASE_URI: postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
-            LANGSMITH_API_KEY: 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
+            LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+            LANGSMITH_WORKSPACE_ID: ${LANGSMITH_WORKSPACE_ID}
+            LANGSMITH_TENANT_ID: ${LANGSMITH_TENANT_ID}
             HF_HOME: /deps/simple-agents/data/huggingface
             HF_ENDPOINT: https://hf-mirror.com
             BROWSER_SERVICE_URL: http://browser-service:2025
@@ -65,7 +67,9 @@ services:
             - "8124:3000"
         environment:
             LANGGRAPH_API_URL: http://agents-api:8000
-            LANGSMITH_API_KEY: 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
+            LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+            LANGSMITH_WORKSPACE_ID: ${LANGSMITH_WORKSPACE_ID}
+            LANGSMITH_TENANT_ID: ${LANGSMITH_TENANT_ID}
         volumes:
           - ./data/sandbox_sessions:/home/data/sandbox_sessions
 
