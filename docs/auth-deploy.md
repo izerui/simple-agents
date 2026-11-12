@@ -63,7 +63,7 @@ docker compose up -d agents-api
 # 应输出包含 "Using auth of type=custom"
 docker compose logs agents-api | grep "auth of type"
 
-# 应输出 403
+# 应输出 401 或 403（不同版本返回码不同，都表示被拒绝）
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8123/assistants/search -H 'content-type: application/json' -d '{}'
 
 # 应输出 200
