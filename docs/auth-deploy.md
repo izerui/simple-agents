@@ -74,6 +74,37 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8123/assistant
 - paper-rag：论文评价能正常返回。
 - mcd_admin_web：AI 助手能正常对话。
 
+## 附：关闭 browser-service 和 postgres 的对外端口（两台服务器都要做）
+
+可以和上面的步骤分开，单独执行。
+
+1. `docker-compose.yml` 中，把 `browser-service` 和 `postgres` 下的 `ports` 整段注释掉：
+
+   ```yaml
+       postgres:
+           # ports:
+           #     - "5433:5432"
+
+       browser-service:
+           # ports:
+           #     - "2025:2025"
+   ```
+
+2. 重启：
+
+   ```bash
+   docker compose up -d postgres browser-service
+   ```
+
+3. 从**外网**验证，两条命令都应连接失败：
+
+   ```bash
+   nc -zv -w 5 <服务器公网IP> 2025
+   nc -zv -w 5 <服务器公网IP> 5433
+   ```
+
+4. 确认 agents-api 的抓取网页和对话功能都正常。
+
 ## 回滚
 
 删掉 `docker-compose.yml` 中的 `LANGGRAPH_AUTH` 一行，然后执行：

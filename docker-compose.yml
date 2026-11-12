@@ -9,8 +9,9 @@ services:
 
     postgres:
         image: serv999.com/hub/pgvector/pgvector:pg16
-        ports:
-            - "5433:5432"
+        # 不对外暴露端口：仅供 compose 内部服务通过 postgres:5432 访问
+        # ports:
+        #     - "5433:5432"
         environment:
             POSTGRES_DB: postgres
             POSTGRES_USER: postgres
