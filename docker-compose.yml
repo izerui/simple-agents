@@ -77,8 +77,10 @@ services:
     # 独立的浏览器抓取服务
     browser-service:
         image: serv999.com/hub/izerui/browser-fetch:latest
-        ports:
-            - "2025:2025"
+        # 不对外暴露端口：agents-api 通过内部网络 http://browser-service:2025 访问
+        # 如需局域网访问，改为绑定内网 IP，如 "<内网IP>:2025:2025"
+        # ports:
+        #     - "2025:2025"
         environment:
             BROWSER_SERVICE_PORT: 2025
             BROWSER_SERVICE_HOST: 0.0.0.0
