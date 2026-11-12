@@ -44,6 +44,7 @@ services:
         environment:
             REDIS_URI: redis://redis:6379
             DATABASE_URI: postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
+            LANGGRAPH_AUTH: '{"path": "/deps/simple-agents/src/graph.py:auth"}'
             LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
             LANGSMITH_WORKSPACE_ID: ${LANGSMITH_WORKSPACE_ID}
             LANGSMITH_TENANT_ID: ${LANGSMITH_TENANT_ID}

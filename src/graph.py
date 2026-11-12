@@ -7,6 +7,7 @@ Supports per-conversation sandbox isolation using BackendFactory.
 """
 import logging
 import os
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -131,16 +132,20 @@ auth = Auth()
 
 
 def is_valid_key(api_key: bytes) -> bool:
-    # Implement your own key validation logic here
-    # For example, you can check if the key exists in a database or a file
-    return api_key == os.getenv('LANGGRAPH_API_KEY')
+    # headers 中的值是 bytes，需编码后比较；未配置 LANGGRAPH_API_KEY 时一律拒绝
+    expected = os.getenv('LANGGRAPH_API_KEY')
+    return bool(expected) and secrets.compare_digest(api_key, expected.encode())
 
 
 @auth.authenticate
 async def authenticate(headers: dict) -> Auth.types.MinimalUserDict:
     # Validate credentials (e.g., API key, JWT token)
+    # 支持官方 SDK 的 x-api-key，以及 Authorization: Bearer <key>（如 langgraph-java-sdk）
     api_key = headers.get(b"x-api-key")
-    logging.info(f"API key: {api_key}")
+    if not api_key:
+        authorization = headers.get(b"authorization", b"")
+        if authorization[:7].lower() == b"bearer ":
+            api_key = authorization[7:].strip()
     if not api_key or not is_valid_key(api_key):
         raise Auth.exceptions.HTTPException(
             status_code=401,

@@ -170,7 +170,7 @@ async def reset_thread_with_sandbox(
             await asyncio.to_thread(shutil.rmtree, thread_dir)
 
         api_base_url = os.getenv("LANGGRAPH_API_URL", os.getenv("EXTRACT_API_URL", "http://localhost:2024")).rstrip("/")
-        client = get_client(url=api_base_url, api_key="")
+        client = get_client(url=api_base_url, api_key=os.getenv("LANGGRAPH_API_KEY"))
         metadata: dict[str, Any] = {}
 
         try:
